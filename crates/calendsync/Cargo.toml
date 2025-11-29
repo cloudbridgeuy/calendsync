@@ -14,3 +14,5 @@ name = "calendsync"
 path = "src/main.rs"
 
 [dependencies]
+# Internal dependencies
+calendsync_core = { workspace = true }
