@@ -16,3 +16,20 @@ path = "src/main.rs"
 [dependencies]
 # Internal dependencies
 calendsync_core = { workspace = true }
+
+# External dependencies
+anyhow = { workspace = true }
+askama = { workspace = true }
+axum = { workspace = true }
+listenfd = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tower-http = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+http-body-util = { workspace = true }
+tower = { workspace = true }

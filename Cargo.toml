@@ -22,14 +22,24 @@ calendsync_core = { version = "0.0.0", path = "crates/core" }
 
 # External Dependencies
 anstream = "0.6.21"
+anyhow = "1.0.100"
+askama = "0.14.0"
+axum = { version = "0.8.7", features = ["macros"] }
 chrono = { version = "0.4.42", features = ["serde"] }
 clap = { version = "4.5.53", features = ["derive", "string", "env"] }
 dialoguer = "0.12.0"
+listenfd = "1.0"
 semver = "1.0.27"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 thiserror = "2.0.17"
 tokio = { version = "1.48.0", features = ["full"] }
 toml_edit = "0.23.7"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace", "timeout"] }
 tracing = { version = "0.1.43" }
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# Test dependencies
+http-body-util = "0.1"
