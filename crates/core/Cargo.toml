@@ -1,0 +1,16 @@
+[package]
+name = "calendsync_core"
+version = "0.0.0"
+homepage = "https://github.com/cloudbridgeuy/calendsync"
+description = "Core for the calendsync project"
+autobins = false
+
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "calendsync_core"
+path = "src/lib.rs"
+
+[dependencies]
