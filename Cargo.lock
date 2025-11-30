@@ -229,6 +229,7 @@ dependencies = [
  "askama",
  "axum",
  "calendsync_core",
+ "chrono",
  "http-body-util",
  "listenfd",
  "serde",
@@ -244,6 +245,11 @@ dependencies = [
 [[package]]
 name = "calendsync_core"
 version = "0.0.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "uuid",
+]
 
 [[package]]
 name = "cc"

@@ -14,6 +14,7 @@ use tower_http::{
 use crate::{
     handlers::{
         api::{create_user, delete_user, get_user, list_users},
+        calendar::calendar_demo,
         pages::index,
     },
     state::AppState,
@@ -36,6 +37,7 @@ pub fn create_app(state: AppState) -> Router {
     // Main application router
     Router::new()
         .route("/", get(index))
+        .route("/calendar", get(calendar_demo))
         .nest("/api", api_routes)
         .layer(TraceLayer::new_for_http())
         .layer(TimeoutLayer::with_status_code(

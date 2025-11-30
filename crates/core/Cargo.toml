@@ -14,3 +14,6 @@ name = "calendsync_core"
 path = "src/lib.rs"
 
 [dependencies]
+chrono = { workspace = true }
+uuid = { workspace = true }
+serde = { workspace = true }

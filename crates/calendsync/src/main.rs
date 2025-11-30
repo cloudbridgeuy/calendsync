@@ -1,6 +1,7 @@
 mod app;
 mod error;
 mod handlers;
+mod mock_data;
 mod models;
 mod state;
 
@@ -37,7 +38,7 @@ async fn main() -> Result<()> {
             TcpListener::from_std(listener)?
         }
         // Otherwise fall back to local listening
-        None => TcpListener::bind("127.0.0.1:3000").await?,
+        None => TcpListener::bind("0.0.0.0:3000").await?,
     };
 
     tracing::info!("listening on {}", listener.local_addr()?);

@@ -21,6 +21,7 @@ calendsync_core = { workspace = true }
 anyhow = { workspace = true }
 askama = { workspace = true }
 axum = { workspace = true }
+chrono = { workspace = true }
 listenfd = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
