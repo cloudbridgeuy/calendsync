@@ -2,6 +2,40 @@ use chrono::{NaiveDate, NaiveTime};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+/// A named calendar that contains entries.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Calendar {
+    pub id: Uuid,
+    pub name: String,
+    /// Default color for entries in this calendar (CSS color value).
+    pub color: String,
+    pub description: Option<String>,
+}
+
+impl Calendar {
+    /// Creates a new calendar with the given name and color.
+    pub fn new(name: impl Into<String>, color: impl Into<String>) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            name: name.into(),
+            color: color.into(),
+            description: None,
+        }
+    }
+
+    /// Sets the description for this calendar.
+    pub fn with_description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+
+    /// Sets a specific ID for this calendar (useful for testing).
+    pub fn with_id(mut self, id: Uuid) -> Self {
+        self.id = id;
+        self
+    }
+}
+
 /// The kind of calendar entry, determining its display behavior and hierarchy.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EntryKind {
@@ -99,6 +133,8 @@ impl EntryKind {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CalendarEntry {
     pub id: Uuid,
+    /// The calendar this entry belongs to.
+    pub calendar_id: Uuid,
     pub title: String,
     pub description: Option<String>,
     pub location: Option<String>,
@@ -113,6 +149,7 @@ pub struct CalendarEntry {
 impl CalendarEntry {
     /// Creates a new multi-day event.
     pub fn multi_day(
+        calendar_id: Uuid,
         title: impl Into<String>,
         start: NaiveDate,
         end: NaiveDate,
@@ -120,6 +157,7 @@ impl CalendarEntry {
     ) -> Self {
         Self {
             id: Uuid::new_v4(),
+            calendar_id,
             title: title.into(),
             description: None,
             location: None,
@@ -130,9 +168,10 @@ impl CalendarEntry {
     }
 
     /// Creates a new all-day event.
-    pub fn all_day(title: impl Into<String>, date: NaiveDate) -> Self {
+    pub fn all_day(calendar_id: Uuid, title: impl Into<String>, date: NaiveDate) -> Self {
         Self {
             id: Uuid::new_v4(),
+            calendar_id,
             title: title.into(),
             description: None,
             location: None,
@@ -144,6 +183,7 @@ impl CalendarEntry {
 
     /// Creates a new timed activity.
     pub fn timed(
+        calendar_id: Uuid,
         title: impl Into<String>,
         date: NaiveDate,
         start: NaiveTime,
@@ -151,6 +191,7 @@ impl CalendarEntry {
     ) -> Self {
         Self {
             id: Uuid::new_v4(),
+            calendar_id,
             title: title.into(),
             description: None,
             location: None,
@@ -161,9 +202,15 @@ impl CalendarEntry {
     }
 
     /// Creates a new task.
-    pub fn task(title: impl Into<String>, date: NaiveDate, completed: bool) -> Self {
+    pub fn task(
+        calendar_id: Uuid,
+        title: impl Into<String>,
+        date: NaiveDate,
+        completed: bool,
+    ) -> Self {
         Self {
             id: Uuid::new_v4(),
+            calendar_id,
             title: title.into(),
             description: None,
             location: None,
@@ -171,6 +218,12 @@ impl CalendarEntry {
             date,
             color: None,
         }
+    }
+
+    /// Sets the calendar ID for this entry.
+    pub fn with_calendar_id(mut self, calendar_id: Uuid) -> Self {
+        self.calendar_id = calendar_id;
+        self
     }
 
     /// Sets the description for this entry.
@@ -254,13 +307,24 @@ mod tests {
     }
 
     #[test]
+    fn test_calendar_builder() {
+        let calendar = Calendar::new("Work", "#3B82F6").with_description("Work calendar");
+
+        assert_eq!(calendar.name, "Work");
+        assert_eq!(calendar.color, "#3B82F6");
+        assert_eq!(calendar.description, Some("Work calendar".to_string()));
+    }
+
+    #[test]
     fn test_calendar_entry_builder() {
+        let calendar_id = Uuid::new_v4();
         let date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
-        let entry = CalendarEntry::all_day("Birthday", date)
+        let entry = CalendarEntry::all_day(calendar_id, "Birthday", date)
             .with_description("John's birthday party")
             .with_location("123 Main St")
             .with_color("#F97316");
 
+        assert_eq!(entry.calendar_id, calendar_id);
         assert_eq!(entry.title, "Birthday");
         assert_eq!(entry.description, Some("John's birthday party".to_string()));
         assert_eq!(entry.location, Some("123 Main St".to_string()));
@@ -271,13 +335,14 @@ mod tests {
 
     #[test]
     fn test_day_data() {
+        let calendar_id = Uuid::new_v4();
         let date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
         let empty_day = DayData::empty(date);
 
         assert!(empty_day.is_empty());
         assert_eq!(empty_day.entry_count(), 0);
 
-        let entry = CalendarEntry::all_day("Test", date);
+        let entry = CalendarEntry::all_day(calendar_id, "Test", date);
         let day_with_entry = DayData::new(date, vec![entry]);
 
         assert!(!day_with_entry.is_empty());

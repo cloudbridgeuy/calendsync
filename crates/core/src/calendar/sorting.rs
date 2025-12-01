@@ -97,6 +97,11 @@ mod tests {
     use super::*;
     use crate::calendar::types::CalendarEntry;
     use chrono::NaiveTime;
+    use uuid::Uuid;
+
+    fn test_calendar_id() -> Uuid {
+        Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap()
+    }
 
     fn make_date(year: i32, month: u32, day: u32) -> NaiveDate {
         NaiveDate::from_ymd_opt(year, month, day).unwrap()
@@ -108,13 +113,14 @@ mod tests {
 
     #[test]
     fn test_sort_entries_by_hierarchy() {
+        let cal_id = test_calendar_id();
         let date = make_date(2024, 1, 15);
         let mut entries = vec![
-            CalendarEntry::task("Task", date, false),
-            CalendarEntry::timed("Meeting", date, make_time(14, 0), make_time(15, 0)),
-            CalendarEntry::all_day("Birthday", date),
-            CalendarEntry::timed("Standup", date, make_time(9, 0), make_time(9, 30)),
-            CalendarEntry::multi_day("Retreat", date, date + Duration::days(2), date),
+            CalendarEntry::task(cal_id, "Task", date, false),
+            CalendarEntry::timed(cal_id, "Meeting", date, make_time(14, 0), make_time(15, 0)),
+            CalendarEntry::all_day(cal_id, "Birthday", date),
+            CalendarEntry::timed(cal_id, "Standup", date, make_time(9, 0), make_time(9, 30)),
+            CalendarEntry::multi_day(cal_id, "Retreat", date, date + Duration::days(2), date),
         ];
 
         sort_entries_by_hierarchy(&mut entries);
@@ -151,11 +157,12 @@ mod tests {
 
     #[test]
     fn test_expand_multi_day_entries() {
+        let cal_id = test_calendar_id();
         let start = make_date(2024, 1, 15);
         let end = make_date(2024, 1, 17);
         let entries = vec![
-            CalendarEntry::multi_day("Retreat", start, end, start),
-            CalendarEntry::all_day("Single", start),
+            CalendarEntry::multi_day(cal_id, "Retreat", start, end, start),
+            CalendarEntry::all_day(cal_id, "Single", start),
         ];
 
         let expanded = expand_multi_day_entries(entries);
@@ -166,12 +173,13 @@ mod tests {
 
     #[test]
     fn test_group_entries_by_date() {
+        let cal_id = test_calendar_id();
         let date1 = make_date(2024, 1, 15);
         let date2 = make_date(2024, 1, 16);
         let entries = vec![
-            CalendarEntry::all_day("Event 1", date1),
-            CalendarEntry::all_day("Event 2", date1),
-            CalendarEntry::all_day("Event 3", date2),
+            CalendarEntry::all_day(cal_id, "Event 1", date1),
+            CalendarEntry::all_day(cal_id, "Event 2", date1),
+            CalendarEntry::all_day(cal_id, "Event 3", date2),
         ];
 
         let grouped = group_entries_by_date(&entries);
@@ -182,14 +190,15 @@ mod tests {
 
     #[test]
     fn test_build_day_data() {
+        let cal_id = test_calendar_id();
         let date1 = make_date(2024, 1, 15);
         let date2 = make_date(2024, 1, 16);
         let dates = vec![date1, date2];
 
         let entries = vec![
-            CalendarEntry::task("Task", date1, false),
-            CalendarEntry::all_day("Birthday", date1),
-            CalendarEntry::all_day("Meeting", date2),
+            CalendarEntry::task(cal_id, "Task", date1, false),
+            CalendarEntry::all_day(cal_id, "Birthday", date1),
+            CalendarEntry::all_day(cal_id, "Meeting", date2),
         ];
 
         let day_data = build_day_data(&dates, entries);
