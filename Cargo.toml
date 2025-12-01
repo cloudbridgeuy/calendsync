@@ -19,6 +19,7 @@ debug = 0
 [workspace.dependencies]
 # Internal Dependencies
 calendsync_core = { version = "0.0.0", path = "crates/core" }
+calendsync_frontend = { version = "0.0.0", path = "crates/frontend" }
 
 # External Dependencies
 anstream = "0.6.21"

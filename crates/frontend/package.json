@@ -1,0 +1,18 @@
+{
+    "name": "calendsync-frontend",
+    "version": "0.0.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "bun build ./src/ts/calendar/index.ts --outdir ./dist --root ./src/ts --entry-naming [dir]-[hash].js --minify",
+        "build:dev": "bun build ./src/ts/calendar/index.ts --outdir ./dist --root ./src/ts --entry-naming [dir]-[hash].js --sourcemap=external",
+        "typecheck": "tsc --noEmit",
+        "test": "bun test",
+        "watch": "bun build ./src/ts/calendar/index.ts --outdir ./dist --root ./src/ts --entry-naming [dir]-[hash].js --sourcemap=external --watch"
+    },
+    "devDependencies": {
+        "@biomejs/biome": "^2.3.8",
+        "@types/bun": "latest",
+        "typescript": "^5.3.0"
+    }
+}
