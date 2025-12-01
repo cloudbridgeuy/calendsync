@@ -23,6 +23,10 @@ TypeScript checks (crates/frontend):
 7. bun run typecheck - TypeScript type checking
 8. bun test - Run TypeScript tests
 
+TypeScript checks (examples/hello-world):
+9. biome check --write --unsafe - Format and lint example TypeScript
+10. bun run typecheck - Example TypeScript type checking
+
 When used with --install-hooks, this command also manages git pre-commit hooks that
 run these same checks automatically before each commit.
 
@@ -128,7 +132,7 @@ async fn run_lint_checks(command: &LintCommand, global: &crate::Global) -> Resul
         all_passed = false;
     }
 
-    // TypeScript checks
+    // TypeScript checks (crates/frontend)
     // 6. Run biome check (format + lint with auto-fix)
     if !run_biome_check(global).await? {
         all_passed = false;
@@ -141,6 +145,17 @@ async fn run_lint_checks(command: &LintCommand, global: &crate::Global) -> Resul
 
     // 8. Run bun test
     if !run_bun_test(global).await? {
+        all_passed = false;
+    }
+
+    // TypeScript checks (examples/hello-world)
+    // 9. Run biome check on example
+    if !run_example_biome_check(global).await? {
+        all_passed = false;
+    }
+
+    // 10. Run bun typecheck on example
+    if !run_example_typecheck(global).await? {
         all_passed = false;
     }
 
@@ -398,6 +413,15 @@ fn get_frontend_dir() -> std::path::PathBuf {
         .join("crates/frontend")
 }
 
+/// Get the path to the hello-world example directory.
+fn get_example_hello_world_dir() -> std::path::PathBuf {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    std::path::Path::new(manifest_dir)
+        .parent()
+        .unwrap()
+        .join("crates/calendsync/examples/hello-world")
+}
+
 async fn run_biome_check(global: &crate::Global) -> Result<bool> {
     if !global.is_silent() {
         aprintln!("{} {}", p_b("🔧"), p_b("Running biome check..."));
@@ -531,6 +555,117 @@ async fn run_bun_test(global: &crate::Global) -> Result<bool> {
         if !stderr.is_empty() {
             aprintln!("{}", stderr);
         }
+        Ok(false)
+    }
+}
+
+async fn run_example_biome_check(global: &crate::Global) -> Result<bool> {
+    if !global.is_silent() {
+        aprintln!(
+            "{} {}",
+            p_b("🔧"),
+            p_b("Running biome check (examples/hello-world)...")
+        );
+    }
+
+    let example_dir = get_example_hello_world_dir();
+
+    // Check if example directory exists
+    if !example_dir.exists() {
+        if !global.is_silent() {
+            aprintln!(
+                "{} {}",
+                p_y("⚠️"),
+                "Example hello-world directory not found, skipping biome checks"
+            );
+        }
+        return Ok(true);
+    }
+
+    // Run biome check with --write --unsafe to auto-fix all issues
+    let output = tokio::process::Command::new("bunx")
+        .args(["biome", "check", "--write", "--unsafe"])
+        .current_dir(&example_dir)
+        .output()
+        .await?;
+
+    if output.status.success() {
+        if !global.is_silent() {
+            aprintln!("{} {}", p_g("✅"), "Example biome check passed");
+        }
+        Ok(true)
+    } else {
+        aprintln!("{} {}", p_r("❌"), "Example biome check failed");
+        // Show output on failure
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if !stdout.is_empty() {
+            aprintln!("{}", stdout);
+        }
+        if !stderr.is_empty() {
+            aprintln!("{}", stderr);
+        }
+        Ok(false)
+    }
+}
+
+async fn run_example_typecheck(global: &crate::Global) -> Result<bool> {
+    if !global.is_silent() {
+        aprintln!(
+            "{} {}",
+            p_b("🔧"),
+            p_b("Running bun typecheck (examples/hello-world)...")
+        );
+    }
+
+    let example_dir = get_example_hello_world_dir();
+
+    // Check if example directory exists
+    if !example_dir.exists() {
+        if !global.is_silent() {
+            aprintln!(
+                "{} {}",
+                p_y("⚠️"),
+                "Example hello-world directory not found, skipping TypeScript checks"
+            );
+        }
+        return Ok(true);
+    }
+
+    // Check if node_modules exists, if not run bun install first
+    if !example_dir.join("node_modules").exists() {
+        if !global.is_silent() {
+            aprintln!("{} {}", p_b("📦"), "Installing example dependencies...");
+        }
+        let install_status = tokio::process::Command::new("bun")
+            .arg("install")
+            .current_dir(&example_dir)
+            .status()
+            .await?;
+
+        if !install_status.success() {
+            aprintln!("{} {}", p_r("❌"), "Failed to install example dependencies");
+            return Ok(false);
+        }
+    }
+
+    let status = tokio::process::Command::new("bun")
+        .args(["run", "typecheck"])
+        .current_dir(&example_dir)
+        .status()
+        .await?;
+
+    if status.success() {
+        if !global.is_silent() {
+            aprintln!("{} {}", p_g("✅"), "Example TypeScript type check passed");
+        }
+        Ok(true)
+    } else {
+        aprintln!("{} {}", p_r("❌"), "Example TypeScript type check failed");
+        aprintln!(
+            "{}",
+            p_r("Please fix TypeScript type errors in examples/hello-world")
+        );
         Ok(false)
     }
 }
