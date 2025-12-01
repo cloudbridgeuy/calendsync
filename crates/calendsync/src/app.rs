@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use axum::{
     http::{header, Method, StatusCode},
-    routing::get,
+    routing::{get, patch},
     Router,
 };
 use tower_http::{
@@ -15,7 +15,14 @@ use crate::{
     handlers::{
         api::{create_user, delete_user, get_user, list_users},
         calendar::calendar_demo,
+        calendars::{
+            create_calendar, delete_calendar, get_calendar, list_calendars, update_calendar,
+        },
+        entries::{
+            create_entry, delete_entry, get_entry, list_entries, toggle_entry, update_entry,
+        },
         pages::index,
+        static_files::serve_static,
     },
     state::AppState,
 };
@@ -25,19 +32,42 @@ pub fn create_app(state: AppState) -> Router {
     // CORS configuration for API endpoints
     let cors = CorsLayer::new()
         .allow_origin(Any)
-        .allow_methods([Method::GET, Method::POST, Method::DELETE])
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+        ])
         .allow_headers([header::CONTENT_TYPE]);
 
     // API routes with CORS
     let api_routes = Router::new()
+        // User routes
         .route("/users", get(list_users).post(create_user))
         .route("/users/{id}", get(get_user).delete(delete_user))
+        // Calendar routes
+        .route("/calendars", get(list_calendars).post(create_calendar))
+        .route(
+            "/calendars/{id}",
+            get(get_calendar)
+                .put(update_calendar)
+                .delete(delete_calendar),
+        )
+        // Entry routes
+        .route("/entries", get(list_entries).post(create_entry))
+        .route(
+            "/entries/{id}",
+            get(get_entry).put(update_entry).delete(delete_entry),
+        )
+        .route("/entries/{id}/toggle", patch(toggle_entry))
         .layer(cors);
 
     // Main application router
     Router::new()
         .route("/", get(index))
         .route("/calendar", get(calendar_demo))
+        .route("/dist/{*filename}", get(serve_static))
         .nest("/api", api_routes)
         .layer(TraceLayer::new_for_http())
         .layer(TimeoutLayer::with_status_code(

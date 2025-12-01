@@ -3,7 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Calendar Demo</title>
+    <title>Calendar - CalendSync</title>
+    <script
+      src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js"
+      integrity="sha384-/TgkGk7p307TH7EXJDuUlgG3Ce1UVolAOFopFekQkkXihi5u/6OCvVKyz1W+idaz"
+      crossorigin="anonymous"
+    ></script>
     <style>
       :root {
         --bg-primary: #ffffff;
@@ -57,41 +62,53 @@
         height: 100dvh;
       }
 
-      /* Today button - floating */
+      /* Today button - floating button */
       .today-button {
         position: fixed;
         bottom: 1.5rem;
-        right: 1.5rem;
-        padding: 0.75rem 1.25rem;
+        left: 1.5rem;
+        padding: 0.5rem 1rem;
         border: none;
         border-radius: 999px;
         background-color: var(--accent);
         color: white;
-        font-family: inherit;
-        font-size: 0.875rem;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 0.75rem;
         font-weight: 600;
         cursor: pointer;
-        box-shadow: 0 4px 12px rgba(249, 115, 22, 0.4);
         transition: all 0.2s ease;
-        z-index: 100;
         opacity: 0;
-        transform: translateY(10px);
+        transform: scale(0.9);
         pointer-events: none;
+        z-index: 100;
+        box-shadow: 0 4px 12px rgba(249, 115, 22, 0.4);
       }
 
       .today-button.visible {
         opacity: 1;
-        transform: translateY(0);
+        transform: scale(1);
         pointer-events: auto;
       }
 
       .today-button:hover {
         background-color: var(--accent-light);
-        box-shadow: 0 6px 16px rgba(249, 115, 22, 0.5);
       }
 
       .today-button:active {
         transform: scale(0.95);
+      }
+
+      @media (min-width: 768px) {
+        .today-button {
+          bottom: 2rem;
+          left: 2rem;
+          padding: 0.75rem 1.25rem;
+          font-size: 0.875rem;
+        }
+
+        .today-button:hover {
+          box-shadow: 0 6px 16px rgba(249, 115, 22, 0.5);
+        }
       }
 
       /* Header - 25% on mobile, auto on desktop */
@@ -104,6 +121,7 @@
         padding: 1rem;
         background-color: var(--bg-secondary);
         border-bottom: 1px solid var(--border);
+        position: relative;
       }
 
       .month-year {
@@ -455,11 +473,6 @@
         .entry-description {
           font-size: 0.75rem;
         }
-
-        .today-button {
-          bottom: 2rem;
-          right: 2rem;
-        }
       }
 
       /* Large desktop */
@@ -471,6 +484,337 @@
         .entry-tile {
           padding: 1rem;
         }
+      }
+
+      /* Floating Action Button (FAB) */
+      .fab {
+        position: fixed;
+        bottom: 1.5rem;
+        right: 1.5rem;
+        width: 2.75rem;
+        height: 2.75rem;
+        border-radius: 50%;
+        background-color: var(--accent);
+        color: white;
+        border: none;
+        font-size: 1.5rem;
+        font-weight: 300;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(249, 115, 22, 0.4);
+        transition: all 0.2s ease;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 1;
+      }
+
+      .fab:hover {
+        background-color: var(--accent-light);
+        box-shadow: 0 6px 16px rgba(249, 115, 22, 0.5);
+        transform: scale(1.05);
+      }
+
+      .fab:active {
+        transform: scale(0.95);
+      }
+
+      @media (min-width: 768px) {
+        .fab {
+          bottom: 2rem;
+          right: 2rem;
+          width: 3.5rem;
+          height: 3.5rem;
+          font-size: 1.75rem;
+        }
+      }
+
+      /* Modal */
+      .modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 200;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.2s ease, visibility 0.2s ease;
+      }
+
+      .modal-backdrop.visible {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .modal {
+        background-color: var(--bg-primary);
+        border-radius: 12px;
+        width: 90%;
+        max-width: 500px;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        transform: translateY(20px);
+        transition: transform 0.2s ease;
+      }
+
+      .modal-backdrop.visible .modal {
+        transform: translateY(0);
+      }
+
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .modal-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      .modal-close {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: 0.25rem;
+        line-height: 1;
+      }
+
+      .modal-close:hover {
+        color: var(--text-primary);
+      }
+
+      .modal-body {
+        padding: 1.5rem;
+      }
+
+      /* Form styles */
+      .form-group {
+        margin-bottom: 1rem;
+      }
+
+      .form-label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--text-secondary);
+        margin-bottom: 0.5rem;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+
+      .form-input,
+      .form-select,
+      .form-textarea {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-size: 1rem;
+        font-family: inherit;
+        background-color: var(--bg-primary);
+        color: var(--text-primary);
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .form-input:focus,
+      .form-select:focus,
+      .form-textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.2);
+      }
+
+      .form-textarea {
+        resize: vertical;
+        min-height: 80px;
+      }
+
+      .form-row {
+        display: flex;
+        gap: 1rem;
+      }
+
+      .form-row .form-group {
+        flex: 1;
+      }
+
+      .form-actions {
+        display: flex;
+        gap: 0.75rem;
+        justify-content: flex-end;
+        padding-top: 1rem;
+        border-top: 1px solid var(--border);
+        margin-top: 1.5rem;
+      }
+
+      .btn {
+        padding: 0.75rem 1.25rem;
+        border: none;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+
+      .btn-primary {
+        background-color: var(--accent);
+        color: white;
+      }
+
+      .btn-primary:hover {
+        background-color: var(--accent-light);
+      }
+
+      .btn-secondary {
+        background-color: var(--bg-tertiary);
+        color: var(--text-primary);
+      }
+
+      .btn-secondary:hover {
+        background-color: var(--border);
+      }
+
+      .btn-danger {
+        background-color: #EF4444;
+        color: white;
+      }
+
+      .btn-danger:hover {
+        background-color: #DC2626;
+      }
+
+      /* Color picker */
+      .color-picker {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+
+      .color-option {
+        width: 2rem;
+        height: 2rem;
+        border-radius: 50%;
+        border: 2px solid transparent;
+        cursor: pointer;
+        transition: transform 0.2s ease, border-color 0.2s ease;
+      }
+
+      .color-option:hover {
+        transform: scale(1.1);
+      }
+
+      .color-option.selected {
+        border-color: var(--text-primary);
+      }
+
+      /* Entry type radio buttons */
+      .entry-type-group {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+
+      .entry-type-option {
+        flex: 1;
+        min-width: 80px;
+      }
+
+      .entry-type-option input {
+        display: none;
+      }
+
+      .entry-type-option label {
+        display: block;
+        padding: 0.5rem 0.75rem;
+        text-align: center;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.75rem;
+        font-weight: 500;
+        transition: all 0.2s ease;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+
+      .entry-type-option input:checked + label {
+        background-color: var(--accent);
+        border-color: var(--accent);
+        color: white;
+      }
+
+      /* Entry tiles - make clickable */
+      .entry-tile {
+        cursor: pointer;
+      }
+
+      .entry-tile:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      }
+
+      /* Day column clickable area */
+      .day-column-click-area {
+        min-height: 60px;
+        border: 2px dashed transparent;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-muted);
+        font-size: 0.875rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        margin-top: 0.5rem;
+        padding: 0.5rem;
+      }
+
+      .day-column-click-area:hover {
+        border-color: var(--border);
+        background-color: var(--bg-secondary);
+      }
+
+      .day-column-click-area span {
+        opacity: 0;
+        transition: opacity 0.2s ease;
+      }
+
+      .day-column-click-area:hover span {
+        opacity: 1;
+      }
+
+      /* Hidden fields */
+      .hidden-field {
+        display: none;
+      }
+
+      /* Time fields - only show when timed type is selected */
+      .time-fields {
+        display: none;
+      }
+
+      .time-fields.visible {
+        display: flex;
+      }
+
+      /* End date field - only show when multi-day type is selected */
+      .end-date-field {
+        display: none;
+      }
+
+      .end-date-field.visible {
+        display: block;
       }
     </style>
   </head>
@@ -499,8 +843,114 @@
       <div class="nav-hint">Swipe to navigate days</div>
     </div>
 
-    <!-- Today button (floating) -->
+    <!-- FAB button for creating entries -->
+    <button class="fab" id="fab-button" title="Add new entry">+</button>
+
+    <!-- Today button -->
     <button class="today-button" id="today-button">Today</button>
+
+    <!-- Entry Modal -->
+    <div class="modal-backdrop" id="entry-modal">
+      <div class="modal">
+        <div class="modal-header">
+          <h2 class="modal-title" id="modal-title">New Entry</h2>
+          <button class="modal-close" id="modal-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <form id="entry-form">
+            <input type="hidden" id="entry-id" name="entry_id" value="">
+
+            <div class="form-group">
+              <label class="form-label" for="entry-title">Title</label>
+              <input type="text" class="form-input" id="entry-title" name="title" required placeholder="Event title">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Type</label>
+              <div class="entry-type-group">
+                <div class="entry-type-option">
+                  <input type="radio" id="type-timed" name="entry_type" value="timed" checked>
+                  <label for="type-timed">Timed</label>
+                </div>
+                <div class="entry-type-option">
+                  <input type="radio" id="type-all-day" name="entry_type" value="all_day">
+                  <label for="type-all-day">All Day</label>
+                </div>
+                <div class="entry-type-option">
+                  <input type="radio" id="type-multi-day" name="entry_type" value="multi_day">
+                  <label for="type-multi-day">Multi-Day</label>
+                </div>
+                <div class="entry-type-option">
+                  <input type="radio" id="type-task" name="entry_type" value="task">
+                  <label for="type-task">Task</label>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="entry-date">Date</label>
+              <input type="date" class="form-input" id="entry-date" name="date" required>
+            </div>
+
+            <div class="form-group end-date-field" id="end-date-field">
+              <label class="form-label" for="entry-end-date">End Date</label>
+              <input type="date" class="form-input" id="entry-end-date" name="end_date">
+            </div>
+
+            <div class="form-row time-fields" id="time-fields">
+              <div class="form-group">
+                <label class="form-label" for="entry-start-time">Start Time</label>
+                <input type="time" class="form-input" id="entry-start-time" name="start_time">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="entry-end-time">End Time</label>
+                <input type="time" class="form-input" id="entry-end-time" name="end_time">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="entry-calendar">Calendar</label>
+              <select class="form-select" id="entry-calendar" name="calendar_id" required>
+                {% for cal in calendars %}
+                <option value="{{ cal.id }}" {% if default_calendar_id.is_some() && default_calendar_id.unwrap() == cal.id %}selected{% endif %}>{{ cal.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="entry-description">Description</label>
+              <textarea class="form-textarea" id="entry-description" name="description" placeholder="Optional description"></textarea>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="entry-location">Location</label>
+              <input type="text" class="form-input" id="entry-location" name="location" placeholder="Optional location">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Color</label>
+              <div class="color-picker" id="color-picker">
+                <div class="color-option selected" data-color="#3B82F6" style="background-color: #3B82F6;"></div>
+                <div class="color-option" data-color="#10B981" style="background-color: #10B981;"></div>
+                <div class="color-option" data-color="#F97316" style="background-color: #F97316;"></div>
+                <div class="color-option" data-color="#8B5CF6" style="background-color: #8B5CF6;"></div>
+                <div class="color-option" data-color="#EC4899" style="background-color: #EC4899;"></div>
+                <div class="color-option" data-color="#EF4444" style="background-color: #EF4444;"></div>
+                <div class="color-option" data-color="#6B7280" style="background-color: #6B7280;"></div>
+              </div>
+              <input type="hidden" id="entry-color" name="color" value="#3B82F6">
+            </div>
+
+            <div class="form-actions">
+              <button type="button" class="btn btn-danger" id="delete-entry-btn" style="display: none;">Delete</button>
+              <div style="flex: 1;"></div>
+              <button type="button" class="btn btn-secondary" id="cancel-btn">Cancel</button>
+              <button type="submit" class="btn btn-primary" id="save-btn">Save</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
 
     <script>
       // Calendar with day-by-day navigation
@@ -513,6 +963,8 @@
             entries: [
               {% for entry in day.entries %}
               {
+                id: '{{ entry.id }}',
+                calendarId: '{{ entry.calendar_id }}',
                 kind: '{{ entry.kind.css_class() }}',
                 completed: {{ entry.kind.is_completed() }},
                 isMultiDay: {{ entry.kind.is_multi_day() }},
@@ -523,10 +975,13 @@
                 description: {% if let Some(desc) = entry.description.as_ref() %}'{{ desc }}'{% else %}null{% endif %},
                 location: {% if let Some(loc) = entry.location.as_ref() %}'{{ loc }}'{% else %}null{% endif %},
                 color: {% if let Some(color) = entry.color.as_ref() %}'{{ color }}'{% else %}null{% endif %},
+                date: '{{ entry.date }}',
                 startTime: {% if let Some(start) = entry.kind.start_time() %}'{{ start.format("%H:%M") }}'{% else %}null{% endif %},
                 endTime: {% if let Some(end) = entry.kind.end_time() %}'{{ end.format("%H:%M") }}'{% else %}null{% endif %},
                 multiDayStart: {% if let Some(start) = entry.kind.multi_day_start() %}'{{ start.format("%b %d") }}'{% else %}null{% endif %},
-                multiDayEnd: {% if let Some(end) = entry.kind.multi_day_end() %}'{{ end.format("%b %d") }}'{% else %}null{% endif %}
+                multiDayEnd: {% if let Some(end) = entry.kind.multi_day_end() %}'{{ end.format("%b %d") }}'{% else %}null{% endif %},
+                multiDayStartDate: {% if let Some(start) = entry.kind.multi_day_start() %}'{{ start }}'{% else %}null{% endif %},
+                multiDayEndDate: {% if let Some(end) = entry.kind.multi_day_end() %}'{{ end }}'{% else %}null{% endif %}
               }{% if !loop.last %},{% endif %}
               {% endfor %}
             ]
@@ -610,7 +1065,7 @@
 
         // Render a single entry tile
         function renderEntryTile(entry) {
-          const colorStyle = entry.color ? `style="border-left-color: ${entry.color};"` : '';
+          const colorStyle = entry.color ? `border-left-color: ${entry.color};` : '';
           const completedClass = entry.completed ? ' completed' : '';
 
           let badge = '';
@@ -633,12 +1088,15 @@
             content += `<div class="entry-location">${entry.location}</div>`;
           }
 
+          // Store entry data as JSON for click handler
+          const entryData = encodeURIComponent(JSON.stringify(entry));
+
           if (entry.isTask) {
             const checkedClass = entry.completed ? ' checked' : '';
             return `
-              <div class="entry-tile ${entry.kind}${completedClass}" ${colorStyle}>
+              <div class="entry-tile ${entry.kind}${completedClass}" style="${colorStyle}" data-entry-id="${entry.id}" data-entry='${entryData}' onclick="entryModal.openEdit(this)">
                 <div class="task-row">
-                  <div class="task-checkbox${checkedClass}"></div>
+                  <div class="task-checkbox${checkedClass}" onclick="event.stopPropagation(); entryModal.toggleTask('${entry.id}')"></div>
                   <div>${content}</div>
                 </div>
               </div>
@@ -646,7 +1104,7 @@
           }
 
           return `
-            <div class="entry-tile ${entry.kind}${completedClass}" ${colorStyle}>
+            <div class="entry-tile ${entry.kind}${completedClass}" style="${colorStyle}" data-entry-id="${entry.id}" data-entry='${entryData}' onclick="entryModal.openEdit(this)">
               ${badge}${time}${content}
             </div>
           `;
@@ -991,6 +1449,12 @@
 
         // Keyboard navigation
         function handleKeydown(e) {
+          // Don't navigate when modal is open
+          const modal = document.getElementById('entry-modal');
+          if (modal && modal.classList.contains('visible')) {
+            return;
+          }
+
           if (e.key === 'ArrowLeft') {
             navigateDays(-1);
           } else if (e.key === 'ArrowRight') {
@@ -1034,12 +1498,293 @@
         // Start
         init();
 
+        // Expose method to update entry cache and refresh view
+        function refreshFromServer() {
+          // Reload the page to get fresh data
+          window.location.reload();
+        }
+
         // Public API
         return {
           navigateDays,
-          goToToday
+          goToToday,
+          refreshFromServer,
+          getCenterDate: () => centerDate,
+          formatDateKey
+        };
+      })();
+
+      // Entry Modal Module
+      const entryModal = (function() {
+        // DOM elements
+        let modal, form, titleEl, deleteBtn;
+        let entryId, entryTitle, entryDate, entryEndDate, entryStartTime, entryEndTime;
+        let entryCalendar, entryDescription, entryLocation, entryColor;
+        let timeFields, endDateField, colorPicker;
+
+        // Current editing entry
+        let currentEntry = null;
+
+        function init() {
+          modal = document.getElementById('entry-modal');
+          form = document.getElementById('entry-form');
+          titleEl = document.getElementById('modal-title');
+          deleteBtn = document.getElementById('delete-entry-btn');
+
+          entryId = document.getElementById('entry-id');
+          entryTitle = document.getElementById('entry-title');
+          entryDate = document.getElementById('entry-date');
+          entryEndDate = document.getElementById('entry-end-date');
+          entryStartTime = document.getElementById('entry-start-time');
+          entryEndTime = document.getElementById('entry-end-time');
+          entryCalendar = document.getElementById('entry-calendar');
+          entryDescription = document.getElementById('entry-description');
+          entryLocation = document.getElementById('entry-location');
+          entryColor = document.getElementById('entry-color');
+
+          timeFields = document.getElementById('time-fields');
+          endDateField = document.getElementById('end-date-field');
+          colorPicker = document.getElementById('color-picker');
+
+          // Event listeners
+          document.getElementById('modal-close').addEventListener('click', close);
+          document.getElementById('cancel-btn').addEventListener('click', close);
+          document.getElementById('fab-button').addEventListener('click', openCreate);
+          deleteBtn.addEventListener('click', handleDelete);
+          form.addEventListener('submit', handleSubmit);
+
+          // Type radio change handlers
+          document.querySelectorAll('input[name="entry_type"]').forEach(radio => {
+            radio.addEventListener('change', handleTypeChange);
+          });
+
+          // Color picker handlers
+          colorPicker.querySelectorAll('.color-option').forEach(option => {
+            option.addEventListener('click', () => selectColor(option));
+          });
+
+          // Close on backdrop click
+          modal.addEventListener('click', (e) => {
+            if (e.target === modal) close();
+          });
+
+          // Close on Escape
+          document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modal.classList.contains('visible')) {
+              close();
+            }
+          });
+        }
+
+        function open() {
+          modal.classList.add('visible');
+          entryTitle.focus();
+        }
+
+        function close() {
+          modal.classList.remove('visible');
+          resetForm();
+        }
+
+        function resetForm() {
+          form.reset();
+          currentEntry = null;
+          entryId.value = '';
+          deleteBtn.style.display = 'none';
+          titleEl.textContent = 'New Entry';
+
+          // Reset color picker
+          selectColorByValue('#3B82F6');
+
+          // Reset type fields visibility
+          document.getElementById('type-timed').checked = true;
+          handleTypeChange();
+
+          // Set default date to highlighted day
+          const centerDate = calendar.getCenterDate();
+          entryDate.value = formatDateForInput(centerDate);
+        }
+
+        function formatDateForInput(date) {
+          const y = date.getFullYear();
+          const m = String(date.getMonth() + 1).padStart(2, '0');
+          const d = String(date.getDate()).padStart(2, '0');
+          return `${y}-${m}-${d}`;
+        }
+
+        function handleTypeChange() {
+          const selectedType = document.querySelector('input[name="entry_type"]:checked').value;
+
+          // Show/hide time fields based on type
+          if (selectedType === 'timed') {
+            timeFields.classList.add('visible');
+            endDateField.classList.remove('visible');
+          } else if (selectedType === 'multi_day') {
+            timeFields.classList.remove('visible');
+            endDateField.classList.add('visible');
+          } else {
+            timeFields.classList.remove('visible');
+            endDateField.classList.remove('visible');
+          }
+        }
+
+        function selectColor(option) {
+          colorPicker.querySelectorAll('.color-option').forEach(opt => {
+            opt.classList.remove('selected');
+          });
+          option.classList.add('selected');
+          entryColor.value = option.dataset.color;
+        }
+
+        function selectColorByValue(color) {
+          const option = colorPicker.querySelector(`[data-color="${color}"]`);
+          if (option) {
+            selectColor(option);
+          }
+        }
+
+        function openCreate(dateStr = null) {
+          resetForm();
+
+          if (typeof dateStr === 'string') {
+            entryDate.value = dateStr;
+          }
+          // Date is already set by resetForm() to the highlighted day
+
+          open();
+        }
+
+        function openEdit(tileElement) {
+          resetForm();
+
+          const entryData = JSON.parse(decodeURIComponent(tileElement.dataset.entry));
+          currentEntry = entryData;
+
+          titleEl.textContent = 'Edit Entry';
+          deleteBtn.style.display = 'block';
+
+          entryId.value = entryData.id;
+          entryTitle.value = entryData.title;
+          entryDate.value = entryData.date;
+          entryCalendar.value = entryData.calendarId;
+          entryDescription.value = entryData.description || '';
+          entryLocation.value = entryData.location || '';
+
+          if (entryData.color) {
+            selectColorByValue(entryData.color);
+          }
+
+          // Set type
+          if (entryData.isTimed) {
+            document.getElementById('type-timed').checked = true;
+            entryStartTime.value = entryData.startTime || '';
+            entryEndTime.value = entryData.endTime || '';
+          } else if (entryData.isAllDay) {
+            document.getElementById('type-all-day').checked = true;
+          } else if (entryData.isMultiDay) {
+            document.getElementById('type-multi-day').checked = true;
+            entryEndDate.value = entryData.multiDayEndDate || '';
+          } else if (entryData.isTask) {
+            document.getElementById('type-task').checked = true;
+          }
+
+          handleTypeChange();
+          open();
+        }
+
+        async function handleSubmit(e) {
+          e.preventDefault();
+
+          const formData = new FormData(form);
+          const isEdit = !!entryId.value;
+
+          const url = isEdit
+            ? `/api/entries/${entryId.value}`
+            : '/api/entries';
+
+          const method = isEdit ? 'PUT' : 'POST';
+
+          try {
+            const response = await fetch(url, {
+              method: method,
+              body: new URLSearchParams(formData),
+              headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+              },
+            });
+
+            if (response.ok) {
+              close();
+              calendar.refreshFromServer();
+            } else {
+              const error = await response.text();
+              alert('Error saving entry: ' + error);
+            }
+          } catch (err) {
+            alert('Network error: ' + err.message);
+          }
+        }
+
+        async function handleDelete() {
+          if (!entryId.value) return;
+
+          if (!confirm('Are you sure you want to delete this entry?')) {
+            return;
+          }
+
+          try {
+            const response = await fetch(`/api/entries/${entryId.value}`, {
+              method: 'DELETE',
+            });
+
+            if (response.ok) {
+              close();
+              calendar.refreshFromServer();
+            } else {
+              const error = await response.text();
+              alert('Error deleting entry: ' + error);
+            }
+          } catch (err) {
+            alert('Network error: ' + err.message);
+          }
+        }
+
+        async function toggleTask(entryId) {
+          try {
+            const response = await fetch(`/api/entries/${entryId}/toggle`, {
+              method: 'PATCH',
+            });
+
+            if (response.ok) {
+              calendar.refreshFromServer();
+            } else {
+              const error = await response.text();
+              alert('Error toggling task: ' + error);
+            }
+          } catch (err) {
+            alert('Network error: ' + err.message);
+          }
+        }
+
+        // Initialize on DOM ready
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', init);
+        } else {
+          init();
+        }
+
+        // Public API
+        return {
+          open,
+          close,
+          openCreate,
+          openEdit,
+          toggleTask
         };
       })();
     </script>
+
+    <!-- Bundled TypeScript calendar module (for future migration) -->
+    <script type="module" src="/dist/{{ calendar_js }}"></script>
   </body>
 </html>

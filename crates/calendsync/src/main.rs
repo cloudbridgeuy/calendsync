@@ -1,4 +1,5 @@
 mod app;
+mod assets;
 mod error;
 mod handlers;
 mod mock_data;
@@ -23,8 +24,8 @@ async fn main() -> Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    // Create application state
-    let state = AppState::new();
+    // Create application state with demo data
+    let state = AppState::with_demo_data();
 
     // Build the application router
     let app = create_app(state);

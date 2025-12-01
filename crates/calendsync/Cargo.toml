@@ -4,6 +4,7 @@ version = "0.0.0"
 homepage = "https://github.com/cloudbridgeuy/calendsync"
 description = "Create calendars to sync with your friends"
 autobins = false
+build = "build.rs"
 
 authors.workspace = true
 edition.workspace = true
@@ -16,6 +17,7 @@ path = "src/main.rs"
 [dependencies]
 # Internal dependencies
 calendsync_core = { workspace = true }
+calendsync_frontend = { workspace = true }
 
 # External dependencies
 anyhow = { workspace = true }

@@ -1,9 +1,10 @@
 use calendsync_core::calendar::{build_day_data, get_week_dates, CalendarEntry, DayData};
 use chrono::{Duration, Local, NaiveDate, NaiveTime};
+use uuid::Uuid;
 
 /// Generates mock calendar entries for demonstration purposes.
 /// Entries are spread across the week centered on the given date.
-pub fn generate_mock_entries(center_date: NaiveDate) -> Vec<CalendarEntry> {
+pub fn generate_mock_entries(calendar_id: Uuid, center_date: NaiveDate) -> Vec<CalendarEntry> {
     let mut entries = Vec::new();
 
     // Helper to create times
@@ -13,52 +14,91 @@ pub fn generate_mock_entries(center_date: NaiveDate) -> Vec<CalendarEntry> {
     let retreat_start = center_date - Duration::days(1);
     let retreat_end = center_date + Duration::days(1);
     entries.push(
-        CalendarEntry::multi_day("Team Retreat", retreat_start, retreat_end, retreat_start)
-            .with_description("Annual team building event")
-            .with_location("Mountain Lodge Resort")
-            .with_color("#8B5CF6"), // Purple
+        CalendarEntry::multi_day(
+            calendar_id,
+            "Team Retreat",
+            retreat_start,
+            retreat_end,
+            retreat_start,
+        )
+        .with_description("Annual team building event")
+        .with_location("Mountain Lodge Resort")
+        .with_color("#8B5CF6"), // Purple
     );
 
     // All-day events
     entries.push(
-        CalendarEntry::all_day("Sarah's Birthday", center_date + Duration::days(2))
-            .with_description("Don't forget the cake!")
-            .with_color("#EC4899"), // Pink
+        CalendarEntry::all_day(
+            calendar_id,
+            "Sarah's Birthday",
+            center_date + Duration::days(2),
+        )
+        .with_description("Don't forget the cake!")
+        .with_color("#EC4899"), // Pink
     );
 
     entries.push(
-        CalendarEntry::all_day("Public Holiday", center_date - Duration::days(2))
-            .with_color("#10B981"), // Green
+        CalendarEntry::all_day(
+            calendar_id,
+            "Public Holiday",
+            center_date - Duration::days(2),
+        )
+        .with_color("#10B981"), // Green
     );
 
     // Timed activities - spread across different days
     entries.push(
-        CalendarEntry::timed("Standup Meeting", center_date, time(9, 0), time(9, 30))
-            .with_location("Zoom")
-            .with_color("#3B82F6"), // Blue
-    );
-
-    entries.push(
-        CalendarEntry::timed("Lunch with Alex", center_date, time(12, 30), time(13, 30))
-            .with_location("Cafe Bistro")
-            .with_color("#F97316"), // Orange (accent)
-    );
-
-    entries.push(
-        CalendarEntry::timed("Product Review", center_date, time(15, 0), time(16, 0))
-            .with_description("Q4 roadmap discussion")
-            .with_location("Conference Room A")
-            .with_color("#3B82F6"), // Blue
-    );
-
-    entries.push(
-        CalendarEntry::timed("Gym Session", center_date, time(18, 0), time(19, 0))
-            .with_location("FitLife Gym")
-            .with_color("#10B981"), // Green
+        CalendarEntry::timed(
+            calendar_id,
+            "Standup Meeting",
+            center_date,
+            time(9, 0),
+            time(9, 30),
+        )
+        .with_location("Zoom")
+        .with_color("#3B82F6"), // Blue
     );
 
     entries.push(
         CalendarEntry::timed(
+            calendar_id,
+            "Lunch with Alex",
+            center_date,
+            time(12, 30),
+            time(13, 30),
+        )
+        .with_location("Cafe Bistro")
+        .with_color("#F97316"), // Orange (accent)
+    );
+
+    entries.push(
+        CalendarEntry::timed(
+            calendar_id,
+            "Product Review",
+            center_date,
+            time(15, 0),
+            time(16, 0),
+        )
+        .with_description("Q4 roadmap discussion")
+        .with_location("Conference Room A")
+        .with_color("#3B82F6"), // Blue
+    );
+
+    entries.push(
+        CalendarEntry::timed(
+            calendar_id,
+            "Gym Session",
+            center_date,
+            time(18, 0),
+            time(19, 0),
+        )
+        .with_location("FitLife Gym")
+        .with_color("#10B981"), // Green
+    );
+
+    entries.push(
+        CalendarEntry::timed(
+            calendar_id,
             "Team Sync",
             center_date + Duration::days(1),
             time(10, 0),
@@ -70,6 +110,7 @@ pub fn generate_mock_entries(center_date: NaiveDate) -> Vec<CalendarEntry> {
 
     entries.push(
         CalendarEntry::timed(
+            calendar_id,
             "Coffee with mentor",
             center_date + Duration::days(2),
             time(14, 0),
@@ -81,6 +122,7 @@ pub fn generate_mock_entries(center_date: NaiveDate) -> Vec<CalendarEntry> {
 
     entries.push(
         CalendarEntry::timed(
+            calendar_id,
             "Doctor Appointment",
             center_date - Duration::days(1),
             time(11, 0),
@@ -92,27 +134,34 @@ pub fn generate_mock_entries(center_date: NaiveDate) -> Vec<CalendarEntry> {
 
     // Tasks - various states
     entries.push(
-        CalendarEntry::task("Review PR #423", center_date, false)
+        CalendarEntry::task(calendar_id, "Review PR #423", center_date, false)
             .with_description("Frontend refactoring changes"),
     );
 
     entries.push(
-        CalendarEntry::task("Send invoice", center_date, true)
+        CalendarEntry::task(calendar_id, "Send invoice", center_date, true)
             .with_description("Monthly billing for Project X"),
     );
 
     entries.push(
-        CalendarEntry::task("Call dentist", center_date + Duration::days(1), false)
-            .with_description("Schedule annual checkup"),
+        CalendarEntry::task(
+            calendar_id,
+            "Call dentist",
+            center_date + Duration::days(1),
+            false,
+        )
+        .with_description("Schedule annual checkup"),
     );
 
     entries.push(CalendarEntry::task(
+        calendar_id,
         "Update resume",
         center_date + Duration::days(3),
         false,
     ));
 
     entries.push(CalendarEntry::task(
+        calendar_id,
         "Grocery shopping",
         center_date - Duration::days(1),
         true,
@@ -121,14 +170,24 @@ pub fn generate_mock_entries(center_date: NaiveDate) -> Vec<CalendarEntry> {
     entries
 }
 
-/// Builds calendar data for the week centered on the given date.
-pub fn build_demo_calendar_data_for_date(center_date: NaiveDate) -> (NaiveDate, Vec<DayData>) {
+/// Builds calendar data for the week centered on the given date using a specific calendar.
+pub fn build_demo_calendar_data_for_date_with_calendar(
+    calendar_id: Uuid,
+    center_date: NaiveDate,
+) -> (NaiveDate, Vec<DayData>) {
     let today = Local::now().date_naive();
     let week_dates = get_week_dates(center_date);
-    let entries = generate_mock_entries(center_date);
+    let entries = generate_mock_entries(calendar_id, center_date);
     let days = build_day_data(&week_dates, entries);
 
     (today, days)
+}
+
+/// Builds calendar data for the week centered on the given date.
+/// Uses a temporary calendar ID for demo purposes.
+pub fn build_demo_calendar_data_for_date(center_date: NaiveDate) -> (NaiveDate, Vec<DayData>) {
+    let demo_calendar_id = Uuid::new_v4();
+    build_demo_calendar_data_for_date_with_calendar(demo_calendar_id, center_date)
 }
 
 /// Builds calendar data for the week centered on today.
@@ -144,8 +203,9 @@ mod tests {
 
     #[test]
     fn test_generate_mock_entries() {
+        let calendar_id = Uuid::new_v4();
         let center = NaiveDate::from_ymd_opt(2024, 6, 15).unwrap();
-        let entries = generate_mock_entries(center);
+        let entries = generate_mock_entries(calendar_id, center);
 
         // Should have various entry types
         assert!(!entries.is_empty());
@@ -159,6 +219,9 @@ mod tests {
         assert!(all_day_count >= 1, "Should have all-day events");
         assert!(timed_count >= 3, "Should have timed activities");
         assert!(task_count >= 3, "Should have tasks");
+
+        // All entries should belong to the same calendar
+        assert!(entries.iter().all(|e| e.calendar_id == calendar_id));
     }
 
     #[test]
