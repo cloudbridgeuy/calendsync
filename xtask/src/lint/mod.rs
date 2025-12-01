@@ -10,11 +10,18 @@ mod hooks;
     long_about = "Run code quality checks including formatting, compilation, linting, and dependency audits.
 
 This command runs the following checks in order:
+
+Rust checks:
 1. cargo fmt - Code formatting (auto-fix with --fix)
 2. cargo check - Compilation check
 3. cargo clippy - Linting with all warnings treated as errors
 4. cargo test - Run all tests including doctests
 5. cargo machete - Unused dependencies detection
+
+TypeScript checks (crates/frontend):
+6. biome check --write --unsafe - Format and lint TypeScript (auto-fix)
+7. bun run typecheck - TypeScript type checking
+8. bun test - Run TypeScript tests
 
 When used with --install-hooks, this command also manages git pre-commit hooks that
 run these same checks automatically before each commit.
@@ -86,6 +93,7 @@ async fn run_lint_checks(command: &LintCommand, global: &crate::Global) -> Resul
         "cargo-machete",
         "Required for unused dependency checks: cargo install cargo-machete",
     )?;
+    require_command("bun", "Required for TypeScript: https://bun.sh/")?;
 
     if !global.is_silent() {
         aprintln!("{}", p_b("Running code quality checks..."));
@@ -94,6 +102,7 @@ async fn run_lint_checks(command: &LintCommand, global: &crate::Global) -> Resul
 
     let mut all_passed = true;
 
+    // Rust checks
     // 1. Run cargo fmt
     if !run_cargo_fmt(command, global).await? {
         all_passed = false;
@@ -116,6 +125,22 @@ async fn run_lint_checks(command: &LintCommand, global: &crate::Global) -> Resul
 
     // 5. Run cargo machete
     if !run_cargo_machete(global).await? {
+        all_passed = false;
+    }
+
+    // TypeScript checks
+    // 6. Run biome check (format + lint with auto-fix)
+    if !run_biome_check(global).await? {
+        all_passed = false;
+    }
+
+    // 7. Run bun typecheck
+    if !run_bun_typecheck(global).await? {
+        all_passed = false;
+    }
+
+    // 8. Run bun test
+    if !run_bun_test(global).await? {
         all_passed = false;
     }
 
@@ -362,4 +387,150 @@ async fn restage_rust_files(global: &crate::Global) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Get the path to the frontend crate directory.
+fn get_frontend_dir() -> std::path::PathBuf {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    std::path::Path::new(manifest_dir)
+        .parent()
+        .unwrap()
+        .join("crates/frontend")
+}
+
+async fn run_biome_check(global: &crate::Global) -> Result<bool> {
+    if !global.is_silent() {
+        aprintln!("{} {}", p_b("🔧"), p_b("Running biome check..."));
+    }
+
+    let frontend_dir = get_frontend_dir();
+
+    // Check if frontend directory exists
+    if !frontend_dir.exists() {
+        if !global.is_silent() {
+            aprintln!(
+                "{} {}",
+                p_y("⚠️"),
+                "Frontend directory not found, skipping biome checks"
+            );
+        }
+        return Ok(true);
+    }
+
+    // Run biome check with --write --unsafe to auto-fix all issues
+    let output = tokio::process::Command::new("bunx")
+        .args(["biome", "check", "--write", "--unsafe"])
+        .current_dir(&frontend_dir)
+        .output()
+        .await?;
+
+    if output.status.success() {
+        if !global.is_silent() {
+            aprintln!("{} {}", p_g("✅"), "Biome check passed");
+        }
+        Ok(true)
+    } else {
+        aprintln!("{} {}", p_r("❌"), "Biome check failed");
+        // Show output on failure
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if !stdout.is_empty() {
+            aprintln!("{}", stdout);
+        }
+        if !stderr.is_empty() {
+            aprintln!("{}", stderr);
+        }
+        Ok(false)
+    }
+}
+
+async fn run_bun_typecheck(global: &crate::Global) -> Result<bool> {
+    if !global.is_silent() {
+        aprintln!("{} {}", p_b("🔧"), p_b("Running bun typecheck..."));
+    }
+
+    let frontend_dir = get_frontend_dir();
+
+    // Check if frontend directory exists
+    if !frontend_dir.exists() {
+        if !global.is_silent() {
+            aprintln!(
+                "{} {}",
+                p_y("⚠️"),
+                "Frontend directory not found, skipping TypeScript checks"
+            );
+        }
+        return Ok(true);
+    }
+
+    let status = tokio::process::Command::new("bun")
+        .args(["run", "typecheck"])
+        .current_dir(&frontend_dir)
+        .status()
+        .await?;
+
+    if status.success() {
+        if !global.is_silent() {
+            aprintln!("{} {}", p_g("✅"), "TypeScript type check passed");
+        }
+        Ok(true)
+    } else {
+        aprintln!("{} {}", p_r("❌"), "TypeScript type check failed");
+        aprintln!(
+            "{}",
+            p_r("Please fix TypeScript type errors before proceeding")
+        );
+        Ok(false)
+    }
+}
+
+async fn run_bun_test(global: &crate::Global) -> Result<bool> {
+    if !global.is_silent() {
+        aprintln!("{} {}", p_b("🔧"), p_b("Running bun test..."));
+    }
+
+    let frontend_dir = get_frontend_dir();
+
+    // Check if frontend directory exists
+    if !frontend_dir.exists() {
+        if !global.is_silent() {
+            aprintln!(
+                "{} {}",
+                p_y("⚠️"),
+                "Frontend directory not found, skipping TypeScript tests"
+            );
+        }
+        return Ok(true);
+    }
+
+    let output = tokio::process::Command::new("bun")
+        .arg("test")
+        .current_dir(&frontend_dir)
+        .output()
+        .await?;
+
+    if output.status.success() {
+        if !global.is_silent() {
+            // Extract test summary from output
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if let Some(line) = stdout.lines().find(|l| l.contains("pass")) {
+                aprintln!("{} TypeScript tests: {}", p_g("✅"), line.trim());
+            } else {
+                aprintln!("{} {}", p_g("✅"), "TypeScript tests passed");
+            }
+        }
+        Ok(true)
+    } else {
+        aprintln!("{} {}", p_r("❌"), "TypeScript tests failed");
+        // Show test output on failure
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if !stdout.is_empty() {
+            aprintln!("{}", stdout);
+        }
+        if !stderr.is_empty() {
+            aprintln!("{}", stderr);
+        }
+        Ok(false)
+    }
 }
