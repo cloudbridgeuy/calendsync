@@ -1,6 +1,6 @@
+import { Counter } from "./components/Counter"
 import { Greeting } from "./components/Greeting"
 import { Weather, type WeatherData } from "./components/Weather"
-import { Counter } from "./components/Counter"
 
 interface AppProps {
     weather?: WeatherData | null
@@ -12,7 +12,7 @@ export function App({ weather, weatherError, greeting }: AppProps) {
     const tempC = weather?.tempC ?? 0
 
     return (
-        <html>
+        <html lang="en">
             <head>
                 <meta charSet="utf-8" />
                 <title>Hello World - React SSR</title>

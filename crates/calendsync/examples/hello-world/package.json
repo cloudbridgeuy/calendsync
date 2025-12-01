@@ -1,21 +1,21 @@
 {
-  "name": "hello-world",
-  "type": "module",
-  "sideEffects": false,
-  "scripts": {
-    "build": "bun run build:server && bun run build:client",
-    "build:server": "bun build ./src/index.tsx --outdir ./dist --entry-naming hello-world.js --format esm --target browser --sourcemap=external",
-    "build:client": "bun build ./src/client.tsx --outdir ./dist --entry-naming hello-world-client.js --format esm --target browser --sourcemap=external",
-    "typecheck": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@faker-js/faker": "^9.0.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
-  },
-  "devDependencies": {
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "typescript": "^5.7.0"
-  }
+    "name": "hello-world",
+    "type": "module",
+    "sideEffects": false,
+    "scripts": {
+        "build": "bun run build:server && bun run build:client",
+        "build:server": "bun build ./src/index.tsx --outdir ./dist --entry-naming hello-world.js --format esm --target browser --sourcemap=external",
+        "build:client": "bun build ./src/client.tsx --outdir ./dist --entry-naming hello-world-client.js --format esm --target browser --sourcemap=external",
+        "typecheck": "tsc --noEmit"
+    },
+    "dependencies": {
+        "@faker-js/faker": "^9.0.0",
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0"
+    },
+    "devDependencies": {
+        "@types/react": "^19.0.0",
+        "@types/react-dom": "^19.0.0",
+        "typescript": "^5.7.0"
+    }
 }
