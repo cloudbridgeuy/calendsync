@@ -19,6 +19,10 @@ crates/frontend/manifest.json
 crates/calendsync/dist
 crates/calendsync/src/assets.rs
 node_modules/
+bun.lock
+
+# Example build artifacts
+crates/calendsync/examples/hello-world/dist/
 
 *.md
 !README.md
