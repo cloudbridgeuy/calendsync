@@ -13,5 +13,12 @@
 # Claude Code settings
 .claude/
 
+# Frontend build artifacts
+crates/frontend/dist/
+crates/frontend/manifest.json
+crates/calendsync/dist
+crates/calendsync/src/assets.rs
+node_modules/
+
 *.md
 !README.md
