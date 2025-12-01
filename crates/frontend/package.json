@@ -4,11 +4,11 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "bun build ./src/ts/calendar/index.ts --outdir ./dist --root ./src/ts --entry-naming [dir]-[hash].js --minify",
-        "build:dev": "bun build ./src/ts/calendar/index.ts --outdir ./dist --root ./src/ts --entry-naming [dir]-[hash].js --sourcemap=external",
+        "build": "bun build ./src/calendar/index.ts --outdir ./dist --root ./src --entry-naming [dir]-[hash].js --minify",
+        "build:dev": "bun build ./src/calendar/index.ts --outdir ./dist --root ./src --entry-naming [dir]-[hash].js --sourcemap=external",
         "typecheck": "tsc --noEmit",
         "test": "bun test",
-        "watch": "bun build ./src/ts/calendar/index.ts --outdir ./dist --root ./src/ts --entry-naming [dir]-[hash].js --sourcemap=external --watch"
+        "watch": "bun build ./src/calendar/index.ts --outdir ./dist --root ./src --entry-naming [dir]-[hash].js --sourcemap=external --watch"
     },
     "devDependencies": {
         "@biomejs/biome": "^2.3.8",
