@@ -36,3 +36,9 @@ uuid = { workspace = true }
 [dev-dependencies]
 http-body-util = { workspace = true }
 tower = { workspace = true }
+deno_core = { workspace = true }
+deno_error = { workspace = true }
+reqwest = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+rand = "0.9.2"
