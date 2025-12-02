@@ -47,6 +47,23 @@ export {
     shouldNavigateFromSwipe,
     snapToNearestDay,
 } from "./layout"
+// Re-export notification functions
+export {
+    addNotification,
+    countUnread,
+    createNotification,
+    formatNotificationTime,
+    getNotificationIcon,
+    getNotificationLabel,
+    getStorageKey,
+    MAX_NOTIFICATIONS,
+    markAllNotificationsAsRead,
+    markNotificationAsRead,
+    NOTIFICATION_STORAGE_PREFIX,
+    parseNotificationsJson,
+    removeNotification,
+    serializeNotifications,
+} from "./notifications"
 // Re-export all types
 export type {
     LayoutConstants,
