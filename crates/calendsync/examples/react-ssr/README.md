@@ -65,7 +65,7 @@ Then open http://localhost:3001 in your browser.
 
 ### Custom Ops
 
-deno_core allows defining custom "ops" - functions callable from JavaScript that execute Rust code.
+`deno_core` allows defining custom "ops" - functions callable from JavaScript that execute Rust code.
 
 ```rust
 // Sync op: receives HTML from JavaScript
@@ -96,7 +96,7 @@ extension!(
 
 ### Thread Spawning for JsRuntime
 
-`deno_core::JsRuntime` is not `Send`, so it cannot be used directly in async Axum handlers. The solution is to spawn a dedicated thread with its own tokio runtime:
+`deno_core::JsRuntime` is not `Send`, so it cannot be used directly in `async` Axum handlers. The solution is to spawn a dedicated thread with its own tokio runtime:
 
 ```rust
 async fn ssr_handler() -> Html<String> {
@@ -135,7 +135,7 @@ fn load_bundles() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Polyfill Requirements
 
-React and react-dom expect certain Web APIs that don't exist in deno_core's minimal environment. These must be polyfilled:
+React and react-dom expect certain Web APIs that don't exist in `deno_core's` minimal environment. These must be polyfilled:
 
 ### console
 
@@ -163,7 +163,7 @@ globalThis.performance = {
 
 ### MessageChannel
 
-React's scheduler uses MessageChannel for task scheduling:
+React's scheduler uses `MessageChannel` for task scheduling:
 
 ```javascript
 class MessageChannelPolyfill {
@@ -223,7 +223,7 @@ globalThis.fetch = async function (url) {
 ```
 hello-world/
 ├── src/
-│   ├── index.tsx          # Server entry point (SSR)
+│   ├── index.tsx           # Server entry point (SSR)
 │   ├── client.tsx          # Client entry point (hydration)
 │   ├── App.tsx             # Root component
 │   └── components/

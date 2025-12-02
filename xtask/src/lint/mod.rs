@@ -23,7 +23,7 @@ TypeScript checks (crates/frontend):
 7. bun run typecheck - TypeScript type checking
 8. bun test - Run TypeScript tests
 
-TypeScript checks (examples/hello-world):
+TypeScript checks (examples/react-ssr):
 9. biome check --write --unsafe - Format and lint example TypeScript
 10. bun run typecheck - Example TypeScript type checking
 
@@ -148,7 +148,7 @@ async fn run_lint_checks(command: &LintCommand, global: &crate::Global) -> Resul
         all_passed = false;
     }
 
-    // TypeScript checks (examples/hello-world)
+    // TypeScript checks (examples/react-ssr)
     // 9. Run biome check on example
     if !run_example_biome_check(global).await? {
         all_passed = false;
@@ -413,13 +413,13 @@ fn get_frontend_dir() -> std::path::PathBuf {
         .join("crates/frontend")
 }
 
-/// Get the path to the hello-world example directory.
+/// Get the path to the react-ssr example directory.
 fn get_example_hello_world_dir() -> std::path::PathBuf {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
     std::path::Path::new(manifest_dir)
         .parent()
         .unwrap()
-        .join("crates/calendsync/examples/hello-world")
+        .join("crates/calendsync/examples/react-ssr")
 }
 
 async fn run_biome_check(global: &crate::Global) -> Result<bool> {
@@ -564,7 +564,7 @@ async fn run_example_biome_check(global: &crate::Global) -> Result<bool> {
         aprintln!(
             "{} {}",
             p_b("🔧"),
-            p_b("Running biome check (examples/hello-world)...")
+            p_b("Running biome check (examples/react-ssr)...")
         );
     }
 
@@ -576,7 +576,7 @@ async fn run_example_biome_check(global: &crate::Global) -> Result<bool> {
             aprintln!(
                 "{} {}",
                 p_y("⚠️"),
-                "Example hello-world directory not found, skipping biome checks"
+                "Example react-ssr directory not found, skipping biome checks"
             );
         }
         return Ok(true);
@@ -614,7 +614,7 @@ async fn run_example_typecheck(global: &crate::Global) -> Result<bool> {
         aprintln!(
             "{} {}",
             p_b("🔧"),
-            p_b("Running bun typecheck (examples/hello-world)...")
+            p_b("Running bun typecheck (examples/react-ssr)...")
         );
     }
 
@@ -626,7 +626,7 @@ async fn run_example_typecheck(global: &crate::Global) -> Result<bool> {
             aprintln!(
                 "{} {}",
                 p_y("⚠️"),
-                "Example hello-world directory not found, skipping TypeScript checks"
+                "Example react-ssr directory not found, skipping TypeScript checks"
             );
         }
         return Ok(true);
@@ -664,7 +664,7 @@ async fn run_example_typecheck(global: &crate::Global) -> Result<bool> {
         aprintln!("{} {}", p_r("❌"), "Example TypeScript type check failed");
         aprintln!(
             "{}",
-            p_r("Please fix TypeScript type errors in examples/hello-world")
+            p_r("Please fix TypeScript type errors in examples/react-ssr")
         );
         Ok(false)
     }

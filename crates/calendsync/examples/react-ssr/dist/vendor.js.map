@@ -1,0 +1,10 @@
+{
+  "version": 3,
+  "sources": ["../src/vendor.ts"],
+  "sourcesContent": [
+    "// Vendor entry point - re-exports all vendor dependencies\n// This enables code splitting by giving Bun multiple entry points\n// that share common dependencies (React, React DOM)\n\nexport * from \"react\"\nexport * from \"react-dom/client\"\n"
+  ],
+  "mappings": ";;;;;;;;;AAIA;AACA;",
+  "debugId": "ABF521FCF56D97FD64756E2164756E21",
+  "names": []
+}
