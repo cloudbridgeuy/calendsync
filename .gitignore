@@ -26,6 +26,9 @@ bun.lock
 # Example build artifacts
 crates/calendsync/examples/hello-world/dist/
 
+# Playwright MCP screenshots
+.playwright-mcp/
+
 *.md
 !README.md
 !TODO.md
