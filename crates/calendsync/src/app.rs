@@ -15,12 +15,14 @@ use crate::{
     handlers::{
         api::{create_user, delete_user, get_user, list_users},
         calendar::calendar_demo,
+        calendar_react::{calendar_entries_api, calendar_react_ssr},
         calendars::{
             create_calendar, delete_calendar, get_calendar, list_calendars, update_calendar,
         },
         entries::{
             create_entry, delete_entry, get_entry, list_entries, toggle_entry, update_entry,
         },
+        events::events_sse,
         pages::index,
         static_files::serve_static,
     },
@@ -61,12 +63,17 @@ pub fn create_app(state: AppState) -> Router {
             get(get_entry).put(update_entry).delete(delete_entry),
         )
         .route("/entries/{id}/toggle", patch(toggle_entry))
+        // React calendar API (returns ServerDay[] format)
+        .route("/calendar-entries", get(calendar_entries_api))
+        // SSE events stream for real-time updates
+        .route("/events", get(events_sse))
         .layer(cors);
 
     // Main application router
     Router::new()
         .route("/", get(index))
         .route("/calendar", get(calendar_demo))
+        .route("/calendar/{calendar_id}", get(calendar_react_ssr))
         .route("/dist/{*filename}", get(serve_static))
         .nest("/api", api_routes)
         .layer(TraceLayer::new_for_http())

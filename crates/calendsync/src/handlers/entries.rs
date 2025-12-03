@@ -24,17 +24,33 @@ fn error_response(status: StatusCode, message: impl Into<String>) -> (StatusCode
 /// Query parameters for listing entries.
 #[derive(Debug, Deserialize)]
 pub struct ListEntriesQuery {
+    /// Filter by calendar ID (currently ignored, returns all mock data)
+    #[allow(dead_code)]
     pub calendar_id: Option<Uuid>,
+    /// Filter by start date (inclusive) - legacy parameter
     pub start: Option<chrono::NaiveDate>,
+    /// Filter by end date (inclusive) - legacy parameter
     pub end: Option<chrono::NaiveDate>,
+    /// Center date for React calendar (ISO 8601: YYYY-MM-DD)
+    pub highlighted_day: Option<chrono::NaiveDate>,
+    /// Number of days before highlighted_day (default: 3)
+    pub before: Option<i64>,
+    /// Number of days after highlighted_day (default: 3)
+    pub after: Option<i64>,
 }
 
 /// List all entries (GET /api/entries).
 ///
 /// Supports optional query parameters for filtering:
-/// - `calendar_id`: Filter by calendar
-/// - `start`: Filter by start date (inclusive)
-/// - `end`: Filter by end date (inclusive)
+/// - `calendar_id`: Filter by calendar (currently ignored, returns same mock data)
+/// - `start`: Filter by start date (inclusive) - legacy
+/// - `end`: Filter by end date (inclusive) - legacy
+/// - `highlighted_day`: Center date for React calendar
+/// - `before`: Number of days before highlighted_day (default: 3)
+/// - `after`: Number of days after highlighted_day (default: 3)
+///
+/// If `highlighted_day` is provided, `before` and `after` are used to calculate the date range.
+/// Otherwise, falls back to `start` and `end` parameters.
 pub async fn list_entries(
     State(state): State<AppState>,
     Query(query): Query<ListEntriesQuery>,
@@ -43,8 +59,21 @@ pub async fn list_entries(
 
     let all_entries: Vec<CalendarEntry> = entries_store.values().cloned().collect();
 
-    let filtered: Vec<&CalendarEntry> =
-        filter_entries(&all_entries, query.calendar_id, query.start, query.end);
+    // Calculate date range
+    let (start, end) = if let Some(highlighted) = query.highlighted_day {
+        // Use highlighted_day with before/after
+        let before_days = query.before.unwrap_or(3);
+        let after_days = query.after.unwrap_or(3);
+        let start = highlighted - chrono::Duration::days(before_days);
+        let end = highlighted + chrono::Duration::days(after_days);
+        (Some(start), Some(end))
+    } else {
+        // Fall back to legacy start/end parameters
+        (query.start, query.end)
+    };
+
+    // Note: calendar_id is accepted but ignored - returns same mock data
+    let filtered: Vec<&CalendarEntry> = filter_entries(&all_entries, None, start, end);
 
     let result: Vec<CalendarEntry> = filtered.into_iter().cloned().collect();
 
