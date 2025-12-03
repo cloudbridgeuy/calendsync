@@ -46,3 +46,9 @@ reqwest = { workspace = true }
 # For react-ssr example
 deno_core = { workspace = true }
 deno_error = { workspace = true }
+
+[package.metadata.cargo-machete]
+# calendsync_frontend is a build-time dependency that triggers the TypeScript build
+# via Cargo's dependency resolution. It's not imported in Rust code but is required
+# for the build process (see build.rs comment).
+ignored = ["calendsync_frontend"]
