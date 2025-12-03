@@ -6,9 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 calendsync is a Rust web application for creating calendars to sync with friends. It uses axum as the web framework with htmx for frontend interactivity.
 
+This is a technical exploration of the **"Rust full-stack" pattern**: server-side rendering React with `deno_core`, real-time updates via SSE, and a pure Rust backend - demonstrating that modern web apps can be built entirely in Rust without Node.js.
+
 **Current State**: Working web application with:
 - REST API for users, calendars, and calendar entries
 - htmx-powered HTML pages
+- React SSR calendar with real-time SSE updates
 - In-memory state with demo data for development
 - Graceful shutdown support
 
