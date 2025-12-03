@@ -10,16 +10,16 @@ fn main() {
     let frontend_dir = Path::new(&manifest_dir);
     let dist_dir = frontend_dir.join("dist");
     let manifest_path = frontend_dir.join("manifest.json");
-    let ts_dir = frontend_dir.join("src/ts");
+    let src_dir = frontend_dir.join("src");
 
-    // Rerun if TypeScript sources change
-    println!("cargo:rerun-if-changed=src/ts/");
+    // Rerun if TypeScript/React sources change
+    println!("cargo:rerun-if-changed=src/");
     println!("cargo:rerun-if-changed=package.json");
     println!("cargo:rerun-if-changed=tsconfig.json");
 
-    // Check if TypeScript sources exist
-    if !ts_dir.exists() {
-        eprintln!("Warning: No TypeScript sources found at {ts_dir:?}");
+    // Check if source directory exists
+    if !src_dir.exists() {
+        eprintln!("Warning: No sources found at {src_dir:?}");
         // Create empty manifest
         fs::write(&manifest_path, "{}").expect("Failed to write empty manifest.json");
         return;
@@ -58,13 +58,23 @@ fn main() {
             let entry = entry.expect("Failed to read entry");
             let filename = entry.file_name().to_string_lossy().to_string();
 
-            // Match pattern: name-hash.js (exclude source maps)
+            // Handle JS files (exclude source maps)
             if filename.ends_with(".js") && !filename.ends_with(".js.map") {
-                // Extract original name (e.g., "index" from "index-a1b2c3d4.js")
+                // Check if it's a hashed file (contains hash before .js)
                 if let Some(dash_pos) = filename.rfind('-') {
+                    // Hashed file: name-hash.js -> name.js
                     let original_name = &filename[..dash_pos];
                     manifest.insert(format!("{original_name}.js"), json!(filename));
+                } else {
+                    // Non-hashed file: name.js -> name.js (e.g., calendar-react-server.js)
+                    manifest.insert(filename.clone(), json!(filename));
                 }
+            }
+
+            // Handle CSS files
+            if filename.ends_with(".css") && !filename.ends_with(".css.map") {
+                // CSS files are not hashed, use as-is
+                manifest.insert(filename.clone(), json!(filename));
             }
         }
     }
