@@ -79,3 +79,133 @@ pub fn format_entries(entries: &[CalendarEntry]) -> String {
     }
     output
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use calendsync_core::calendar::{Calendar, CalendarEntry, EntryKind};
+    use chrono::NaiveDate;
+    use uuid::Uuid;
+
+    fn make_user(name: &str, email: &str) -> User {
+        User {
+            id: Uuid::new_v4(),
+            name: name.to_string(),
+            email: email.to_string(),
+        }
+    }
+
+    fn make_calendar(name: &str, color: &str) -> Calendar {
+        Calendar {
+            id: Uuid::new_v4(),
+            name: name.to_string(),
+            color: color.to_string(),
+            description: None,
+        }
+    }
+
+    fn make_entry(title: &str, date: NaiveDate) -> CalendarEntry {
+        CalendarEntry {
+            id: Uuid::new_v4(),
+            calendar_id: Uuid::new_v4(),
+            title: title.to_string(),
+            description: None,
+            location: None,
+            date,
+            color: None,
+            kind: EntryKind::AllDay,
+        }
+    }
+
+    #[test]
+    fn test_format_user() {
+        let user = make_user("Alice", "alice@example.com");
+        let output = format_user(&user);
+
+        assert!(output.contains("Alice"));
+        assert!(output.contains("alice@example.com"));
+        assert!(output.contains(&user.id.to_string()));
+    }
+
+    #[test]
+    fn test_format_users_empty() {
+        let output = format_users(&[]);
+        assert_eq!(output, "No users found.");
+    }
+
+    #[test]
+    fn test_format_users_multiple() {
+        let users = vec![
+            make_user("Alice", "alice@example.com"),
+            make_user("Bob", "bob@example.com"),
+        ];
+        let output = format_users(&users);
+
+        assert!(output.contains("USERS (2)"));
+        assert!(output.contains("Alice"));
+        assert!(output.contains("Bob"));
+    }
+
+    #[test]
+    fn test_format_calendar() {
+        let calendar = make_calendar("Work", "#3B82F6");
+        let output = format_calendar(&calendar);
+
+        assert!(output.contains("Work"));
+        assert!(output.contains("#3B82F6"));
+        assert!(output.contains(&calendar.id.to_string()));
+    }
+
+    #[test]
+    fn test_format_calendar_with_description() {
+        let mut calendar = make_calendar("Work", "#3B82F6");
+        calendar.description = Some("My work calendar".to_string());
+        let output = format_calendar(&calendar);
+
+        assert!(output.contains("Description: My work calendar"));
+    }
+
+    #[test]
+    fn test_format_calendars_empty() {
+        let output = format_calendars(&[]);
+        assert_eq!(output, "No calendars found.");
+    }
+
+    #[test]
+    fn test_format_entry() {
+        let entry = make_entry("Meeting", NaiveDate::from_ymd_opt(2024, 6, 15).unwrap());
+        let output = format_entry(&entry);
+
+        assert!(output.contains("Meeting"));
+        assert!(output.contains("2024-06-15"));
+        assert!(output.contains(&entry.id.to_string()));
+    }
+
+    #[test]
+    fn test_format_entry_with_location() {
+        let mut entry = make_entry("Meeting", NaiveDate::from_ymd_opt(2024, 6, 15).unwrap());
+        entry.location = Some("Room 101".to_string());
+        let output = format_entry(&entry);
+
+        assert!(output.contains("Location: Room 101"));
+    }
+
+    #[test]
+    fn test_format_entries_empty() {
+        let output = format_entries(&[]);
+        assert_eq!(output, "No entries found.");
+    }
+
+    #[test]
+    fn test_format_entries_multiple() {
+        let entries = vec![
+            make_entry("Meeting 1", NaiveDate::from_ymd_opt(2024, 6, 15).unwrap()),
+            make_entry("Meeting 2", NaiveDate::from_ymd_opt(2024, 6, 16).unwrap()),
+        ];
+        let output = format_entries(&entries);
+
+        assert!(output.contains("ENTRIES (2)"));
+        assert!(output.contains("Meeting 1"));
+        assert!(output.contains("Meeting 2"));
+    }
+}
