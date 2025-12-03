@@ -10,8 +10,10 @@
 
 .DS_Store
 
-# Claude Code settings
-.claude/
+# Claude Code settings (keep context docs)
+.claude/*
+!.claude/context/
+!.claude/commands/
 
 # Frontend build artifacts
 crates/frontend/dist/
@@ -26,3 +28,6 @@ crates/calendsync/examples/hello-world/dist/
 
 *.md
 !README.md
+!TODO.md
+!CLAUDE.md
+!.claude/context/*.md

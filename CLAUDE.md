@@ -56,6 +56,8 @@ cargo run --example react-ssr -p calendsync
 - **crates/calendsync** - Main binary application (web server)
 - **crates/core** - Pure business logic library (Functional Core)
 - **crates/frontend** - TypeScript build crate (bun bundler)
+- **crates/ssr_core** - Pure SSR functions (config, validation, polyfills)
+- **crates/ssr** - SSR worker pool (threading, JsRuntime execution)
 - **xtask/** - Development automation tasks (cargo-xtask pattern)
 
 ### Web Application Structure (crates/calendsync)
@@ -73,8 +75,9 @@ src/
 │   ├── entries.rs   # Entry CRUD endpoints
 │   ├── pages.rs     # HTML page handlers
 │   ├── calendar.rs  # Calendar demo page (htmx)
-│   ├── calendar_react.rs # React SSR calendar handler
-│   └── events.rs    # SSE events handler for real-time updates
+│   ├── calendar_react.rs # React SSR calendar handler (uses SsrPool)
+│   ├── events.rs    # SSE events handler for real-time updates
+│   └── health.rs    # SSR pool health check endpoints
 └── models/          # Data models
     ├── user.rs
     ├── calendar.rs
@@ -570,6 +573,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | Web Application | `crates/calendsync/README.md` |
 | React SSR Example | `crates/calendsync/examples/README.md` |
 | React Calendar | `.claude/context/react-calendar.md` |
+| SSR Worker Pool | `.claude/context/ssr-worker-pool.md` |
 | Axum Reference | `.claude/context/AXUM.md` |
 | HTMX Reference | `.claude/context/HTMX.md` |
 | React SSR Context | `.claude/context/react-ssr-example.md` |
