@@ -2,10 +2,71 @@
  * Notification Center component - displays notification bell with badge and dropdown panel.
  */
 
-import { formatNotificationTime, getNotificationIcon, getNotificationLabel } from "@core/calendar"
+import { formatNotificationTime, getNotificationLabel } from "@core/calendar"
 import { useCallback, useEffect, useRef } from "react"
 import type { NotificationCenterActions, NotificationCenterState } from "../hooks"
-import type { Notification } from "../types"
+import type { Notification, NotificationType } from "../types"
+
+/**
+ * Get SVG icon for notification type.
+ * These are decorative icons - the notification type is already conveyed via the label text.
+ */
+function NotificationIcon({ type }: { type: NotificationType }) {
+    switch (type) {
+        case "added":
+            return (
+                <svg
+                    width={12}
+                    height={12}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2.5}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                >
+                    <title>Added</title>
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+            )
+        case "updated":
+            return (
+                <svg
+                    width={12}
+                    height={12}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2.5}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                >
+                    <title>Updated</title>
+                    <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                </svg>
+            )
+        case "deleted":
+            return (
+                <svg
+                    width={12}
+                    height={12}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2.5}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                >
+                    <title>Deleted</title>
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+            )
+    }
+}
 
 interface NotificationCenterProps {
     /** Notification center state */
@@ -197,7 +258,6 @@ interface NotificationItemProps {
 
 function NotificationItem({ notification, onClick, onDismiss }: NotificationItemProps) {
     const { type, entryTitle, date, timestamp, read } = notification
-    const icon = getNotificationIcon(type)
     const label = getNotificationLabel(type)
     const timeAgo = formatNotificationTime(timestamp)
 
@@ -214,7 +274,9 @@ function NotificationItem({ notification, onClick, onDismiss }: NotificationItem
                 }
             }}
         >
-            <span className={`notification-item-icon notification-item-icon-${type}`}>{icon}</span>
+            <span className={`notification-item-icon notification-item-icon-${type}`}>
+                <NotificationIcon type={type} />
+            </span>
             <div className="notification-item-content">
                 <div className="notification-item-header">
                     <span className="notification-item-label">{label}</span>
