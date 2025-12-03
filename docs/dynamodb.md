@@ -41,16 +41,14 @@ PAY_PER_REQUEST (on-demand capacity)
 |-----------|---------|---------|
 | `PK` | `USER#<user_id>` | `USER#550e8400-e29b-41d4-a716-446655440001` |
 | `SK` | `USER#<user_id>` | `USER#550e8400-e29b-41d4-a716-446655440001` |
-| `GSI1PK` | `USER#EMAIL#<email>` | `USER#EMAIL#john@example.com` |
-| `GSI1SK` | `USER#<user_id>` | `USER#550e8400-e29b-41d4-a716-446655440001` |
+| `GSI1PK` | (not used) | - |
+| `GSI1SK` | (not used) | - |
 
 **Attributes**:
 ```json
 {
   "PK": "USER#550e8400-e29b-41d4-a716-446655440001",
   "SK": "USER#550e8400-e29b-41d4-a716-446655440001",
-  "GSI1PK": "USER#EMAIL#john@example.com",
-  "GSI1SK": "USER#550e8400-e29b-41d4-a716-446655440001",
   "entityType": "USER",
   "id": "550e8400-e29b-41d4-a716-446655440001",
   "name": "John Doe",
@@ -186,18 +184,7 @@ Query:
     :sk = "USER#<user_id>"
 ```
 
-### 2. Get User by Email
-
-```
-Query:
-  TableName: calendsync
-  IndexName: GSI1
-  KeyConditionExpression: GSI1PK = :pk
-  ExpressionAttributeValues:
-    :pk = "USER#EMAIL#<email>"
-```
-
-### 3. Get Calendar by ID
+### 2. Get Calendar by ID
 
 ```
 Query:
@@ -208,7 +195,7 @@ Query:
     :sk = "CAL#<calendar_id>"
 ```
 
-### 4. Get Entry by ID
+### 3. Get Entry by ID
 
 ```
 Query:
@@ -219,7 +206,7 @@ Query:
     :sk = "ENTRY#<entry_id>"
 ```
 
-### 5. Get All Users for a Calendar (with roles)
+### 4. Get All Users for a Calendar (with roles)
 
 ```
 Query:
@@ -232,7 +219,7 @@ Query:
 
 Returns membership items with `userId` and `role`. To get full user details, perform a `BatchGetItem` on the user IDs.
 
-### 6. Get All Calendars for a User (with roles)
+### 5. Get All Calendars for a User (with roles)
 
 ```
 Query:
@@ -246,7 +233,7 @@ Query:
 
 Returns membership items with `calendarId` and `role`. To get full calendar details, perform a `BatchGetItem`.
 
-### 7. Get Entries for a Calendar Within a Date Range
+### 6. Get Entries for a Calendar Within a Date Range
 
 ```
 Query:
