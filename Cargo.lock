@@ -357,6 +357,7 @@ dependencies = [
  "axum",
  "calendsync_core",
  "calendsync_frontend",
+ "calendsync_ssr",
  "chrono",
  "clap",
  "deno_core",
@@ -393,6 +394,28 @@ version = "0.0.0"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "calendsync_ssr"
+version = "0.0.0"
+dependencies = [
+ "calendsync_ssr_core",
+ "deno_core",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "calendsync_ssr_core"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]

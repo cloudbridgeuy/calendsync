@@ -9,6 +9,7 @@ use tokio::sync::broadcast;
 use uuid::Uuid;
 
 use calendsync_core::calendar::{Calendar, CalendarEntry};
+use calendsync_ssr::SsrPool;
 
 use crate::mock_data::generate_mock_entries;
 use crate::models::User;
@@ -52,6 +53,9 @@ pub struct AppState {
     pub event_history: Arc<RwLock<VecDeque<StoredEvent>>>,
     /// Shutdown signal sender for SSE connections.
     pub shutdown_tx: broadcast::Sender<()>,
+    /// SSR worker pool for React server-side rendering.
+    /// None when SSR is not initialized (e.g., in tests).
+    pub ssr_pool: Option<Arc<SsrPool>>,
 }
 
 impl Default for AppState {
@@ -64,6 +68,7 @@ impl Default for AppState {
             event_counter: Arc::new(AtomicU64::new(1)),
             event_history: Arc::new(RwLock::new(VecDeque::new())),
             shutdown_tx,
+            ssr_pool: None,
         }
     }
 }
@@ -72,6 +77,12 @@ impl AppState {
     /// Create a new application state.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Set the SSR pool.
+    pub fn with_ssr_pool(mut self, pool: SsrPool) -> Self {
+        self.ssr_pool = Some(Arc::new(pool));
+        self
     }
 
     /// Create a new application state with demo data.

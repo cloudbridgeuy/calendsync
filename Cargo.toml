@@ -20,6 +20,8 @@ debug = 0
 # Internal Dependencies
 calendsync_core = { version = "0.0.0", path = "crates/core" }
 calendsync_frontend = { version = "0.0.0", path = "crates/frontend" }
+calendsync_ssr_core = { version = "0.0.0", path = "crates/ssr_core" }
+calendsync_ssr = { version = "0.0.0", path = "crates/ssr" }
 
 # External Dependencies
 anstream = "0.6.21"

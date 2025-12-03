@@ -23,6 +23,7 @@ use crate::{
             create_entry, delete_entry, get_entry, list_entries, toggle_entry, update_entry,
         },
         events::events_sse,
+        health::{ssr_health, ssr_stats},
         pages::index,
         static_files::serve_static,
     },
@@ -69,6 +70,11 @@ pub fn create_app(state: AppState) -> Router {
         .route("/events", get(events_sse))
         .layer(cors);
 
+    // Health check routes (no CORS, no timeout layer for probes)
+    let health_routes = Router::new()
+        .route("/ssr", get(ssr_health))
+        .route("/ssr/stats", get(ssr_stats));
+
     // Main application router
     Router::new()
         .route("/", get(index))
@@ -76,6 +82,7 @@ pub fn create_app(state: AppState) -> Router {
         .route("/calendar/{calendar_id}", get(calendar_react_ssr))
         .route("/dist/{*filename}", get(serve_static))
         .nest("/api", api_routes)
+        .nest("/health", health_routes)
         .layer(TraceLayer::new_for_http())
         .layer(TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,

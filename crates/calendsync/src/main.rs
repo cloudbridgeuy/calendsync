@@ -6,7 +6,10 @@ mod mock_data;
 mod models;
 mod state;
 
+use std::path::Path;
+
 use anyhow::Result;
+use calendsync_ssr::{SsrPool, SsrPoolConfig};
 use clap::Parser;
 use listenfd::ListenFd;
 use tokio::{net::TcpListener, signal};
@@ -41,8 +44,11 @@ async fn main() -> Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    // Create application state with demo data
-    let state = AppState::with_demo_data();
+    // Initialize SSR pool
+    let ssr_pool = init_ssr_pool()?;
+
+    // Create application state with demo data and SSR pool
+    let state = AppState::with_demo_data().with_ssr_pool(ssr_pool);
 
     // Build the application router
     let app = create_app(state.clone());
@@ -71,6 +77,43 @@ async fn main() -> Result<()> {
 
     tracing::info!("Server stopped");
     Ok(())
+}
+
+/// Initialize the SSR worker pool.
+///
+/// Reads the server bundle path from the manifest and creates a pool
+/// with workers based on available parallelism.
+fn init_ssr_pool() -> Result<SsrPool> {
+    // Parse manifest to find server bundle name
+    let manifest_str = include_str!("../../frontend/manifest.json");
+    let manifest: serde_json::Value = serde_json::from_str(manifest_str)?;
+
+    let server_bundle_name = manifest
+        .get("calendar-react.js")
+        .and_then(|v| v.as_str())
+        .unwrap_or("calendar-react-server.js");
+
+    let bundle_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../frontend/dist")
+        .join(server_bundle_name);
+
+    // Determine worker count based on available parallelism
+    let worker_count = std::thread::available_parallelism()
+        .map(|p| p.get())
+        .unwrap_or(4);
+
+    // Create pool config (10s timeout, production)
+    let pool_config = SsrPoolConfig::with_defaults(worker_count)?;
+
+    tracing::info!(
+        workers = worker_count,
+        bundle = %bundle_path.display(),
+        "Initializing SSR pool"
+    );
+
+    let pool = SsrPool::new(pool_config, &bundle_path)?;
+
+    Ok(pool)
 }
 
 /// Wait for shutdown signals (Ctrl+C or SIGTERM) and notify SSE handlers.

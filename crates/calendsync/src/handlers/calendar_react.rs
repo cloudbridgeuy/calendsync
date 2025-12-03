@@ -1,282 +1,19 @@
 //! React SSR handler for `/calendar/{calendar_id}`.
 //!
-//! Uses deno_core to server-side render the React calendar with prerender API.
-
-use std::cell::RefCell;
-use std::sync::OnceLock;
+//! Uses the SSR worker pool from `calendsync_ssr` to render the React calendar.
 
 use axum::{
     extract::{Path, State},
-    response::Html,
+    http::StatusCode,
+    response::{Html, IntoResponse, Response},
 };
 use chrono::Local;
-use deno_core::{extension, op2, JsRuntime, RuntimeOptions};
-use tokio::sync::oneshot;
 use uuid::Uuid;
 
 use calendsync_core::calendar::{filter_entries, CalendarEntry};
+use calendsync_ssr::{sanitize_error, SsrConfig, SsrError};
 
 use crate::state::AppState;
-
-// Cache the server bundle in memory after first read
-static SERVER_BUNDLE: OnceLock<String> = OnceLock::new();
-
-// Thread-local storage for the rendered HTML (used within SSR thread)
-thread_local! {
-    static RENDERED_HTML: RefCell<Option<String>> = const { RefCell::new(None) };
-}
-
-/// Custom op to receive HTML from JavaScript
-#[op2(fast)]
-fn op_set_html(#[string] html: String) {
-    RENDERED_HTML.with(|cell| {
-        *cell.borrow_mut() = Some(html);
-    });
-}
-
-// Define the extension with the op
-extension!(react_ssr_ext, ops = [op_set_html]);
-
-/// Web API polyfills required for React 19 prerender to run in deno_core.
-fn get_polyfills(config_json: &str) -> String {
-    let node_env = std::env::var("NODE_ENV").unwrap_or_else(|_| "development".to_string());
-    let control_plane_url = std::env::var("CONTROL_PLANE_URL")
-        .unwrap_or_else(|_| "http://calendsync.localhost:8000".to_string());
-
-    format!(
-        r#"
-// SSR Configuration - injected by Rust
-globalThis.__SSR_CONFIG__ = {config_json};
-
-// Process polyfill (Node.js compatibility)
-globalThis.process = {{
-    env: {{
-        NODE_ENV: '{node_env}',
-        CONTROL_PLANE_URL: '{control_plane_url}',
-    }},
-    nextTick: (fn) => queueMicrotask(fn),
-}};
-
-// Console polyfill - forward JS logs to Rust stdout
-globalThis.console = {{
-    log: (...args) => Deno.core.print('[JS] ' + args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ') + '\n', false),
-    error: (...args) => Deno.core.print('[JS ERROR] ' + args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ') + '\n', true),
-    warn: (...args) => Deno.core.print('[JS WARN] ' + args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ') + '\n', false),
-    info: (...args) => Deno.core.print('[JS] ' + args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ') + '\n', false),
-    debug: () => {{}},
-}};
-
-// Performance polyfill for timing
-const performanceStart = Date.now();
-globalThis.performance = {{
-    now: () => Date.now() - performanceStart,
-}};
-
-// MessageChannel polyfill - React uses this for scheduling
-class MessageChannelPolyfill {{
-    constructor() {{
-        this.port1 = {{
-            postMessage: () => {{
-                if (this.port2.onmessage) {{
-                    queueMicrotask(this.port2.onmessage);
-                }}
-            }},
-            onmessage: null,
-        }};
-        this.port2 = {{
-            postMessage: () => {{
-                if (this.port1.onmessage) {{
-                    queueMicrotask(this.port1.onmessage);
-                }}
-            }},
-            onmessage: null,
-        }};
-    }}
-}}
-globalThis.MessageChannel = MessageChannelPolyfill;
-
-// TextEncoder/TextDecoder polyfills - used by React for string encoding
-class TextEncoderPolyfill {{
-    encode(str) {{
-        const utf8 = unescape(encodeURIComponent(str));
-        const result = new Uint8Array(utf8.length);
-        for (let i = 0; i < utf8.length; i++) {{
-            result[i] = utf8.charCodeAt(i);
-        }}
-        return result;
-    }}
-    encodeInto(str, dest) {{
-        const encoded = this.encode(str);
-        const len = Math.min(encoded.length, dest.length);
-        dest.set(encoded.subarray(0, len));
-        return {{ read: str.length, written: len }};
-    }}
-}}
-globalThis.TextEncoder = TextEncoderPolyfill;
-
-class TextDecoderPolyfill {{
-    constructor(label = 'utf-8') {{
-        this.encoding = label.toLowerCase();
-    }}
-    decode(input) {{
-        if (!input) return '';
-        const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
-        let result = '';
-        for (let i = 0; i < bytes.length; i++) {{
-            result += String.fromCharCode(bytes[i]);
-        }}
-        return decodeURIComponent(escape(result));
-    }}
-}}
-globalThis.TextDecoder = TextDecoderPolyfill;
-
-// ReadableStream polyfill for React 19 prerender
-class ReadableStreamPolyfill {{
-    constructor(underlyingSource) {{
-        this._source = underlyingSource;
-        this._started = false;
-        this._done = false;
-        this._chunks = [];
-        this._controller = {{
-            enqueue: (chunk) => {{ this._chunks.push(chunk); }},
-            close: () => {{ this._done = true; }},
-            error: (e) => {{ this._error = e; }},
-            desiredSize: 1,
-        }};
-    }}
-
-    getReader() {{
-        const self = this;
-        return {{
-            async read() {{
-                // Check for errors
-                if (self._error) {{
-                    throw self._error;
-                }}
-
-                // If we have buffered chunks, return one
-                if (self._chunks.length > 0) {{
-                    return {{ done: false, value: self._chunks.shift() }};
-                }}
-
-                // Check if stream is done
-                if (self._done) {{
-                    return {{ done: true, value: undefined }};
-                }}
-
-                // Start the stream if not started
-                if (!self._started) {{
-                    self._started = true;
-                    if (self._source.start) {{
-                        await self._source.start(self._controller);
-                    }}
-                }}
-
-                // Return any chunks enqueued during start
-                if (self._chunks.length > 0) {{
-                    return {{ done: false, value: self._chunks.shift() }};
-                }}
-
-                // Keep pulling until we get data or stream closes
-                while (!self._done && self._chunks.length === 0) {{
-                    if (self._source.pull) {{
-                        await self._source.pull(self._controller);
-                    }} else {{
-                        // No pull function and no data means stream is done
-                        break;
-                    }}
-                }}
-
-                // Check for errors again
-                if (self._error) {{
-                    throw self._error;
-                }}
-
-                // Return chunk if available
-                if (self._chunks.length > 0) {{
-                    return {{ done: false, value: self._chunks.shift() }};
-                }}
-
-                // Stream is done
-                return {{ done: true, value: undefined }};
-            }},
-            releaseLock() {{}},
-        }};
-    }}
-}}
-globalThis.ReadableStream = ReadableStreamPolyfill;
-
-// WritableStream polyfill (minimal, for React)
-class WritableStreamPolyfill {{
-    constructor(underlyingSink) {{
-        this._sink = underlyingSink;
-    }}
-    getWriter() {{
-        const self = this;
-        return {{
-            write(chunk) {{
-                if (self._sink && self._sink.write) {{
-                    return self._sink.write(chunk);
-                }}
-            }},
-            close() {{
-                if (self._sink && self._sink.close) {{
-                    return self._sink.close();
-                }}
-            }},
-            releaseLock() {{}},
-        }};
-    }}
-}}
-globalThis.WritableStream = WritableStreamPolyfill;
-
-// TransformStream polyfill (minimal, for React)
-class TransformStreamPolyfill {{
-    constructor(transformer) {{
-        this._transformer = transformer;
-        this.readable = new ReadableStreamPolyfill({{
-            start: () => {{}},
-            pull: () => {{}},
-        }});
-        this.writable = new WritableStreamPolyfill({{
-            write: () => {{}},
-            close: () => {{}},
-        }});
-    }}
-}}
-globalThis.TransformStream = TransformStreamPolyfill;
-"#
-    )
-}
-
-/// Load the server bundle from disk (cached after first load).
-fn load_server_bundle() -> anyhow::Result<&'static str> {
-    // Try to get the cached bundle first
-    if let Some(bundle) = SERVER_BUNDLE.get() {
-        return Ok(bundle.as_str());
-    }
-
-    // Load and cache the bundle
-    let manifest_str = include_str!("../../../frontend/manifest.json");
-    let manifest: serde_json::Value = serde_json::from_str(manifest_str)?;
-
-    // Get the server bundle filename from manifest
-    let server_bundle_name = manifest
-        .get("calendar-react.js")
-        .and_then(|v| v.as_str())
-        .unwrap_or("calendar-react-server.js");
-
-    let dist_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../frontend/dist")
-        .join(server_bundle_name);
-
-    let content = std::fs::read_to_string(&dist_path)
-        .map_err(|e| anyhow::anyhow!("Failed to read server bundle at {dist_path:?}: {e}"))?;
-
-    // Store and return (race condition is fine - same content)
-    let _ = SERVER_BUNDLE.set(content);
-    Ok(SERVER_BUNDLE.get().unwrap().as_str())
-}
 
 /// Get the client bundle URL from the manifest.
 fn get_client_bundle_url() -> String {
@@ -429,40 +166,88 @@ pub async fn calendar_entries_api(
     axum::Json(days)
 }
 
-/// Run React SSR in a dedicated thread.
-async fn run_react_ssr(config_json: String) -> anyhow::Result<String> {
-    let js_code = load_server_bundle()?;
-
-    // Create runtime with our custom extension
-    let mut runtime = JsRuntime::new(RuntimeOptions {
-        extensions: vec![react_ssr_ext::init()],
-        ..Default::default()
-    });
-
-    // Generate polyfills with config
-    let polyfills = get_polyfills(&config_json);
-
-    // Inject polyfills, then execute React bundle
-    runtime.execute_script("<polyfills>", polyfills)?;
-    runtime.execute_script("<react-ssr>", js_code.to_string())?;
-
-    // Run event loop for async operations
-    runtime.run_event_loop(Default::default()).await?;
-
-    // Retrieve the rendered HTML
-    RENDERED_HTML
-        .with(|cell| cell.borrow_mut().take())
-        .ok_or_else(|| anyhow::anyhow!("No HTML was rendered"))
+/// Generate error HTML with client-side fallback.
+fn error_html(error: &str, calendar_id: &str, client_bundle_url: &str) -> String {
+    format!(
+        r#"<!DOCTYPE html>
+<html>
+<head>
+    <title>Calendar</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/dist/calendar-react.css">
+    <style>
+        .error-container {{
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 2rem;
+            text-align: center;
+        }}
+        .error-message {{ color: #dc2626; margin-bottom: 1rem; }}
+        .retry-button {{
+            padding: 0.75rem 1.5rem;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+        }}
+    </style>
+</head>
+<body>
+    <div class="error-container" id="error">
+        <h1>Unable to load calendar</h1>
+        <p class="error-message">{error}</p>
+        <button class="retry-button" onclick="location.reload()">Retry</button>
+    </div>
+    <!-- Fallback: try client-side render -->
+    <div id="root" style="display:none"></div>
+    <script>
+        window.__INITIAL_DATA__ = {{
+            calendarId: "{calendar_id}",
+            highlightedDay: new Date().toISOString().split('T')[0],
+            days: [],
+            clientBundleUrl: "{client_bundle_url}",
+            controlPlaneUrl: ""
+        }};
+    </script>
+    <script type="module" src="{client_bundle_url}" onerror="document.getElementById('error').style.display='flex'"></script>
+    <script>
+        // If client bundle loads, hide error and show app
+        window.addEventListener('load', () => {{
+            if (window.__CALENDAR_LOADED__) {{
+                document.getElementById('error').style.display = 'none';
+                document.getElementById('root').style.display = 'block';
+            }}
+        }});
+    </script>
+</body>
+</html>"#
+    )
 }
 
 /// SSR handler for `/calendar/{calendar_id}`.
 ///
-/// Renders the React calendar server-side and returns HTML.
+/// Renders the React calendar server-side using the SSR worker pool.
 #[axum::debug_handler]
 pub async fn calendar_react_ssr(
     State(state): State<AppState>,
     Path(calendar_id): Path<Uuid>,
-) -> Html<String> {
+) -> Response {
+    // Check if SSR pool is available
+    let Some(ssr_pool) = &state.ssr_pool else {
+        tracing::error!("SSR pool not initialized");
+        let client_bundle_url = get_client_bundle_url();
+        return Html(error_html(
+            "SSR not available",
+            &calendar_id.to_string(),
+            &client_bundle_url,
+        ))
+        .into_response();
+    };
+
     // Get today's date as the highlighted day
     let today = Local::now().date_naive();
     let highlighted_day = today.to_string();
@@ -492,44 +277,46 @@ pub async fn calendar_react_ssr(
         "controlPlaneUrl": "",
     });
 
-    let config = serde_json::json!({
+    // Create SSR config (with payload size validation)
+    let config = match SsrConfig::new(serde_json::json!({
         "initialData": initial_data,
-    });
-
-    let config_json = serde_json::to_string(&config).expect("Failed to serialize config");
-
-    // Spawn SSR in a dedicated thread because deno_core's JsRuntime is not Send
-    let (tx, rx) = oneshot::channel();
-
-    std::thread::spawn(move || {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-        let _ = tx.send(rt.block_on(run_react_ssr(config_json)));
-    });
-
-    match rx.await {
-        Ok(Ok(html)) => Html(html),
-        Ok(Err(e)) => {
-            tracing::error!(error = %e, "React SSR failed");
-            Html(format!(
-                r#"<!DOCTYPE html>
-<html>
-<head><title>Error</title></head>
-<body><h1>Error rendering calendar</h1><pre>{e}</pre></body>
-</html>"#
+    })) {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to create SSR config");
+            return Html(error_html(
+                &sanitize_error(&SsrError::Core(e)),
+                &calendar_id.to_string(),
+                &client_bundle_url,
             ))
+            .into_response();
+        }
+    };
+
+    // Render using SSR pool
+    match ssr_pool.render(config).await {
+        Ok(html) => Html(html).into_response(),
+        Err(SsrError::Overloaded { retry_after_secs }) => {
+            // Return 503 with Retry-After header
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                [("Retry-After", retry_after_secs.to_string())],
+                Html(error_html(
+                    &sanitize_error(&SsrError::Overloaded { retry_after_secs }),
+                    &calendar_id.to_string(),
+                    &client_bundle_url,
+                )),
+            )
+                .into_response()
         }
         Err(e) => {
-            tracing::error!(error = %e, "SSR channel error");
-            Html(format!(
-                r#"<!DOCTYPE html>
-<html>
-<head><title>Error</title></head>
-<body><h1>Internal Error</h1><pre>{e}</pre></body>
-</html>"#
+            tracing::error!(error = %e, "SSR render failed");
+            Html(error_html(
+                &sanitize_error(&e),
+                &calendar_id.to_string(),
+                &client_bundle_url,
             ))
+            .into_response()
         }
     }
 }
