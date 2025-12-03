@@ -4,15 +4,30 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "bun build ./src/calendar/index.ts --outdir ./dist --root ./src --entry-naming [dir]-[hash].js --minify",
-        "build:dev": "bun build ./src/calendar/index.ts --outdir ./dist --root ./src --entry-naming [dir]-[hash].js --sourcemap=external",
+        "build": "bun run build:calendar && bun run build:calendar-react",
+        "build:dev": "bun run build:calendar:dev && bun run build:calendar-react:dev",
+        "build:calendar": "bun build ./src/calendar/index.ts --outdir ./dist --root ./src --entry-naming [dir]-[hash].js --minify",
+        "build:calendar:dev": "bun build ./src/calendar/index.ts --outdir ./dist --root ./src --entry-naming [dir]-[hash].js --sourcemap=external",
+        "build:calendar-react": "bun run build:calendar-react:server && bun run build:calendar-react:client && bun run build:calendar-react:css",
+        "build:calendar-react:dev": "bun run build:calendar-react:server:dev && bun run build:calendar-react:client:dev && bun run build:calendar-react:css",
+        "build:calendar-react:css": "cp ./src/calendar-react/styles.css ./dist/calendar-react.css",
+        "build:calendar-react:server": "bun build ./src/calendar-react/server.tsx --outdir ./dist --entry-naming calendar-react-server.js --format esm --target browser --minify",
+        "build:calendar-react:server:dev": "bun build ./src/calendar-react/server.tsx --outdir ./dist --entry-naming calendar-react-server.js --format esm --target browser --sourcemap=external",
+        "build:calendar-react:client": "bun build ./src/calendar-react/client.tsx --outdir ./dist --entry-naming calendar-react-client-[hash].js --format esm --target browser --minify --define:process.env.NODE_ENV='\"production\"'",
+        "build:calendar-react:client:dev": "bun build ./src/calendar-react/client.tsx --outdir ./dist --entry-naming calendar-react-client-[hash].js --format esm --target browser --sourcemap=external --define:process.env.NODE_ENV='\"development\"'",
         "typecheck": "tsc --noEmit",
         "test": "bun test",
         "watch": "bun build ./src/calendar/index.ts --outdir ./dist --root ./src --entry-naming [dir]-[hash].js --sourcemap=external --watch"
     },
+    "dependencies": {
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0"
+    },
     "devDependencies": {
         "@biomejs/biome": "^2.3.8",
         "@types/bun": "latest",
+        "@types/react": "^19.0.0",
+        "@types/react-dom": "^19.0.0",
         "typescript": "^5.3.0"
     }
 }

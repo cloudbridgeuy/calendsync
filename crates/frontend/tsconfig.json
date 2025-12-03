@@ -4,6 +4,7 @@
         "module": "ESNext",
         "moduleResolution": "bundler",
         "lib": ["ES2022", "DOM", "DOM.Iterable"],
+        "jsx": "react-jsx",
         "strict": true,
         "noEmit": true,
         "skipLibCheck": true,
@@ -19,7 +20,8 @@
         "baseUrl": "./src",
         "paths": {
             "@core/*": ["./core/*"],
-            "@calendar/*": ["./calendar/*"]
+            "@calendar/*": ["./calendar/*"],
+            "@calendar-react/*": ["./calendar-react/*"]
         }
     },
     "include": ["src/**/*"],
