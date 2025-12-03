@@ -2,7 +2,7 @@ use chrono::{NaiveDate, NaiveTime};
 use serde::{Deserialize, Deserializer};
 use uuid::Uuid;
 
-use calendsync_core::calendar::{CalendarEntry, EntryKind};
+use calendsync_core::calendar::{CalendarEntry, EntryKind, EntryType};
 
 /// Deserialize an optional string, treating empty strings as None.
 fn deserialize_optional_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
@@ -42,7 +42,34 @@ where
     }
 }
 
-/// Request payload for creating a new entry.
+/// Server-side entry type with custom deserialization.
+///
+/// This wraps the core `EntryType` to provide backwards compatibility
+/// with existing form submissions.
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ServerEntryType {
+    AllDay,
+    Timed,
+    Task,
+    MultiDay,
+}
+
+impl From<ServerEntryType> for EntryType {
+    fn from(t: ServerEntryType) -> Self {
+        match t {
+            ServerEntryType::AllDay => EntryType::AllDay,
+            ServerEntryType::Timed => EntryType::Timed,
+            ServerEntryType::Task => EntryType::Task,
+            ServerEntryType::MultiDay => EntryType::MultiDay,
+        }
+    }
+}
+
+/// Server-side request payload for creating a new entry.
+///
+/// This wraps the core `CreateEntryRequest` with server-specific custom
+/// deserializers for form handling (empty strings → None).
 #[derive(Debug, Deserialize)]
 pub struct CreateEntry {
     pub calendar_id: Uuid,
@@ -52,7 +79,7 @@ pub struct CreateEntry {
     #[serde(default, deserialize_with = "deserialize_optional_string")]
     pub location: Option<String>,
     pub date: NaiveDate,
-    pub entry_type: EntryType,
+    pub entry_type: ServerEntryType,
     #[serde(default, deserialize_with = "deserialize_optional_time")]
     pub start_time: Option<NaiveTime>,
     #[serde(default, deserialize_with = "deserialize_optional_time")]
@@ -63,29 +90,19 @@ pub struct CreateEntry {
     pub color: Option<String>,
 }
 
-/// The type of entry being created.
-#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum EntryType {
-    AllDay,
-    Timed,
-    Task,
-    MultiDay,
-}
-
 impl CreateEntry {
     /// Converts the create request into a CalendarEntry.
     /// Returns None if the entry type requires fields that are not provided.
     pub fn into_entry(self) -> Option<CalendarEntry> {
         let kind = match self.entry_type {
-            EntryType::AllDay => EntryKind::AllDay,
-            EntryType::Timed => {
+            ServerEntryType::AllDay => EntryKind::AllDay,
+            ServerEntryType::Timed => {
                 let start = self.start_time?;
                 let end = self.end_time?;
                 EntryKind::Timed { start, end }
             }
-            EntryType::Task => EntryKind::Task { completed: false },
-            EntryType::MultiDay => {
+            ServerEntryType::Task => EntryKind::Task { completed: false },
+            ServerEntryType::MultiDay => {
                 let end = self.end_date?;
                 EntryKind::MultiDay {
                     start: self.date,
@@ -114,7 +131,10 @@ impl CreateEntry {
     }
 }
 
-/// Request payload for updating an entry.
+/// Server-side request payload for updating an entry.
+///
+/// This wraps the core `UpdateEntryRequest` with server-specific custom
+/// deserializers for form handling (empty strings → None).
 #[derive(Debug, Deserialize)]
 pub struct UpdateEntry {
     #[serde(default, deserialize_with = "deserialize_optional_string")]
@@ -126,7 +146,7 @@ pub struct UpdateEntry {
     #[serde(default, deserialize_with = "deserialize_optional_date")]
     pub date: Option<NaiveDate>,
     #[serde(default)]
-    pub entry_type: Option<EntryType>,
+    pub entry_type: Option<ServerEntryType>,
     #[serde(default, deserialize_with = "deserialize_optional_time")]
     pub start_time: Option<NaiveTime>,
     #[serde(default, deserialize_with = "deserialize_optional_time")]
@@ -161,8 +181,8 @@ impl UpdateEntry {
         // Handle entry type changes
         if let Some(entry_type) = self.entry_type {
             entry.kind = match entry_type {
-                EntryType::AllDay => EntryKind::AllDay,
-                EntryType::Timed => {
+                ServerEntryType::AllDay => EntryKind::AllDay,
+                ServerEntryType::Timed => {
                     let start = self.start_time.unwrap_or_else(|| {
                         entry
                             .kind
@@ -177,11 +197,11 @@ impl UpdateEntry {
                     });
                     EntryKind::Timed { start, end }
                 }
-                EntryType::Task => {
+                ServerEntryType::Task => {
                     let completed = self.completed.unwrap_or(false);
                     EntryKind::Task { completed }
                 }
-                EntryType::MultiDay => {
+                ServerEntryType::MultiDay => {
                     let start = self.date.unwrap_or(entry.date);
                     let end = self
                         .end_date

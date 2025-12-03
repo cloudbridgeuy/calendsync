@@ -2,18 +2,10 @@
 
 use super::CalendsyncClient;
 use crate::error::{ClientError, Result};
-use calendsync_core::calendar::CalendarEntry;
-use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// SSE event types for calendar updates.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum CalendarEvent {
-    EntryAdded { entry: CalendarEntry, date: String },
-    EntryUpdated { entry: CalendarEntry, date: String },
-    EntryDeleted { entry_id: Uuid, date: String },
-}
+// Re-export from core for public API
+pub use calendsync_core::calendar::CalendarEvent;
 
 impl CalendsyncClient {
     /// Watch SSE events for a calendar.

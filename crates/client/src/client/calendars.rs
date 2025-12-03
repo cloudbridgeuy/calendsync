@@ -5,26 +5,8 @@ use crate::error::Result;
 use calendsync_core::calendar::Calendar;
 use uuid::Uuid;
 
-/// Request for creating a calendar.
-#[derive(Debug, serde::Serialize)]
-pub struct CreateCalendarRequest {
-    pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub color: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-}
-
-/// Request for updating a calendar.
-#[derive(Debug, serde::Serialize)]
-pub struct UpdateCalendarRequest {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub color: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-}
+// Re-export from core for public API
+pub use calendsync_core::calendar::{CreateCalendarRequest, UpdateCalendarRequest};
 
 impl CalendsyncClient {
     /// List all calendars.

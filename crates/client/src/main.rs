@@ -119,7 +119,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         Commands::Entries(entries_cmd) => {
-            use calendsync_client::cli::entries::{EntriesAction, EntryType};
+            use calendsync_client::cli::entries::EntriesAction;
             match entries_cmd.action {
                 EntriesAction::List {
                     calendar_id,
@@ -156,18 +156,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     end_date,
                     color,
                 } => {
-                    let type_str = match entry_type {
-                        EntryType::AllDay => "all_day",
-                        EntryType::Timed => "timed",
-                        EntryType::Task => "task",
-                        EntryType::MultiDay => "multi_day",
-                    };
                     let entry = client
                         .create_entry(CreateEntryRequest {
                             calendar_id,
                             title,
                             date,
-                            entry_type: type_str.to_string(),
+                            entry_type: entry_type.into(),
                             description,
                             location,
                             start_time,
@@ -203,19 +197,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     color,
                     completed,
                 } => {
-                    let type_str = entry_type.map(|t| match t {
-                        EntryType::AllDay => "all_day".to_string(),
-                        EntryType::Timed => "timed".to_string(),
-                        EntryType::Task => "task".to_string(),
-                        EntryType::MultiDay => "multi_day".to_string(),
-                    });
                     let entry = client
                         .update_entry(
                             id,
                             UpdateEntryRequest {
                                 title,
                                 date,
-                                entry_type: type_str,
+                                entry_type: entry_type.map(Into::into),
                                 description,
                                 location,
                                 start_time,

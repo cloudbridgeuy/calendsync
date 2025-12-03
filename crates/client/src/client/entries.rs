@@ -3,71 +3,12 @@
 use super::CalendsyncClient;
 use crate::error::Result;
 use calendsync_core::calendar::CalendarEntry;
-use chrono::{NaiveDate, NaiveTime};
 use uuid::Uuid;
 
-/// Query parameters for listing entries.
-#[derive(Debug, Default, serde::Serialize)]
-pub struct ListEntriesQuery {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub calendar_id: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub start: Option<NaiveDate>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub end: Option<NaiveDate>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub highlighted_day: Option<NaiveDate>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub before: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub after: Option<u32>,
-}
-
-/// Request for creating an entry.
-#[derive(Debug, serde::Serialize)]
-pub struct CreateEntryRequest {
-    pub calendar_id: Uuid,
-    pub title: String,
-    pub date: NaiveDate,
-    pub entry_type: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub location: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub start_time: Option<NaiveTime>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub end_time: Option<NaiveTime>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub end_date: Option<NaiveDate>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub color: Option<String>,
-}
-
-/// Request for updating an entry.
-#[derive(Debug, serde::Serialize)]
-pub struct UpdateEntryRequest {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub title: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub date: Option<NaiveDate>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub entry_type: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub location: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub start_time: Option<NaiveTime>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub end_time: Option<NaiveTime>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub end_date: Option<NaiveDate>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub color: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub completed: Option<bool>,
-}
+// Re-export from core for public API
+pub use calendsync_core::calendar::{
+    CreateEntryRequest, EntryType, ListEntriesQuery, UpdateEntryRequest,
+};
 
 impl CalendsyncClient {
     /// List entries with filters.

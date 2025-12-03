@@ -4,6 +4,9 @@ use chrono::{NaiveDate, NaiveTime};
 use clap::{Parser, Subcommand, ValueEnum};
 use uuid::Uuid;
 
+// Re-export core EntryType for API usage
+pub use calendsync_core::calendar::EntryType as CoreEntryType;
+
 /// Entry management commands.
 #[derive(Debug, Parser)]
 pub struct EntriesCommand {
@@ -11,13 +14,24 @@ pub struct EntriesCommand {
     pub action: EntriesAction,
 }
 
-/// Entry type for creation.
+/// CLI entry type for creation (with clap ValueEnum).
 #[derive(Debug, Clone, Copy, ValueEnum)]
 pub enum EntryType {
     AllDay,
     Timed,
     Task,
     MultiDay,
+}
+
+impl From<EntryType> for CoreEntryType {
+    fn from(t: EntryType) -> Self {
+        match t {
+            EntryType::AllDay => CoreEntryType::AllDay,
+            EntryType::Timed => CoreEntryType::Timed,
+            EntryType::Task => CoreEntryType::Task,
+            EntryType::MultiDay => CoreEntryType::MultiDay,
+        }
+    }
 }
 
 /// Available entry actions.

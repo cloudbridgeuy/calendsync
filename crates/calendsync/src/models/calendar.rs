@@ -2,7 +2,10 @@ use serde::Deserialize;
 
 use calendsync_core::calendar::Calendar;
 
-/// Request payload for creating a new calendar.
+/// Server-side request payload for creating a new calendar.
+///
+/// This wraps the core `CreateCalendarRequest` with server-specific defaults
+/// for form handling (e.g., default color when not provided).
 #[derive(Debug, Deserialize)]
 pub struct CreateCalendar {
     pub name: String,
@@ -27,7 +30,10 @@ impl CreateCalendar {
     }
 }
 
-/// Request payload for updating a calendar.
+/// Server-side request payload for updating a calendar.
+///
+/// This wraps the core `UpdateCalendarRequest` with server-specific
+/// form handling.
 #[derive(Debug, Deserialize)]
 pub struct UpdateCalendar {
     #[serde(default)]

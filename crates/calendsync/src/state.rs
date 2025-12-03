@@ -8,21 +8,13 @@ use std::{
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
-use calendsync_core::calendar::{Calendar, CalendarEntry};
 use calendsync_ssr::SsrPool;
 
 use crate::mock_data::generate_mock_entries;
 use crate::models::User;
 
-/// SSE event types for calendar updates.
-#[derive(Clone, Debug, serde::Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-#[allow(clippy::enum_variant_names)]
-pub enum CalendarEvent {
-    EntryAdded { entry: CalendarEntry, date: String },
-    EntryUpdated { entry: CalendarEntry, date: String },
-    EntryDeleted { entry_id: Uuid, date: String },
-}
+// Re-export core types for use in handlers
+pub use calendsync_core::calendar::{Calendar, CalendarEntry, CalendarEvent};
 
 /// A stored event with its ID for replay on reconnection.
 #[derive(Clone, Debug)]

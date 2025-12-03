@@ -374,6 +374,78 @@ impl DayData {
     }
 }
 
+/// SSE event types for real-time calendar updates.
+///
+/// These events are sent from the server to clients via Server-Sent Events (SSE)
+/// when calendar entries are created, updated, or deleted.
+///
+/// The `date` field is included to help clients update their view without
+/// needing to re-query for entries.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum CalendarEvent {
+    /// A new entry was added to the calendar.
+    EntryAdded {
+        /// The newly created entry.
+        entry: CalendarEntry,
+        /// The date string for client-side view updates.
+        date: String,
+    },
+    /// An existing entry was updated.
+    EntryUpdated {
+        /// The updated entry.
+        entry: CalendarEntry,
+        /// The date string for client-side view updates.
+        date: String,
+    },
+    /// An entry was deleted from the calendar.
+    EntryDeleted {
+        /// The ID of the deleted entry.
+        entry_id: Uuid,
+        /// The date string for client-side view updates.
+        date: String,
+    },
+}
+
+impl CalendarEvent {
+    /// Creates an EntryAdded event.
+    pub fn entry_added(entry: CalendarEntry) -> Self {
+        let date = entry.date.to_string();
+        Self::EntryAdded { entry, date }
+    }
+
+    /// Creates an EntryUpdated event.
+    pub fn entry_updated(entry: CalendarEntry) -> Self {
+        let date = entry.date.to_string();
+        Self::EntryUpdated { entry, date }
+    }
+
+    /// Creates an EntryDeleted event.
+    pub fn entry_deleted(entry_id: Uuid, date: NaiveDate) -> Self {
+        Self::EntryDeleted {
+            entry_id,
+            date: date.to_string(),
+        }
+    }
+
+    /// Returns the calendar entry if this is an add or update event.
+    pub fn entry(&self) -> Option<&CalendarEntry> {
+        match self {
+            Self::EntryAdded { entry, .. } | Self::EntryUpdated { entry, .. } => Some(entry),
+            Self::EntryDeleted { .. } => None,
+        }
+    }
+
+    /// Returns the date string associated with this event.
+    pub fn date(&self) -> &str {
+        match self {
+            Self::EntryAdded { date, .. }
+            | Self::EntryUpdated { date, .. }
+            | Self::EntryDeleted { date, .. } => date,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
