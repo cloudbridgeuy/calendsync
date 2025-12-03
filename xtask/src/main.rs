@@ -8,6 +8,7 @@
 
 use clap::Parser;
 
+mod dynamodb;
 mod install;
 mod lint;
 mod prelude;
@@ -140,6 +141,9 @@ enum Commands {
     /// Code quality checks and git hooks management
     Lint(lint::LintCommand),
 
+    /// Manage DynamoDB infrastructure
+    Dynamodb(dynamodb::DynamodbCommand),
+
     /// Documentation tasks (coming soon)
     #[command(hide = true)]
     Docs {
@@ -166,6 +170,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Lint(lint_cmd) => {
             lint::run(lint_cmd, cli.global).await?;
+        }
+        Commands::Dynamodb(dynamodb_cmd) => {
+            dynamodb::run(dynamodb_cmd, cli.global).await?;
         }
         Commands::Docs { .. } => {
             println!("Documentation automation coming soon!");

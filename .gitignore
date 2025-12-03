@@ -34,3 +34,4 @@ crates/calendsync/examples/hello-world/dist/
 !TODO.md
 !CLAUDE.md
 !.claude/context/*.md
+!docs/*.md

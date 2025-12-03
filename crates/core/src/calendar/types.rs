@@ -1,6 +1,97 @@
-use chrono::{NaiveDate, NaiveTime};
+use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+/// A user who can access calendars.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct User {
+    pub id: Uuid,
+    pub name: String,
+    pub email: String,
+}
+
+impl User {
+    /// Creates a new user with a generated UUID.
+    pub fn new(name: impl Into<String>, email: impl Into<String>) -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            name: name.into(),
+            email: email.into(),
+        }
+    }
+
+    /// Sets a specific ID for this user (useful for testing).
+    pub fn with_id(mut self, id: Uuid) -> Self {
+        self.id = id;
+        self
+    }
+}
+
+/// Role for calendar membership.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CalendarRole {
+    /// Can read/write entries and administer the calendar (delete, invite users).
+    Owner,
+    /// Can read and write calendar entries.
+    Writer,
+    /// Can only read calendar entries.
+    Reader,
+}
+
+impl CalendarRole {
+    /// Returns true if this role can write entries.
+    pub fn can_write(&self) -> bool {
+        matches!(self, CalendarRole::Owner | CalendarRole::Writer)
+    }
+
+    /// Returns true if this role can administer the calendar.
+    pub fn can_administer(&self) -> bool {
+        matches!(self, CalendarRole::Owner)
+    }
+}
+
+/// Membership linking a user to a calendar with a role.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CalendarMembership {
+    pub calendar_id: Uuid,
+    pub user_id: Uuid,
+    pub role: CalendarRole,
+    pub joined_at: DateTime<Utc>,
+}
+
+impl CalendarMembership {
+    /// Creates a new membership with the current timestamp.
+    pub fn new(calendar_id: Uuid, user_id: Uuid, role: CalendarRole) -> Self {
+        Self {
+            calendar_id,
+            user_id,
+            role,
+            joined_at: Utc::now(),
+        }
+    }
+
+    /// Creates a new owner membership.
+    pub fn owner(calendar_id: Uuid, user_id: Uuid) -> Self {
+        Self::new(calendar_id, user_id, CalendarRole::Owner)
+    }
+
+    /// Creates a new writer membership.
+    pub fn writer(calendar_id: Uuid, user_id: Uuid) -> Self {
+        Self::new(calendar_id, user_id, CalendarRole::Writer)
+    }
+
+    /// Creates a new reader membership.
+    pub fn reader(calendar_id: Uuid, user_id: Uuid) -> Self {
+        Self::new(calendar_id, user_id, CalendarRole::Reader)
+    }
+
+    /// Sets a specific joined_at timestamp (useful for testing).
+    pub fn with_joined_at(mut self, joined_at: DateTime<Utc>) -> Self {
+        self.joined_at = joined_at;
+        self
+    }
+}
 
 /// A named calendar that contains entries.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

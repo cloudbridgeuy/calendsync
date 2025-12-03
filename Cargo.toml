@@ -22,9 +22,12 @@ calendsync_core = { version = "0.0.0", path = "crates/core" }
 calendsync_frontend = { version = "0.0.0", path = "crates/frontend" }
 calendsync_ssr_core = { version = "0.0.0", path = "crates/ssr_core" }
 calendsync_ssr = { version = "0.0.0", path = "crates/ssr" }
+calendsync_client = { version = "0.0.0", path = "crates/client" }
 
 # External Dependencies
 anstream = "0.6.21"
+aws-config = { version = "1.8", features = ["behavior-version-latest"] }
+aws-sdk-dynamodb = "1.100"
 anyhow = "1.0.100"
 askama = "0.14.0"
 axum = { version = "0.8.7", features = ["macros"] }
@@ -54,4 +57,4 @@ http-body-util = "0.1"
 # Using only deno_core to avoid transitive dependency conflicts with deno_web
 deno_core = "0.371"
 deno_error = "0.7"
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }

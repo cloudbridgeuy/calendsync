@@ -1,0 +1,25 @@
+# Docker Compose configuration for local development
+# Usage:
+#   docker compose up -d      # Start services
+#   docker compose down       # Stop services
+#   docker compose down -v    # Stop and remove volumes (data)
+
+services:
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    container_name: calendsync-dynamodb
+    ports:
+      - "8000:8000"
+    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath /data"
+    volumes:
+      - dynamodb-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:8000 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  dynamodb-data:
+    name: calendsync-dynamodb-data
