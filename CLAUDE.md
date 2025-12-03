@@ -55,6 +55,7 @@ cargo run --example react-ssr -p calendsync
 
 - **crates/calendsync** - Main binary application (web server)
 - **crates/core** - Pure business logic library (Functional Core)
+- **crates/client** - CLI client for calendsync API
 - **crates/frontend** - TypeScript build crate (bun bundler)
 - **crates/ssr_core** - Pure SSR functions (config, validation, polyfills)
 - **crates/ssr** - SSR worker pool (threading, JsRuntime execution)
@@ -92,6 +93,8 @@ The project uses the [cargo-xtask](https://github.com/matklad/cargo-xtask/) patt
 - `cargo xtask lint` - Run all code quality checks (fmt, check, clippy, test, cargo-machete)
 - `cargo xtask install` - Build and install the binary locally
 - `cargo xtask release create <version>` - Create a new release
+- `cargo xtask dynamodb deploy` - Deploy DynamoDB table infrastructure
+- `cargo xtask dynamodb seed` - Seed calendar with mock entries
 
 ### Tech Stack
 
@@ -571,6 +574,9 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | Topic | Location |
 |-------|----------|
 | Web Application | `crates/calendsync/README.md` |
+| CLI Client | `crates/client/README.md` |
+| DynamoDB Schema | `docs/dynamodb.md` |
+| DynamoDB xtask | `.claude/context/dynamodb.md` |
 | React SSR Example | `crates/calendsync/examples/README.md` |
 | React Calendar | `.claude/context/react-calendar.md` |
 | SSR Worker Pool | `.claude/context/ssr-worker-pool.md` |
@@ -589,6 +595,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 |------|------------|
 | **calendsync** | Main binary crate - the web server application |
 | **calendsync_core** | Pure business logic library following Functional Core pattern |
+| **calendsync_client** | CLI client crate for interacting with calendsync API |
 | **calendsync_frontend** | TypeScript build crate using bun bundler |
 | **Functional Core** | Pure, testable functions with no side effects (no I/O, no state mutations) |
 | **Imperative Shell** | Thin layer handling I/O (HTTP, database) that calls into the Functional Core |
@@ -602,3 +609,6 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | **xtask** | Cargo pattern for project-specific dev automation (`cargo xtask lint`) |
 | **SSE** | Server-Sent Events - one-way real-time updates from server to client |
 | **Notification Center** | UI component showing real-time SSE events (added/updated/deleted entries) |
+| **DynamoDB** | AWS NoSQL database used for persistence (single-table design) |
+| **GSI** | Global Secondary Index - alternate query pattern in DynamoDB |
+| **CalendarMembership** | Entity linking users to calendars with roles (owner/writer/reader) |
