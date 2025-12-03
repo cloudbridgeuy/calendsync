@@ -1,13 +1,8 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use uuid::Uuid;
 
-/// A user in the system.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct User {
-    pub id: Uuid,
-    pub name: String,
-    pub email: String,
-}
+// Re-export User from core
+pub use calendsync_core::calendar::User;
 
 /// Request payload for creating a new user.
 #[derive(Debug, Deserialize)]
@@ -16,13 +11,13 @@ pub struct CreateUser {
     pub email: String,
 }
 
-impl User {
-    /// Create a new user with a generated UUID.
-    pub fn new(name: String, email: String) -> Self {
-        Self {
+impl CreateUser {
+    /// Convert to a User with a generated UUID.
+    pub fn into_user(self) -> User {
+        User {
             id: Uuid::new_v4(),
-            name,
-            email,
+            name: self.name,
+            email: self.email,
         }
     }
 }

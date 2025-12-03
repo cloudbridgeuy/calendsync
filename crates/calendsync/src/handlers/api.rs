@@ -48,7 +48,7 @@ pub async fn create_user(
     headers: HeaderMap,
     Form(payload): Form<CreateUser>,
 ) -> Result<Response, AppError> {
-    let user = User::new(payload.name, payload.email);
+    let user = payload.into_user();
 
     state
         .users
