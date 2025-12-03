@@ -448,6 +448,58 @@ async fn test_endpoint() {
 - Add rustdoc comments for public APIs
 - Use `#[allow(clippy::large_enum_variant)]` sparingly and with justification
 
+## Issue Tracking with Beads
+
+This project uses [beads](https://github.com/cloudbridgeuy/beads) for issue tracking. Beads stores issues in `.beads/issues.jsonl` and syncs via git.
+
+### Common Commands
+
+```bash
+# List ready issues (no blockers)
+bd ready
+
+# List all open issues
+bd list --status=open
+
+# Show issue details
+bd show <id>
+
+# Create an issue
+bd create --title="Fix bug" --type=bug
+bd create --title="Add feature" --type=feature
+bd create --title="Refactor code" --type=task
+
+# Update issue status
+bd update <id> --status=in_progress
+bd update <id> --status=closed
+
+# Close an issue
+bd close <id>
+bd close <id> --reason="Completed"
+
+# Add dependencies
+bd dep add <issue> <depends-on>
+
+# Sync with remote
+bd sync
+```
+
+### Issue Types
+
+- `bug` - Something broken that needs fixing
+- `feature` - New functionality
+- `task` - Refactoring, documentation, infrastructure
+
+### Workflow
+
+1. Check available work: `bd ready`
+2. Claim an issue: `bd update <id> --status=in_progress`
+3. Work on the issue
+4. Close when done: `bd close <id>`
+5. Sync changes: `bd sync`
+
+**Note**: Beads is separate from git commits. Closing an issue with `bd close` doesn't require a commit message reference. The `Closes: <id>` convention in commit messages is optional documentation.
+
 ## Functional Core - Imperative Shell
 
 We advocate the use of this pattern when writing code for this repo.
