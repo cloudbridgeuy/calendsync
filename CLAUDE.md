@@ -310,7 +310,9 @@ crates/core/src/
 ├── lib.rs           # Public API exports
 └── calendar/
     ├── mod.rs       # Module exports and re-exports
-    ├── types.rs     # CalendarEntry, EntryStatus, etc.
+    ├── types.rs     # Domain types (Calendar, CalendarEntry, CalendarEvent, User, etc.)
+    ├── requests.rs  # API request types (CreateCalendarRequest, CreateEntryRequest, etc.)
+    ├── mock_data.rs # Pure mock data generation (generate_seed_entries)
     ├── sorting.rs   # Pure sorting functions
     ├── operations.rs # Pure calendar operations
     └── error.rs     # CalendarError enum
@@ -635,6 +637,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | Axum Reference | `.claude/context/AXUM.md` |
 | HTMX Reference | `.claude/context/HTMX.md` |
 | React SSR Context | `.claude/context/react-ssr-example.md` |
+| Shared Types | `.claude/context/shared-types.md` |
 
 ### Examples
 
