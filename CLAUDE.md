@@ -633,6 +633,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | DynamoDB xtask | `.claude/context/dynamodb.md` |
 | React SSR Example | `crates/calendsync/examples/README.md` |
 | React Calendar | `.claude/context/react-calendar.md` |
+| Wheel Navigation | `.claude/context/wheel-navigation.md` |
 | SSR Worker Pool | `.claude/context/ssr-worker-pool.md` |
 | Axum Reference | `.claude/context/AXUM.md` |
 | HTMX Reference | `.claude/context/HTMX.md` |
