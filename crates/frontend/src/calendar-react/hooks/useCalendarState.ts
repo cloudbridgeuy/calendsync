@@ -82,11 +82,23 @@ export interface UseCalendarStateConfig {
  */
 export function useCalendarState(config: UseCalendarStateConfig): [CalendarState, CalendarActions] {
     const { initialData, onNotification } = config
-    // Parse initial highlighted day
-    const initialHighlightedDay = useMemo(
-        () => parseDateKey(initialData.highlightedDay),
-        [initialData.highlightedDay],
-    )
+    // Parse initial highlighted day, correcting for server/client timezone mismatch
+    const initialHighlightedDay = useMemo(() => {
+        const serverDate = parseDateKey(initialData.highlightedDay)
+        const clientToday = new Date()
+        clientToday.setHours(0, 0, 0, 0)
+
+        // If server date doesn't match client's today, check for timezone mismatch
+        // A 1-day difference suggests the server tried to send "today" but got the wrong day
+        if (!isSameDay(serverDate, clientToday)) {
+            const dayDiff = Math.abs(daysBetween(serverDate, clientToday))
+            if (dayDiff === 1) {
+                // Likely timezone mismatch - use client's today
+                return clientToday
+            }
+        }
+        return serverDate
+    }, [initialData.highlightedDay])
 
     // Initialize center date from initial data
     const [centerDate, setCenterDate] = useState<Date>(() => initialHighlightedDay)
