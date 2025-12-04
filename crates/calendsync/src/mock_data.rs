@@ -4,11 +4,64 @@ use uuid::Uuid;
 
 /// Generates mock calendar entries for demonstration purposes.
 /// Entries are spread across the week centered on the given date.
+/// Includes 50+ entries on center_date to test vertical scrolling.
 pub fn generate_mock_entries(calendar_id: Uuid, center_date: NaiveDate) -> Vec<CalendarEntry> {
     let mut entries = Vec::new();
 
     // Helper to create times
     let time = |h: u32, m: u32| NaiveTime::from_hms_opt(h, m, 0).unwrap();
+
+    // Generate 50 entries for center_date to test vertical scrolling
+    let scroll_test_titles = [
+        "Morning Standup",
+        "Code Review",
+        "Design Sync",
+        "Sprint Planning",
+        "Customer Call",
+        "Team Lunch",
+        "1:1 with Manager",
+        "Tech Talk",
+        "Bug Triage",
+        "Release Planning",
+        "API Review",
+        "Security Audit",
+        "Performance Review",
+        "Training Session",
+        "Client Demo",
+        "Retrospective",
+        "Brainstorming",
+        "Documentation",
+        "Testing",
+        "Deployment",
+        "Monitoring Review",
+        "Incident Postmortem",
+        "Architecture Discussion",
+        "Data Migration",
+        "Feature Planning",
+    ];
+
+    let colors = [
+        "#3B82F6", "#10B981", "#F97316", "#8B5CF6", "#EC4899", "#EF4444",
+    ];
+
+    for i in 0..50 {
+        let title_idx = i % scroll_test_titles.len();
+        let color_idx = i % colors.len();
+        let hour = 6 + (i as u32 % 16); // 6 AM to 10 PM
+        let minute = (i as u32 * 15) % 60;
+
+        entries.push(
+            CalendarEntry::timed(
+                calendar_id,
+                format!("{} #{}", scroll_test_titles[title_idx], i + 1),
+                center_date,
+                time(hour, minute),
+                time(hour, (minute + 30) % 60),
+            )
+            .with_description(format!("Test entry {} for scroll testing", i + 1))
+            .with_color(colors[color_idx]),
+        );
+    }
 
     // Multi-day event: Team Retreat (3 days starting from center - 1)
     let retreat_start = center_date - Duration::days(1);
