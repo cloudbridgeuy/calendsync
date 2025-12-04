@@ -3,6 +3,12 @@
  */
 
 import { addDays, formatDateKey } from "@core/calendar/dates"
+import {
+    calculateDaysFromWheelDelta,
+    calculateWheelDragOffset,
+    detectWheelDirection,
+    getWheelNavigationDelta,
+} from "@core/calendar/layout"
 import type { ServerEntry } from "@core/calendar/types"
 import { DEFAULT_LAYOUT_CONSTANTS } from "@core/calendar/types"
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -43,11 +49,17 @@ export function Calendar({ initialData }: CalendarProps) {
         flashStates,
     } = state
 
-    // Touch/swipe state
+    // Touch/swipe state (mobile)
     const [isDragging, setIsDragging] = useState(false)
     const [dragOffset, setDragOffset] = useState(0)
     const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null)
     const isHorizontalSwipeRef = useRef<boolean | null>(null)
+
+    // Desktop trackpad drag state
+    const [isDesktopDragging, setIsDesktopDragging] = useState(false)
+    const [desktopDragOffset, setDesktopDragOffset] = useState(0)
+    const wheelAccumulatorRef = useRef(0)
+    const isDesktopHorizontalRef = useRef<boolean | null>(null)
 
     // Refs for DOM elements
     const daysScrollRef = useRef<HTMLDivElement>(null)
@@ -82,35 +94,71 @@ export function Calendar({ initialData }: CalendarProps) {
     }, [actions])
 
     /**
-     * Handle wheel navigation (Cmd+Scroll or Ctrl+Scroll).
-     * Debounced to prevent rapid-fire navigation.
+     * Handle wheel/trackpad navigation on desktop.
+     * Accumulates scroll delta and navigates when gesture ends.
+     * Supports both Cmd/Ctrl+scroll and regular horizontal scroll.
      */
     useEffect(() => {
-        let lastWheelTime = 0
-        const DEBOUNCE_MS = 150 // Minimum time between navigations
+        if (isMobile) return
+
+        const WHEEL_IDLE_TIMEOUT = 100 // ms - detect end of gesture
+        const dayWidth = window.innerWidth / visibleDays
+        let idleTimer: ReturnType<typeof setTimeout> | null = null
 
         const handleWheel = (e: WheelEvent) => {
-            // Only handle if Cmd (Mac) or Ctrl (Windows/Linux) is held
-            if (e.metaKey || e.ctrlKey) {
-                e.preventDefault()
+            const hasModifier = e.metaKey || e.ctrlKey
 
-                // Debounce: ignore if too soon after last navigation
-                const now = Date.now()
-                if (now - lastWheelTime < DEBOUNCE_MS) {
-                    return
-                }
-                lastWheelTime = now
-
-                // deltaY > 0 = scroll down = navigate forward (right)
-                // deltaY < 0 = scroll up = navigate backward (left)
-                const direction = e.deltaY > 0 ? 1 : -1
-                actions.navigateDays(direction)
+            // Direction lock: determine scroll direction on first significant movement
+            if (isDesktopHorizontalRef.current === null) {
+                const direction = detectWheelDirection(e.deltaX, e.deltaY, hasModifier)
+                if (direction === null) return // Movement too small to determine
+                isDesktopHorizontalRef.current = direction
             }
+
+            // If vertical scroll, let it pass through for scrolling within day columns
+            if (!isDesktopHorizontalRef.current) return
+
+            e.preventDefault()
+            setIsDesktopDragging(true)
+
+            // Accumulate delta using pure function
+            const delta = getWheelNavigationDelta(e.deltaX, e.deltaY, hasModifier)
+            wheelAccumulatorRef.current += delta
+
+            // Calculate visual offset using pure function
+            const dragPercent = calculateWheelDragOffset(
+                wheelAccumulatorRef.current,
+                dayWidth,
+                visibleDays,
+            )
+            setDesktopDragOffset(dragPercent)
+
+            // Reset idle timer - gesture ends when no wheel events for WHEEL_IDLE_TIMEOUT
+            if (idleTimer) clearTimeout(idleTimer)
+            idleTimer = setTimeout(() => {
+                // Calculate days to navigate using pure function
+                const daysToMove = calculateDaysFromWheelDelta(
+                    wheelAccumulatorRef.current,
+                    dayWidth,
+                )
+                if (daysToMove !== 0) {
+                    actions.navigateDays(daysToMove)
+                }
+
+                // Reset state
+                wheelAccumulatorRef.current = 0
+                isDesktopHorizontalRef.current = null
+                setIsDesktopDragging(false)
+                setDesktopDragOffset(0)
+            }, WHEEL_IDLE_TIMEOUT)
         }
 
         window.addEventListener("wheel", handleWheel, { passive: false })
-        return () => window.removeEventListener("wheel", handleWheel)
-    }, [actions])
+        return () => {
+            window.removeEventListener("wheel", handleWheel)
+            if (idleTimer) clearTimeout(idleTimer)
+        }
+    }, [isMobile, visibleDays, actions])
 
     /**
      * Touch start handler.
@@ -237,6 +285,10 @@ export function Calendar({ initialData }: CalendarProps) {
         const columnWidth = 100 / visibleDays
         const columns = []
 
+        // Apply desktop drag offset during gesture, with snap animation after
+        const transform = isDesktopDragging ? `translateX(${desktopDragOffset}%)` : undefined
+        const transition = isDesktopDragging ? "none" : "transform 0.2s ease-out"
+
         for (let i = 0; i < visibleDays; i++) {
             const date = addDays(centerDate, i - halfDays)
             const dateKey = formatDateKey(date)
@@ -254,6 +306,8 @@ export function Calendar({ initialData }: CalendarProps) {
                         width: `${columnWidth}%`,
                         flexBasis: `${columnWidth}%`,
                         flexShrink: 0,
+                        transform,
+                        transition,
                     }}
                 />,
             )

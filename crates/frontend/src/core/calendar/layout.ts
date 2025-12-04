@@ -173,3 +173,66 @@ export function calculateAnimationDuration(
     const calculated = baseDuration + Math.abs(distance) * 0.5
     return Math.min(calculated, maxDuration)
 }
+
+// =============================================================================
+// Wheel/Trackpad Navigation Functions
+// =============================================================================
+
+/**
+ * Determine if a wheel event indicates horizontal scrolling intent.
+ * Returns null if movement is too small to determine direction.
+ *
+ * Direction lock: once determined, the gesture should stick to horizontal or vertical.
+ */
+export function detectWheelDirection(
+    deltaX: number,
+    deltaY: number,
+    hasModifier: boolean,
+    threshold: number = 5,
+): boolean | null {
+    // Modifier key always means horizontal (for day navigation)
+    if (hasModifier) return true
+
+    // Need significant movement to determine direction
+    if (Math.abs(deltaX) <= threshold && Math.abs(deltaY) <= threshold) {
+        return null
+    }
+
+    return Math.abs(deltaX) > Math.abs(deltaY)
+}
+
+/**
+ * Calculate the effective delta for wheel navigation.
+ * Uses deltaY for modifier+scroll, deltaX for regular horizontal scroll.
+ */
+export function getWheelNavigationDelta(
+    deltaX: number,
+    deltaY: number,
+    hasModifier: boolean,
+): number {
+    return hasModifier ? deltaY : deltaX
+}
+
+/**
+ * Calculate drag offset percentage from accumulated wheel delta.
+ * Used for visual feedback during trackpad gestures.
+ */
+export function calculateWheelDragOffset(
+    accumulatedDelta: number,
+    dayWidth: number,
+    visibleDays: number,
+): number {
+    const result = -(accumulatedDelta / dayWidth) * (100 / visibleDays)
+    // Normalize -0 to 0 for consistency
+    return result === 0 ? 0 : result
+}
+
+/**
+ * Calculate number of days to navigate based on accumulated scroll.
+ * Rounds to nearest whole day for snap behavior.
+ */
+export function calculateDaysFromWheelDelta(accumulatedDelta: number, dayWidth: number): number {
+    const result = Math.round(accumulatedDelta / dayWidth)
+    // Normalize -0 to 0 for consistency
+    return result === 0 ? 0 : result
+}

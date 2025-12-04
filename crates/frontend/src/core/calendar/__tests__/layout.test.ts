@@ -2,11 +2,15 @@ import { describe, expect, test } from "bun:test"
 import {
     calculateAnimationDuration,
     calculateDayPosition,
+    calculateDaysFromWheelDelta,
     calculateDayWidth,
     calculateOffsetFromCenter,
     calculateSwipeTransform,
     calculateVisibleDays,
+    calculateWheelDragOffset,
+    detectWheelDirection,
     getVisibleDateOffsets,
+    getWheelNavigationDelta,
     isMobileViewport,
     shouldLoadMoreDays,
     shouldNavigateFromSwipe,
@@ -211,5 +215,84 @@ describe("calculateAnimationDuration", () => {
     test("respects custom parameters", () => {
         const duration = calculateAnimationDuration(0, 100, 500)
         expect(duration).toBe(100)
+    })
+})
+
+// =============================================================================
+// Wheel/Trackpad Navigation Functions
+// =============================================================================
+
+describe("detectWheelDirection", () => {
+    test("returns true (horizontal) when modifier key is pressed", () => {
+        expect(detectWheelDirection(0, 10, true)).toBe(true)
+        expect(detectWheelDirection(10, 0, true)).toBe(true)
+    })
+
+    test("returns null when movement is below threshold", () => {
+        expect(detectWheelDirection(3, 2, false)).toBeNull()
+        expect(detectWheelDirection(0, 0, false)).toBeNull()
+    })
+
+    test("returns true when horizontal movement dominates", () => {
+        expect(detectWheelDirection(20, 5, false)).toBe(true)
+        expect(detectWheelDirection(-15, 3, false)).toBe(true)
+    })
+
+    test("returns false when vertical movement dominates", () => {
+        expect(detectWheelDirection(5, 20, false)).toBe(false)
+        expect(detectWheelDirection(3, -15, false)).toBe(false)
+    })
+
+    test("respects custom threshold", () => {
+        expect(detectWheelDirection(8, 2, false, 10)).toBeNull()
+        expect(detectWheelDirection(15, 2, false, 10)).toBe(true)
+    })
+})
+
+describe("getWheelNavigationDelta", () => {
+    test("returns deltaY when modifier is pressed", () => {
+        expect(getWheelNavigationDelta(10, 50, true)).toBe(50)
+        expect(getWheelNavigationDelta(100, -30, true)).toBe(-30)
+    })
+
+    test("returns deltaX when no modifier", () => {
+        expect(getWheelNavigationDelta(10, 50, false)).toBe(10)
+        expect(getWheelNavigationDelta(-25, 100, false)).toBe(-25)
+    })
+})
+
+describe("calculateWheelDragOffset", () => {
+    test("calculates percentage offset correctly", () => {
+        // 100px accumulated, 200px day width, 5 visible days
+        // -(100/200) * (100/5) = -0.5 * 20 = -10%
+        expect(calculateWheelDragOffset(100, 200, 5)).toBe(-10)
+    })
+
+    test("returns positive offset for negative delta (dragging right)", () => {
+        expect(calculateWheelDragOffset(-100, 200, 5)).toBe(10)
+    })
+
+    test("returns 0 for zero delta", () => {
+        expect(calculateWheelDragOffset(0, 200, 5)).toBe(0)
+    })
+})
+
+describe("calculateDaysFromWheelDelta", () => {
+    test("rounds to nearest day", () => {
+        expect(calculateDaysFromWheelDelta(150, 100)).toBe(2) // 1.5 rounds to 2
+        expect(calculateDaysFromWheelDelta(140, 100)).toBe(1) // 1.4 rounds to 1
+        expect(calculateDaysFromWheelDelta(50, 100)).toBe(1) // 0.5 rounds to 1
+        expect(calculateDaysFromWheelDelta(49, 100)).toBe(0) // 0.49 rounds to 0
+    })
+
+    test("handles negative delta (scroll left)", () => {
+        // Note: Math.round(-1.5) = -1 in JavaScript (rounds toward +Infinity)
+        expect(calculateDaysFromWheelDelta(-160, 100)).toBe(-2) // -1.6 rounds to -2
+        expect(calculateDaysFromWheelDelta(-51, 100)).toBe(-1) // -0.51 rounds to -1
+    })
+
+    test("returns 0 for small movements", () => {
+        expect(calculateDaysFromWheelDelta(10, 100)).toBe(0)
+        expect(calculateDaysFromWheelDelta(-10, 100)).toBe(0)
     })
 })
