@@ -95,8 +95,10 @@ export function Calendar({ initialData }: CalendarProps) {
 
         // Trackpad accumulation state
         let accumulatedDelta = 0
+        let lastWheelTime = 0
 
         const TRACKPAD_THRESHOLD = 30 // Pixels per day for trackpad
+        const GESTURE_TIMEOUT = 150 // ms - reset accumulator if no events for this long
 
         const handleWheel = (e: WheelEvent) => {
             // Only handle if Cmd (Mac) or Ctrl (Windows/Linux) is held
@@ -133,9 +135,15 @@ export function Calendar({ initialData }: CalendarProps) {
 
             // === Handle Based on Device Type ===
             if (isTouchPad) {
-                // Trackpad: accumulate and navigate when threshold crossed
-                // No direction change detection - let the accumulator naturally handle
-                // reversals (opposite deltas will reduce the accumulator)
+                const now = Date.now()
+
+                // Reset accumulator if gesture ended (time gap since last event)
+                if (now - lastWheelTime > GESTURE_TIMEOUT) {
+                    accumulatedDelta = 0
+                }
+                lastWheelTime = now
+
+                // Accumulate delta
                 accumulatedDelta += e.deltaY
 
                 // Navigate when threshold crossed (use while to handle large deltas)
