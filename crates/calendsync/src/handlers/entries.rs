@@ -7,7 +7,7 @@ use axum::{
 use serde::Deserialize;
 use uuid::Uuid;
 
-use calendsync_core::calendar::{filter_entries, CalendarEntry, EntryKind};
+use calendsync_core::calendar::{filter_entries, CalendarEntry, CalendarEvent, EntryKind};
 
 use crate::{
     models::{CreateEntry, UpdateEntry},
@@ -24,8 +24,7 @@ fn error_response(status: StatusCode, message: impl Into<String>) -> (StatusCode
 /// Query parameters for listing entries.
 #[derive(Debug, Deserialize)]
 pub struct ListEntriesQuery {
-    /// Filter by calendar ID (currently ignored, returns all mock data)
-    #[allow(dead_code)]
+    /// Filter by calendar ID
     pub calendar_id: Option<Uuid>,
     /// Filter by start date (inclusive) - legacy parameter
     pub start: Option<chrono::NaiveDate>,
@@ -42,7 +41,7 @@ pub struct ListEntriesQuery {
 /// List all entries (GET /api/entries).
 ///
 /// Supports optional query parameters for filtering:
-/// - `calendar_id`: Filter by calendar (currently ignored, returns same mock data)
+/// - `calendar_id`: Filter by calendar
 /// - `start`: Filter by start date (inclusive) - legacy
 /// - `end`: Filter by end date (inclusive) - legacy
 /// - `highlighted_day`: Center date for React calendar
@@ -72,8 +71,8 @@ pub async fn list_entries(
         (query.start, query.end)
     };
 
-    // Note: calendar_id is accepted but ignored - returns same mock data
-    let filtered: Vec<&CalendarEntry> = filter_entries(&all_entries, None, start, end);
+    // Filter by calendar_id if provided
+    let filtered: Vec<&CalendarEntry> = filter_entries(&all_entries, query.calendar_id, start, end);
 
     let result: Vec<CalendarEntry> = filtered.into_iter().cloned().collect();
 
@@ -121,6 +120,9 @@ pub async fn create_entry(
         .expect("Failed to acquire write lock")
         .insert(entry.id, entry.clone());
 
+    // Publish SSE event for real-time updates
+    state.publish_event(entry.calendar_id, CalendarEvent::entry_added(entry.clone()));
+
     tracing::info!(entry_id = %entry.id, title = %entry.title, "Created new entry");
 
     Ok((StatusCode::CREATED, Json(entry)))
@@ -155,17 +157,27 @@ pub async fn update_entry(
 
     tracing::debug!(entry_id = %id, payload = ?payload, "Received update entry request");
 
-    let mut entries = state.entries.write().expect("Failed to acquire write lock");
+    // Update entry and get a clone for the response and event
+    let updated_entry = {
+        let mut entries = state.entries.write().expect("Failed to acquire write lock");
 
-    let entry = entries
-        .get_mut(&id)
-        .ok_or_else(|| error_response(StatusCode::NOT_FOUND, format!("Entry {id} not found")))?;
+        let entry = entries.get_mut(&id).ok_or_else(|| {
+            error_response(StatusCode::NOT_FOUND, format!("Entry {id} not found"))
+        })?;
 
-    payload.apply_to(entry);
+        payload.apply_to(entry);
+        entry.clone()
+    }; // Lock is released here
+
+    // Publish SSE event for real-time updates
+    state.publish_event(
+        updated_entry.calendar_id,
+        CalendarEvent::entry_updated(updated_entry.clone()),
+    );
 
     tracing::info!(entry_id = %id, "Updated entry");
 
-    Ok(Json(entry.clone()))
+    Ok(Json(updated_entry))
 }
 
 /// Delete an entry by ID (DELETE /api/entries/{id}).
@@ -175,12 +187,6 @@ pub async fn delete_entry(
 ) -> Result<StatusCode, (StatusCode, String)> {
     tracing::debug!(entry_id = %id, "Received delete entry request");
 
-    // Log all existing entry IDs for debugging
-    let entries = state.entries.read().expect("Failed to acquire read lock");
-    let entry_ids: Vec<String> = entries.keys().map(|k| k.to_string()).collect();
-    tracing::debug!(existing_entries = ?entry_ids, "Current entries in store");
-    drop(entries);
-
     let removed = state
         .entries
         .write()
@@ -189,6 +195,12 @@ pub async fn delete_entry(
 
     match removed {
         Some(entry) => {
+            // Publish SSE event for real-time updates
+            state.publish_event(
+                entry.calendar_id,
+                CalendarEvent::entry_deleted(entry.id, entry.date),
+            );
+
             tracing::info!(entry_id = %id, title = %entry.title, "Deleted entry");
             Ok(StatusCode::OK)
         }
@@ -206,22 +218,33 @@ pub async fn toggle_entry(
 ) -> Result<Json<CalendarEntry>, (StatusCode, String)> {
     tracing::debug!(entry_id = %id, "Received toggle entry request");
 
-    let mut entries = state.entries.write().expect("Failed to acquire write lock");
+    // Toggle entry and get a clone for the response and event
+    let toggled_entry = {
+        let mut entries = state.entries.write().expect("Failed to acquire write lock");
 
-    let entry = entries
-        .get_mut(&id)
-        .ok_or_else(|| error_response(StatusCode::NOT_FOUND, format!("Entry {id} not found")))?;
+        let entry = entries.get_mut(&id).ok_or_else(|| {
+            error_response(StatusCode::NOT_FOUND, format!("Entry {id} not found"))
+        })?;
 
-    // Only toggle if it's a task
-    match &mut entry.kind {
-        EntryKind::Task { completed } => {
-            *completed = !*completed;
-            tracing::info!(entry_id = %id, completed = %completed, "Toggled task");
-            Ok(Json(entry.clone()))
+        // Only toggle if it's a task
+        match &mut entry.kind {
+            EntryKind::Task { completed } => {
+                *completed = !*completed;
+                tracing::info!(entry_id = %id, completed = %completed, "Toggled task");
+                Ok(entry.clone())
+            }
+            _ => Err(error_response(
+                StatusCode::BAD_REQUEST,
+                format!("Entry {id} is not a task"),
+            )),
         }
-        _ => Err(error_response(
-            StatusCode::BAD_REQUEST,
-            format!("Entry {id} is not a task"),
-        )),
-    }
+    }?; // Lock is released here
+
+    // Publish SSE event for real-time updates
+    state.publish_event(
+        toggled_entry.calendar_id,
+        CalendarEvent::entry_updated(toggled_entry.clone()),
+    );
+
+    Ok(Json(toggled_entry))
 }

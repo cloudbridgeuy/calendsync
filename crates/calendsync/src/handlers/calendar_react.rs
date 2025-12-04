@@ -127,8 +127,7 @@ fn entries_to_server_days(
 /// Query parameters for the calendar entries API.
 #[derive(serde::Deserialize)]
 pub struct CalendarEntriesQuery {
-    /// Calendar ID
-    #[allow(dead_code)]
+    /// Calendar ID to fetch entries for.
     pub calendar_id: Uuid,
     /// Center date (ISO 8601: YYYY-MM-DD)
     pub highlighted_day: chrono::NaiveDate,
@@ -163,11 +162,9 @@ pub async fn calendar_entries_api(
     let end = query.highlighted_day + chrono::Duration::days(query.after);
 
     // Generate mock entries for the requested date range
-    let demo_calendar_id =
-        Uuid::parse_str("fc9f55e0-dd5e-4988-a5f3-9ae520859857").unwrap_or_else(|_| Uuid::new_v4());
-
-    let entries = crate::mock_data::generate_mock_entries(demo_calendar_id, query.highlighted_day);
-    let filtered: Vec<&CalendarEntry> = filter_entries(&entries, None, Some(start), Some(end));
+    let entries = crate::mock_data::generate_mock_entries(query.calendar_id, query.highlighted_day);
+    let filtered: Vec<&CalendarEntry> =
+        filter_entries(&entries, Some(query.calendar_id), Some(start), Some(end));
     let days = entries_to_server_days(&filtered, start, end);
 
     axum::Json(days)

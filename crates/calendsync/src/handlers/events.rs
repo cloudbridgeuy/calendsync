@@ -36,9 +36,13 @@ pub async fn events_sse(
 
     // Create the stream
     let stream = async_stream::stream! {
+        // Track the last event ID we've sent to this client
+        let mut current_event_id = last_event_id;
+
         // First, send any missed events since last_event_id
-        let missed_events = state.get_events_since(calendar_id, last_event_id);
+        let missed_events = state.get_events_since(calendar_id, current_event_id);
         for stored in missed_events {
+            current_event_id = stored.id;
             let event_data = serde_json::to_string(&stored.event).unwrap_or_default();
             let event_type = match &stored.event {
                 CalendarEvent::EntryAdded { .. } => "entry_added",
@@ -55,8 +59,9 @@ pub async fn events_sse(
         // Track session start for max duration (1 hour)
         let session_start = std::time::Instant::now();
         let max_duration = Duration::from_secs(3600);
+        let poll_interval = Duration::from_millis(100);
 
-        // Keep connection alive, waiting for real events or shutdown
+        // Poll for new events until shutdown or max duration
         loop {
             // Check if we've exceeded max session duration
             if session_start.elapsed() > max_duration {
@@ -64,10 +69,27 @@ pub async fn events_sse(
                 break;
             }
 
-            // Wait for shutdown signal (keep-alive is handled by Sse::keep_alive)
+            // Poll for new events
+            let new_events = state.get_events_since(calendar_id, current_event_id);
+            for stored in new_events {
+                current_event_id = stored.id;
+                let event_data = serde_json::to_string(&stored.event).unwrap_or_default();
+                let event_type = match &stored.event {
+                    CalendarEvent::EntryAdded { .. } => "entry_added",
+                    CalendarEvent::EntryUpdated { .. } => "entry_updated",
+                    CalendarEvent::EntryDeleted { .. } => "entry_deleted",
+                };
+
+                yield Ok(Event::default()
+                    .id(stored.id.to_string())
+                    .event(event_type)
+                    .data(event_data));
+            }
+
+            // Wait for poll interval or shutdown signal
             tokio::select! {
-                _ = tokio::time::sleep(Duration::from_secs(60)) => {
-                    // Periodic check for max duration
+                _ = tokio::time::sleep(poll_interval) => {
+                    // Continue polling
                 }
                 _ = shutdown_rx.recv() => {
                     tracing::info!("SSE session received shutdown signal");

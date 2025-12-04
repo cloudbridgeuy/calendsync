@@ -1,5 +1,5 @@
-use calendsync_core::calendar::{build_day_data, get_week_dates, CalendarEntry, DayData};
-use chrono::{Duration, Local, NaiveDate, NaiveTime};
+use calendsync_core::calendar::CalendarEntry;
+use chrono::{Duration, NaiveDate, NaiveTime};
 use uuid::Uuid;
 
 /// Generates mock calendar entries for demonstration purposes.
@@ -223,33 +223,6 @@ pub fn generate_mock_entries(calendar_id: Uuid, center_date: NaiveDate) -> Vec<C
     entries
 }
 
-/// Builds calendar data for the week centered on the given date using a specific calendar.
-pub fn build_demo_calendar_data_for_date_with_calendar(
-    calendar_id: Uuid,
-    center_date: NaiveDate,
-) -> (NaiveDate, Vec<DayData>) {
-    let today = Local::now().date_naive();
-    let week_dates = get_week_dates(center_date);
-    let entries = generate_mock_entries(calendar_id, center_date);
-    let days = build_day_data(&week_dates, entries);
-
-    (today, days)
-}
-
-/// Builds calendar data for the week centered on the given date.
-/// Uses a temporary calendar ID for demo purposes.
-pub fn build_demo_calendar_data_for_date(center_date: NaiveDate) -> (NaiveDate, Vec<DayData>) {
-    let demo_calendar_id = Uuid::new_v4();
-    build_demo_calendar_data_for_date_with_calendar(demo_calendar_id, center_date)
-}
-
-/// Builds calendar data for the week centered on today.
-#[allow(dead_code)]
-pub fn build_demo_calendar_data() -> (NaiveDate, Vec<DayData>) {
-    let today = Local::now().date_naive();
-    build_demo_calendar_data_for_date(today)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -275,13 +248,5 @@ mod tests {
 
         // All entries should belong to the same calendar
         assert!(entries.iter().all(|e| e.calendar_id == calendar_id));
-    }
-
-    #[test]
-    fn test_build_demo_calendar_data() {
-        let (today, days) = build_demo_calendar_data();
-
-        assert_eq!(days.len(), 7, "Should have 7 days");
-        assert_eq!(days[3].date, today, "Center day should be today");
     }
 }

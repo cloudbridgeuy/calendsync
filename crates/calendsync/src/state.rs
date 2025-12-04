@@ -117,7 +117,6 @@ impl AppState {
     }
 
     /// Get the default calendar ID (first calendar, or None if empty).
-    #[allow(dead_code)]
     pub fn default_calendar_id(&self) -> Option<Uuid> {
         self.calendars
             .read()
@@ -140,10 +139,33 @@ impl AppState {
             .unwrap_or_default()
     }
 
-    /// Get the current event counter value.
-    #[allow(dead_code)]
-    pub fn current_event_id(&self) -> u64 {
-        self.event_counter.load(Ordering::SeqCst)
+    /// Maximum events to keep in history (for reconnection catch-up).
+    const MAX_EVENT_HISTORY: usize = 1000;
+
+    /// Publish a calendar event to the event history.
+    ///
+    /// This stores the event for SSE clients to receive. Events are stored
+    /// with a unique incrementing ID for reconnection catch-up support.
+    pub fn publish_event(&self, calendar_id: Uuid, event: CalendarEvent) {
+        let id = self.event_counter.fetch_add(1, Ordering::SeqCst);
+        let stored = StoredEvent {
+            id,
+            calendar_id,
+            event,
+        };
+
+        tracing::debug!(event_id = id, %calendar_id, "Publishing calendar event");
+
+        let mut history = self
+            .event_history
+            .write()
+            .expect("Failed to acquire event history write lock");
+        history.push_back(stored);
+
+        // Trim old events if history is too large
+        while history.len() > Self::MAX_EVENT_HISTORY {
+            history.pop_front();
+        }
     }
 
     /// Subscribe to shutdown signal.
