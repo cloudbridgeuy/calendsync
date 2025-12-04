@@ -84,10 +84,15 @@ export function Calendar({ initialData }: CalendarProps) {
     /**
      * Handle wheel navigation (Cmd+Scroll or Ctrl+Scroll).
      * Uses threshold-based accumulation for real-time navigation with controlled sensitivity.
+     * First navigation of a gesture uses a higher threshold to avoid direction stutter.
      */
     useEffect(() => {
         let accumulatedDelta = 0
-        const DELTA_THRESHOLD = 50 // pixels of scroll needed to navigate 1 day
+        let lastEventTime = 0
+        let gestureConfirmed = false
+        const DELTA_THRESHOLD = 2 // pixels of scroll needed to navigate 1 day
+        const INITIAL_THRESHOLD = 10 // higher threshold for first navigation to confirm direction
+        const GESTURE_TIMEOUT = 200 // ms - new gesture if no events for this long
 
         const handleWheel = (e: WheelEvent) => {
             // Only handle if Cmd (Mac) or Ctrl (Windows/Linux) is held
@@ -95,15 +100,28 @@ export function Calendar({ initialData }: CalendarProps) {
 
             e.preventDefault()
 
+            const now = Date.now()
+
+            // Detect new gesture start
+            if (now - lastEventTime > GESTURE_TIMEOUT) {
+                accumulatedDelta = 0
+                gestureConfirmed = false
+            }
+            lastEventTime = now
+
             // Accumulate delta
             accumulatedDelta += e.deltaY
 
+            // Use higher threshold for first navigation, normal threshold after
+            const threshold = gestureConfirmed ? DELTA_THRESHOLD : INITIAL_THRESHOLD
+
             // Navigate when threshold is crossed
-            if (Math.abs(accumulatedDelta) >= DELTA_THRESHOLD) {
+            if (Math.abs(accumulatedDelta) >= threshold) {
                 const direction = accumulatedDelta > 0 ? 1 : -1
                 actions.navigateDays(direction)
                 // Reset accumulator (keep remainder for smooth continuous scrolling)
                 accumulatedDelta = accumulatedDelta % DELTA_THRESHOLD
+                gestureConfirmed = true
             }
         }
 
