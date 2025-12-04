@@ -11,7 +11,6 @@ use uuid::Uuid;
 use calendsync_ssr::SsrPool;
 
 use crate::mock_data::generate_mock_entries;
-use crate::models::User;
 
 // Re-export core types for use in handlers
 pub use calendsync_core::calendar::{Calendar, CalendarEntry, CalendarEvent};
@@ -27,11 +26,9 @@ pub struct StoredEvent {
 /// Shared application state.
 ///
 /// This is cloned for each request handler and contains shared resources
-/// like the user repository, calendars, and entries.
+/// like calendars and entries.
 #[derive(Clone)]
 pub struct AppState {
-    /// In-memory user storage.
-    pub users: Arc<RwLock<HashMap<Uuid, User>>>,
     /// In-memory calendar storage.
     pub calendars: Arc<RwLock<HashMap<Uuid, Calendar>>>,
     /// In-memory entry storage.
@@ -51,7 +48,6 @@ impl Default for AppState {
     fn default() -> Self {
         let (shutdown_tx, _) = broadcast::channel(1);
         Self {
-            users: Arc::new(RwLock::new(HashMap::new())),
             calendars: Arc::new(RwLock::new(HashMap::new())),
             entries: Arc::new(RwLock::new(HashMap::new())),
             event_counter: Arc::new(AtomicU64::new(1)),

@@ -1,6 +1,4 @@
 mod app;
-mod assets;
-mod error;
 mod handlers;
 mod mock_data;
 mod models;

@@ -2,6 +2,8 @@
 //!
 //! Uses the SSR worker pool from `calendsync_ssr` to render the React calendar.
 
+use std::collections::BTreeMap;
+
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -13,6 +15,7 @@ use uuid::Uuid;
 use calendsync_core::calendar::{filter_entries, CalendarEntry};
 use calendsync_ssr::{sanitize_error, SsrConfig, SsrError};
 
+use super::entries::entry_to_server_entry;
 use crate::state::AppState;
 
 /// Query parameters for the entry modal route.
@@ -36,56 +39,6 @@ fn get_client_bundle_url() -> String {
     format!("/dist/{client_bundle_name}")
 }
 
-/// Convert CalendarEntry to the ServerEntry format expected by the frontend.
-pub fn entry_to_server_entry(entry: &CalendarEntry) -> serde_json::Value {
-    use calendsync_core::calendar::EntryKind;
-
-    let (kind, completed, is_multi_day, is_all_day, is_timed, is_task) = match &entry.kind {
-        EntryKind::AllDay => ("all-day", false, false, true, false, false),
-        EntryKind::Timed { .. } => ("timed", false, false, false, true, false),
-        EntryKind::Task { completed } => ("task", *completed, false, false, false, true),
-        EntryKind::MultiDay { .. } => ("multi-day", false, true, false, false, false),
-    };
-
-    let start_time = entry
-        .kind
-        .start_time()
-        .map(|t| t.format("%H:%M").to_string());
-    let end_time = entry.kind.end_time().map(|t| t.format("%H:%M").to_string());
-    let multi_day_start = entry
-        .kind
-        .multi_day_start()
-        .map(|d| d.format("%b %d").to_string());
-    let multi_day_end = entry
-        .kind
-        .multi_day_end()
-        .map(|d| d.format("%b %d").to_string());
-    let multi_day_start_date = entry.kind.multi_day_start().map(|d| d.to_string());
-    let multi_day_end_date = entry.kind.multi_day_end().map(|d| d.to_string());
-
-    serde_json::json!({
-        "id": entry.id.to_string(),
-        "calendarId": entry.calendar_id.to_string(),
-        "kind": kind,
-        "completed": completed,
-        "isMultiDay": is_multi_day,
-        "isAllDay": is_all_day,
-        "isTimed": is_timed,
-        "isTask": is_task,
-        "title": entry.title,
-        "description": entry.description,
-        "location": entry.location,
-        "color": entry.color,
-        "date": entry.date.to_string(),
-        "startTime": start_time,
-        "endTime": end_time,
-        "multiDayStart": multi_day_start,
-        "multiDayEnd": multi_day_end,
-        "multiDayStartDate": multi_day_start_date,
-        "multiDayEndDate": multi_day_end_date,
-    })
-}
-
 /// Group entries by date into ServerDay format for a date range.
 /// Creates entries for all dates in the range, even if they have no entries.
 fn entries_to_server_days(
@@ -93,8 +46,6 @@ fn entries_to_server_days(
     start: chrono::NaiveDate,
     end: chrono::NaiveDate,
 ) -> Vec<serde_json::Value> {
-    use std::collections::BTreeMap;
-
     // Build a map of entries by date
     let mut days_map: BTreeMap<chrono::NaiveDate, Vec<serde_json::Value>> = BTreeMap::new();
 
@@ -122,52 +73,6 @@ fn entries_to_server_days(
             })
         })
         .collect()
-}
-
-/// Query parameters for the calendar entries API.
-#[derive(serde::Deserialize)]
-pub struct CalendarEntriesQuery {
-    /// Calendar ID to fetch entries for.
-    pub calendar_id: Uuid,
-    /// Center date (ISO 8601: YYYY-MM-DD)
-    pub highlighted_day: chrono::NaiveDate,
-    /// Number of days before highlighted_day (default: 365)
-    #[serde(default = "default_before")]
-    pub before: i64,
-    /// Number of days after highlighted_day (default: 365)
-    #[serde(default = "default_after")]
-    pub after: i64,
-}
-
-fn default_before() -> i64 {
-    365
-}
-fn default_after() -> i64 {
-    365
-}
-
-/// API handler for fetching calendar entries in ServerDay[] format.
-/// Used by the React calendar client for data fetching.
-///
-/// GET /api/calendar-entries?calendar_id=...&highlighted_day=...&before=3&after=3
-///
-/// NOTE: This generates mock entries on-the-fly for the requested date range.
-/// In production, this would query a database.
-#[axum::debug_handler]
-pub async fn calendar_entries_api(
-    State(_state): State<AppState>,
-    axum::extract::Query(query): axum::extract::Query<CalendarEntriesQuery>,
-) -> axum::Json<Vec<serde_json::Value>> {
-    let start = query.highlighted_day - chrono::Duration::days(query.before);
-    let end = query.highlighted_day + chrono::Duration::days(query.after);
-
-    // Generate mock entries for the requested date range
-    let entries = crate::mock_data::generate_mock_entries(query.calendar_id, query.highlighted_day);
-    let filtered: Vec<&CalendarEntry> =
-        filter_entries(&entries, Some(query.calendar_id), Some(start), Some(end));
-    let days = entries_to_server_days(&filtered, start, end);
-
-    axum::Json(days)
 }
 
 /// Generate error HTML with client-side fallback.

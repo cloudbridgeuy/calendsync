@@ -1,4 +1,7 @@
-//! Health check endpoints for SSR pool monitoring.
+//! Health check endpoints for Kubernetes-style probes.
+//!
+//! - `/healthz` - Liveness probe (fast, passive stats)
+//! - `/readyz` - Readiness probe (active SSR render check)
 
 use axum::{
     extract::State,
@@ -11,12 +14,31 @@ use calendsync_ssr::{HealthStatus, SsrPoolStats};
 
 use crate::state::AppState;
 
-/// GET /health/ssr - Active health check for SSR pool.
+/// GET /healthz - Liveness probe (passive stats, no render).
+///
+/// Returns pool statistics without sending a render request.
+/// Fast endpoint suitable for frequent liveness checks.
+#[axum::debug_handler]
+pub async fn healthz(State(state): State<AppState>) -> Response {
+    let Some(ssr_pool) = &state.ssr_pool else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({
+                "error": "SSR pool not initialized"
+            })),
+        )
+            .into_response();
+    };
+
+    (StatusCode::OK, Json(ssr_pool.stats())).into_response()
+}
+
+/// GET /readyz - Readiness probe (active SSR health check).
 ///
 /// Sends a minimal render probe to verify workers can process requests.
 /// Returns 200 with health status if healthy, 503 if unhealthy.
 #[axum::debug_handler]
-pub async fn ssr_health(State(state): State<AppState>) -> Response {
+pub async fn readyz(State(state): State<AppState>) -> Response {
     let Some(ssr_pool) = &state.ssr_pool else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
@@ -46,23 +68,4 @@ pub async fn ssr_health(State(state): State<AppState>) -> Response {
         )
             .into_response(),
     }
-}
-
-/// GET /health/ssr/stats - Passive stats (no render probe).
-///
-/// Returns pool statistics without sending a render request.
-/// Fast endpoint for basic monitoring.
-#[axum::debug_handler]
-pub async fn ssr_stats(State(state): State<AppState>) -> Response {
-    let Some(ssr_pool) = &state.ssr_pool else {
-        return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(serde_json::json!({
-                "error": "SSR pool not initialized"
-            })),
-        )
-            .into_response();
-    };
-
-    (StatusCode::OK, Json(ssr_pool.stats())).into_response()
 }

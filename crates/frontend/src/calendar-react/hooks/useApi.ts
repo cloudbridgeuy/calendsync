@@ -39,7 +39,7 @@ export async function fetchEntries(
         after: after.toString(),
     })
 
-    const url = `${CONTROL_PLANE_URL}/api/calendar-entries?${params.toString()}`
+    const url = `${CONTROL_PLANE_URL}/api/entries/calendar?${params.toString()}`
 
     const response = await fetch(url, { signal })
 

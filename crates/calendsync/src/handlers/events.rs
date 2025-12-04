@@ -9,7 +9,7 @@ use axum::{
 };
 use uuid::Uuid;
 
-use super::calendar_react::entry_to_server_entry;
+use super::entries::entry_to_server_entry;
 use crate::state::{AppState, CalendarEvent};
 
 /// Serialize a CalendarEvent to JSON, transforming entries to ServerEntry format.
