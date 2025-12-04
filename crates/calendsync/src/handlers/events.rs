@@ -9,7 +9,35 @@ use axum::{
 };
 use uuid::Uuid;
 
+use super::calendar_react::entry_to_server_entry;
 use crate::state::{AppState, CalendarEvent};
+
+/// Serialize a CalendarEvent to JSON, transforming entries to ServerEntry format.
+fn serialize_event(event: &CalendarEvent) -> String {
+    match event {
+        CalendarEvent::EntryAdded { entry, date } => {
+            let server_entry = entry_to_server_entry(entry);
+            serde_json::json!({
+                "entry": server_entry,
+                "date": date,
+            })
+            .to_string()
+        }
+        CalendarEvent::EntryUpdated { entry, date } => {
+            let server_entry = entry_to_server_entry(entry);
+            serde_json::json!({
+                "entry": server_entry,
+                "date": date,
+            })
+            .to_string()
+        }
+        CalendarEvent::EntryDeleted { entry_id, date } => serde_json::json!({
+            "entry_id": entry_id,
+            "date": date,
+        })
+        .to_string(),
+    }
+}
 
 /// Query parameters for the SSE events endpoint.
 #[derive(Debug, serde::Deserialize)]
@@ -43,7 +71,7 @@ pub async fn events_sse(
         let missed_events = state.get_events_since(calendar_id, current_event_id);
         for stored in missed_events {
             current_event_id = stored.id;
-            let event_data = serde_json::to_string(&stored.event).unwrap_or_default();
+            let event_data = serialize_event(&stored.event);
             let event_type = match &stored.event {
                 CalendarEvent::EntryAdded { .. } => "entry_added",
                 CalendarEvent::EntryUpdated { .. } => "entry_updated",
@@ -73,7 +101,7 @@ pub async fn events_sse(
             let new_events = state.get_events_since(calendar_id, current_event_id);
             for stored in new_events {
                 current_event_id = stored.id;
-                let event_data = serde_json::to_string(&stored.event).unwrap_or_default();
+                let event_data = serialize_event(&stored.event);
                 let event_type = match &stored.event {
                     CalendarEvent::EntryAdded { .. } => "entry_added",
                     CalendarEvent::EntryUpdated { .. } => "entry_updated",

@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use calendsync_core::calendar::{filter_entries, CalendarEntry, CalendarEvent, EntryKind};
 
+use super::calendar_react::entry_to_server_entry;
 use crate::{
     models::{CreateEntry, UpdateEntry},
     state::AppState,
@@ -125,7 +126,7 @@ pub async fn create_entry(
 
     tracing::info!(entry_id = %entry.id, title = %entry.title, "Created new entry");
 
-    Ok((StatusCode::CREATED, Json(entry)))
+    Ok((StatusCode::CREATED, Json(entry_to_server_entry(&entry))))
 }
 
 /// Get a single entry by ID (GET /api/entries/{id}).
@@ -148,7 +149,7 @@ pub async fn update_entry(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
     form_result: Result<Form<UpdateEntry>, FormRejection>,
-) -> Result<Json<CalendarEntry>, (StatusCode, String)> {
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let Form(payload) = form_result.map_err(|e| {
         let msg = format!("Failed to parse form: {e}");
         tracing::error!(error = %e, "Form parsing failed");
@@ -177,7 +178,7 @@ pub async fn update_entry(
 
     tracing::info!(entry_id = %id, "Updated entry");
 
-    Ok(Json(updated_entry))
+    Ok(Json(entry_to_server_entry(&updated_entry)))
 }
 
 /// Delete an entry by ID (DELETE /api/entries/{id}).
@@ -215,7 +216,7 @@ pub async fn delete_entry(
 pub async fn toggle_entry(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
-) -> Result<Json<CalendarEntry>, (StatusCode, String)> {
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     tracing::debug!(entry_id = %id, "Received toggle entry request");
 
     // Toggle entry and get a clone for the response and event
@@ -246,5 +247,5 @@ pub async fn toggle_entry(
         CalendarEvent::entry_updated(toggled_entry.clone()),
     );
 
-    Ok(Json(toggled_entry))
+    Ok(Json(entry_to_server_entry(&toggled_entry)))
 }

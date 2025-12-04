@@ -37,7 +37,7 @@ fn get_client_bundle_url() -> String {
 }
 
 /// Convert CalendarEntry to the ServerEntry format expected by the frontend.
-fn entry_to_server_entry(entry: &CalendarEntry) -> serde_json::Value {
+pub fn entry_to_server_entry(entry: &CalendarEntry) -> serde_json::Value {
     use calendsync_core::calendar::EntryKind;
 
     let (kind, completed, is_multi_day, is_all_day, is_timed, is_task) = match &entry.kind {
