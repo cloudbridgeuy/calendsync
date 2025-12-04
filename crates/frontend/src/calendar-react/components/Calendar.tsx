@@ -83,14 +83,11 @@ export function Calendar({ initialData }: CalendarProps) {
 
     /**
      * Handle wheel navigation (Cmd+Scroll or Ctrl+Scroll).
-     * Accumulates scroll delta during gesture and navigates once when gesture ends.
+     * Uses threshold-based accumulation for real-time navigation with controlled sensitivity.
      */
     useEffect(() => {
-        // Accumulate delta during gesture, navigate when gesture ends
-        let wheelDelta = 0
-        let idleTimer: ReturnType<typeof setTimeout> | null = null
-        const IDLE_TIMEOUT = 150 // ms - gesture ends when no events for this duration
-        const DELTA_PER_DAY = 50 // pixels of scroll per day navigation
+        let accumulatedDelta = 0
+        const DELTA_THRESHOLD = 50 // pixels of scroll needed to navigate 1 day
 
         const handleWheel = (e: WheelEvent) => {
             // Only handle if Cmd (Mac) or Ctrl (Windows/Linux) is held
@@ -98,27 +95,20 @@ export function Calendar({ initialData }: CalendarProps) {
 
             e.preventDefault()
 
-            // Accumulate delta (deltaY for vertical scroll gesture)
-            wheelDelta += e.deltaY
+            // Accumulate delta
+            accumulatedDelta += e.deltaY
 
-            // Reset idle timer
-            if (idleTimer) clearTimeout(idleTimer)
-            idleTimer = setTimeout(() => {
-                // Gesture ended - calculate days to navigate
-                const daysToMove = Math.round(wheelDelta / DELTA_PER_DAY)
-                if (daysToMove !== 0) {
-                    actions.navigateDays(daysToMove)
-                }
-                // Reset accumulator
-                wheelDelta = 0
-            }, IDLE_TIMEOUT)
+            // Navigate when threshold is crossed
+            if (Math.abs(accumulatedDelta) >= DELTA_THRESHOLD) {
+                const direction = accumulatedDelta > 0 ? 1 : -1
+                actions.navigateDays(direction)
+                // Reset accumulator (keep remainder for smooth continuous scrolling)
+                accumulatedDelta = accumulatedDelta % DELTA_THRESHOLD
+            }
         }
 
         window.addEventListener("wheel", handleWheel, { passive: false })
-        return () => {
-            window.removeEventListener("wheel", handleWheel)
-            if (idleTimer) clearTimeout(idleTimer)
-        }
+        return () => window.removeEventListener("wheel", handleWheel)
     }, [actions])
 
     /**
