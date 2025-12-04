@@ -184,13 +184,29 @@ export function Calendar({ initialData }: CalendarProps) {
 
             if (dayOffset !== 0) {
                 actions.navigateDays(dayOffset)
+                // Set starting position for incoming day's snap animation
+                // Going forward (+1): new day comes from right, so start at +100%
+                // Going backward (-1): new day comes from left, so start at -100%
+                setDragOffset(dayOffset > 0 ? 100 : -100)
+
+                // Use setTimeout to ensure React renders the new position first,
+                // then animate to 0
+                setTimeout(() => {
+                    setIsDragging(false)
+                    setDragOffset(0)
+                }, 0)
+            } else {
+                // Snap back to current day
+                setIsDragging(false)
+                setDragOffset(0)
             }
+        } else {
+            setIsDragging(false)
+            setDragOffset(0)
         }
 
         touchStartRef.current = null
         isHorizontalSwipeRef.current = null
-        setIsDragging(false)
-        setDragOffset(0)
     }, [isMobile, dragOffset, actions])
 
     /**
