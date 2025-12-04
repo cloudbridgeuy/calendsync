@@ -285,9 +285,14 @@ export function Calendar({ initialData }: CalendarProps) {
         const columnWidth = 100 / visibleDays
         const columns = []
 
-        // Apply desktop drag offset during gesture, with snap animation after
-        const transform = isDesktopDragging ? `translateX(${desktopDragOffset}%)` : undefined
-        const transition = isDesktopDragging ? "none" : "transform 0.2s ease-out"
+        // Only apply transform/transition during drag gesture
+        // CSS handles the default transition, we just override during drag
+        const dragStyles: React.CSSProperties = isDesktopDragging
+            ? {
+                  transform: `translateX(${desktopDragOffset}%)`,
+                  transition: "none",
+              }
+            : {}
 
         for (let i = 0; i < visibleDays; i++) {
             const date = addDays(centerDate, i - halfDays)
@@ -306,8 +311,7 @@ export function Calendar({ initialData }: CalendarProps) {
                         width: `${columnWidth}%`,
                         flexBasis: `${columnWidth}%`,
                         flexShrink: 0,
-                        transform,
-                        transition,
+                        ...dragStyles,
                     }}
                 />,
             )
