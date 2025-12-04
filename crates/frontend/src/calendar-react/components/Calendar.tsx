@@ -90,9 +90,10 @@ export function Calendar({ initialData }: CalendarProps) {
         let accumulatedDelta = 0
         let lastEventTime = 0
         let gestureConfirmed = false
+        let lastDirection = 0
         const DELTA_THRESHOLD = 2 // pixels of scroll needed to navigate 1 day
-        const INITIAL_THRESHOLD = 10 // higher threshold for first navigation to confirm direction
-        const GESTURE_TIMEOUT = 200 // ms - new gesture if no events for this long
+        const INITIAL_THRESHOLD = 4 // higher threshold for first navigation to confirm direction
+        const GESTURE_TIMEOUT = 50 // ms - new gesture if no events for this long
 
         const handleWheel = (e: WheelEvent) => {
             // Only handle if Cmd (Mac) or Ctrl (Windows/Linux) is held
@@ -102,12 +103,27 @@ export function Calendar({ initialData }: CalendarProps) {
 
             const now = Date.now()
 
-            // Detect new gesture start
+            // Detect new gesture start (time gap)
             if (now - lastEventTime > GESTURE_TIMEOUT) {
                 accumulatedDelta = 0
                 gestureConfirmed = false
+                lastDirection = 0
             }
             lastEventTime = now
+
+            // Detect direction change - reset accumulator to prevent drift
+            const currentDirection = e.deltaY > 0 ? 1 : e.deltaY < 0 ? -1 : 0
+            if (
+                lastDirection !== 0 &&
+                currentDirection !== 0 &&
+                currentDirection !== lastDirection
+            ) {
+                accumulatedDelta = 0
+                gestureConfirmed = false
+            }
+            if (currentDirection !== 0) {
+                lastDirection = currentDirection
+            }
 
             // Accumulate delta
             accumulatedDelta += e.deltaY
@@ -119,8 +135,8 @@ export function Calendar({ initialData }: CalendarProps) {
             if (Math.abs(accumulatedDelta) >= threshold) {
                 const direction = accumulatedDelta > 0 ? 1 : -1
                 actions.navigateDays(direction)
-                // Reset accumulator (keep remainder for smooth continuous scrolling)
-                accumulatedDelta = accumulatedDelta % DELTA_THRESHOLD
+                // Subtract threshold to allow continuous scrolling without drift
+                accumulatedDelta -= direction * threshold
                 gestureConfirmed = true
             }
         }
