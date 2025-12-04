@@ -2,10 +2,15 @@
 
 The React calendar is a server-side rendered (SSR) calendar view with real-time updates via Server-Sent Events (SSE).
 
-## Route
+## Routes
 
-- **URL**: `/calendar/{calendar_id}` - React SSR calendar page
-- **Handler**: `crates/calendsync/src/handlers/calendar_react.rs`
+| URL | Description |
+|-----|-------------|
+| `/calendar/{calendar_id}` | React SSR calendar page (modal closed) |
+| `/calendar/{calendar_id}/entry` | Calendar with create modal open |
+| `/calendar/{calendar_id}/entry?entry_id={id}` | Calendar with edit modal open |
+
+**Handler**: `crates/calendsync/src/handlers/calendar_react.rs`
 
 ## Architecture
 
@@ -214,4 +219,74 @@ The calendar uses CSS custom properties for theming:
 --text-secondary /* Muted text */
 --border        /* Border color */
 --accent        /* Orange accent (#F97316) */
+```
+
+## Entry Modal
+
+The calendar includes a URL-based modal for creating and editing entries.
+
+### URL-Based Modal State
+
+The modal state is controlled by the URL, enabling:
+- Deep linking to create/edit forms
+- Browser back/forward navigation
+- SSR with modal open state
+
+**URL Scheme**:
+- `/calendar/{id}` - Modal closed
+- `/calendar/{id}/entry` - Create mode (highlighted day pre-filled)
+- `/calendar/{id}/entry?entry_id={uuid}` - Edit mode (entry data pre-loaded)
+
+### Navigation Behavior
+
+| Action | Navigation Method | Effect |
+|--------|------------------|--------|
+| Open modal (click FAB or entry) | `history.pushState` | Adds to history |
+| Cancel/Escape/Click outside | `history.back()` | Natural back button behavior |
+| Save entry | `history.replaceState` | Prevents re-opening on back |
+
+### Architecture (Functional Core - Imperative Shell)
+
+**Functional Core** (`crates/frontend/src/core/calendar/modal.ts`):
+- `parseModalUrl(pathname, search)` - Parse URL to modal state
+- `buildModalUrl(calendarId, mode, entryId?)` - Build modal URL
+- `entryToFormData(entry)` - Convert ServerEntry to form data
+- `formDataToApiPayload(data, calendarId)` - Convert form to API params
+- `validateFormData(data)` - Validate form fields
+
+**Imperative Shell** (hooks):
+- `useModalUrl` - URL/history management
+- `useEntryApi` - Entry CRUD operations
+
+### File Structure
+
+```
+crates/frontend/src/
+├── core/calendar/
+│   └── modal.ts                    # Pure modal utilities
+├── calendar-react/
+│   ├── components/
+│   │   └── EntryModal.tsx          # Modal component
+│   ├── hooks/
+│   │   ├── useModalUrl.ts          # URL state hook
+│   │   └── useEntryApi.ts          # Entry API hook
+│   └── types.ts                    # ModalState, EntryFormData
+└── calendsync/src/handlers/
+    └── calendar_react.rs           # SSR handlers (calendar_react_ssr_entry)
+```
+
+### InitialData Extension
+
+The `InitialData` interface includes optional modal state for SSR:
+
+```typescript
+interface InitialData {
+    // ... existing fields ...
+    modal?: {
+        mode: "create" | "edit"
+        entryId?: string        // Edit mode
+        entry?: ServerEntry     // Pre-fetched entry (edit mode SSR)
+        defaultDate?: string    // Create mode
+    }
+}
 ```

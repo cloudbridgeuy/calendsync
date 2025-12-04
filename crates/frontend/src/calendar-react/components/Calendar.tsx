@@ -6,10 +6,17 @@ import { addDays, formatDateKey } from "@core/calendar/dates"
 import type { ServerEntry } from "@core/calendar/types"
 import { DEFAULT_LAYOUT_CONSTANTS } from "@core/calendar/types"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { isOnToday, useCalendarState, useNotificationCenter } from "../hooks"
+import {
+    isOnToday,
+    useCalendarState,
+    useEntryApi,
+    useModalUrl,
+    useNotificationCenter,
+} from "../hooks"
 import type { InitialData } from "../types"
 import { CalendarHeader } from "./CalendarHeader"
 import { DayColumn } from "./DayColumn"
+import { EntryModal } from "./EntryModal"
 import { NotificationCenter } from "./NotificationCenter"
 import { TodayButton } from "./TodayButton"
 
@@ -43,6 +50,48 @@ export function Calendar({ initialData }: CalendarProps) {
         flashStates,
     } = state
 
+    // Modal URL state management
+    const { modalState, openCreateModal, openEditModal, closeModal, closeAfterSave } = useModalUrl({
+        calendarId: initialData.calendarId,
+        initialModal: initialData.modal,
+    })
+
+    // Entry API for fetching entry data on client-side navigation
+    const entryApi = useEntryApi({ calendarId: initialData.calendarId })
+
+    // Track the entry being edited (from SSR, cache, or fetched)
+    const [editEntry, setEditEntry] = useState<ServerEntry | undefined>(initialData.modal?.entry)
+
+    // Fetch entry data when navigating to edit URL on client side
+    useEffect(() => {
+        if (modalState?.mode === "edit" && modalState.entryId && !editEntry) {
+            // First try to get from cache
+            for (const entries of entryCache.values()) {
+                const found = entries.find((e) => e.id === modalState.entryId)
+                if (found) {
+                    setEditEntry(found)
+                    return
+                }
+            }
+
+            // If not in cache, fetch from API
+            entryApi
+                .fetchEntry(modalState.entryId)
+                .then((entry) => setEditEntry(entry))
+                .catch(() => {
+                    // Entry not found, close modal
+                    closeModal()
+                })
+        }
+    }, [modalState, editEntry, entryCache, entryApi, closeModal])
+
+    // Clear edit entry when modal closes
+    useEffect(() => {
+        if (!modalState) {
+            setEditEntry(undefined)
+        }
+    }, [modalState])
+
     // Touch/swipe state
     const [isDragging, setIsDragging] = useState(false)
     const [dragOffset, setDragOffset] = useState(0)
@@ -62,6 +111,31 @@ export function Calendar({ initialData }: CalendarProps) {
         },
         [entryCache],
     )
+
+    /**
+     * Handle entry click to open edit modal.
+     */
+    const handleEntryClick = useCallback(
+        (entry: ServerEntry) => {
+            setEditEntry(entry) // Pre-populate from cache
+            openEditModal(entry.id)
+        },
+        [openEditModal],
+    )
+
+    /**
+     * Handle modal save - SSE will update the cache.
+     */
+    const handleModalSave = useCallback(() => {
+        closeAfterSave()
+    }, [closeAfterSave])
+
+    /**
+     * Handle modal delete.
+     */
+    const handleModalDelete = useCallback(() => {
+        closeAfterSave()
+    }, [closeAfterSave])
 
     /**
      * Handle keyboard navigation.
@@ -301,6 +375,7 @@ export function Calendar({ initialData }: CalendarProps) {
                         dateKey={dateKey}
                         entries={entries}
                         flashStates={flashStates}
+                        onEntryClick={handleEntryClick}
                         style={{
                             width: "100%",
                             flexBasis: "100%",
@@ -333,6 +408,7 @@ export function Calendar({ initialData }: CalendarProps) {
                     entries={entries}
                     flashStates={flashStates}
                     isLastVisible={isLastVisible}
+                    onEntryClick={handleEntryClick}
                     style={{
                         width: `${columnWidth}%`,
                         flexBasis: `${columnWidth}%`,
@@ -414,6 +490,33 @@ export function Calendar({ initialData }: CalendarProps) {
 
             {/* Today button */}
             <TodayButton visible={showTodayButton} onClick={actions.goToToday} />
+
+            {/* FAB button to create entry */}
+            <button
+                type="button"
+                className="fab"
+                onClick={() => openCreateModal(formatDateKey(centerDate))}
+                aria-label="Create new entry"
+            >
+                <span className="fab-icon">+</span>
+            </button>
+
+            {/* Entry modal */}
+            {modalState && (
+                <EntryModal
+                    mode={modalState.mode}
+                    entry={modalState.mode === "edit" ? editEntry : undefined}
+                    defaultDate={
+                        modalState.mode === "create"
+                            ? modalState.defaultDate || formatDateKey(centerDate)
+                            : undefined
+                    }
+                    calendarId={initialData.calendarId}
+                    onClose={closeModal}
+                    onSave={handleModalSave}
+                    onDelete={handleModalDelete}
+                />
+            )}
 
             {/* Navigation hint (mobile only, shown briefly) */}
             {isMobile && <div className="nav-hint">Swipe to navigate days</div>}

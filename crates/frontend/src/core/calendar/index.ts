@@ -51,6 +51,17 @@ export {
     shouldNavigateFromSwipe,
     snapToNearestDay,
 } from "./layout"
+export type { EntryFormData, ParsedModalUrl, ValidationResult } from "./modal"
+// Re-export modal functions
+export {
+    buildCalendarUrl,
+    buildModalUrl,
+    createDefaultFormData,
+    entryToFormData,
+    formDataToApiPayload,
+    parseModalUrl,
+    validateFormData,
+} from "./modal"
 // Re-export notification functions
 export {
     addNotification,

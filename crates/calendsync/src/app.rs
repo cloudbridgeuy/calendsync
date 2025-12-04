@@ -15,7 +15,7 @@ use crate::{
     handlers::{
         api::{create_user, delete_user, get_user, list_users},
         calendar::calendar_demo,
-        calendar_react::{calendar_entries_api, calendar_react_ssr},
+        calendar_react::{calendar_entries_api, calendar_react_ssr, calendar_react_ssr_entry},
         calendars::{
             create_calendar, delete_calendar, get_calendar, list_calendars, update_calendar,
         },
@@ -80,6 +80,10 @@ pub fn create_app(state: AppState) -> Router {
         .route("/", get(index))
         .route("/calendar", get(calendar_demo))
         .route("/calendar/{calendar_id}", get(calendar_react_ssr))
+        .route(
+            "/calendar/{calendar_id}/entry",
+            get(calendar_react_ssr_entry),
+        )
         .route("/dist/{*filename}", get(serve_static))
         .nest("/api", api_routes)
         .nest("/health", health_routes)

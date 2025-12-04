@@ -18,6 +18,37 @@ export {
 } from "@core/calendar/types"
 
 /**
+ * Modal state from SSR or URL parsing.
+ * Determines whether the entry modal is open and in what mode.
+ */
+export interface ModalState {
+    /** Modal mode: create new entry or edit existing */
+    mode: "create" | "edit"
+    /** Entry ID for edit mode */
+    entryId?: string
+    /** Pre-fetched entry data for edit mode (from SSR) */
+    entry?: import("@core/calendar/types").ServerEntry
+    /** Default date for create mode (pre-fill the date field) */
+    defaultDate?: string
+}
+
+/**
+ * Entry form data for creating/editing entries.
+ * Used by the modal form state.
+ */
+export interface EntryFormData {
+    title: string
+    date: string
+    startTime?: string
+    endTime?: string
+    isAllDay: boolean
+    description?: string
+    location?: string
+    entryType: "all_day" | "timed" | "task" | "multi_day"
+    endDate?: string // For multi-day entries
+}
+
+/**
  * Initial data passed from server to client via __INITIAL_DATA__
  */
 export interface InitialData {
@@ -31,6 +62,8 @@ export interface InitialData {
     clientBundleUrl: string
     /** Base URL for API calls */
     controlPlaneUrl: string
+    /** Modal state from SSR (if modal URL was requested) */
+    modal?: ModalState
 }
 
 /**

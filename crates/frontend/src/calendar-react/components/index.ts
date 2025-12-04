@@ -5,6 +5,8 @@
 export { Calendar } from "./Calendar"
 export { CalendarHeader } from "./CalendarHeader"
 export { DayColumn } from "./DayColumn"
+export type { EntryModalProps } from "./EntryModal"
+export { EntryModal } from "./EntryModal"
 export { EntryTile } from "./EntryTile"
 export { NotificationCenter } from "./NotificationCenter"
 export type { ToastData, ToastType } from "./Toast"

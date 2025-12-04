@@ -3,7 +3,7 @@
 //! Uses the SSR worker pool from `calendsync_ssr` to render the React calendar.
 
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{Html, IntoResponse, Response},
 };
@@ -14,6 +14,13 @@ use calendsync_core::calendar::{filter_entries, CalendarEntry};
 use calendsync_ssr::{sanitize_error, SsrConfig, SsrError};
 
 use crate::state::AppState;
+
+/// Query parameters for the entry modal route.
+#[derive(serde::Deserialize, Default)]
+pub struct EntryModalQuery {
+    /// Entry ID for edit mode (optional - if missing, we're in create mode)
+    pub entry_id: Option<Uuid>,
+}
 
 /// Get the client bundle URL from the manifest.
 fn get_client_bundle_url() -> String {
@@ -292,6 +299,131 @@ pub async fn calendar_react_ssr(
     };
 
     // Render using SSR pool
+    render_with_ssr_pool(
+        ssr_pool,
+        config,
+        &calendar_id.to_string(),
+        &client_bundle_url,
+    )
+    .await
+}
+
+/// SSR handler for `/calendar/{calendar_id}/entry`.
+///
+/// Renders the React calendar with entry modal open for creating or editing.
+/// - Without `entry_id` query param: Create mode (modal open with highlighted day)
+/// - With `entry_id=uuid` query param: Edit mode (modal open with entry data)
+#[axum::debug_handler]
+pub async fn calendar_react_ssr_entry(
+    State(state): State<AppState>,
+    Path(calendar_id): Path<Uuid>,
+    Query(query): Query<EntryModalQuery>,
+) -> Response {
+    // Check if SSR pool is available
+    let Some(ssr_pool) = &state.ssr_pool else {
+        tracing::error!("SSR pool not initialized");
+        let client_bundle_url = get_client_bundle_url();
+        return Html(error_html(
+            "SSR not available",
+            &calendar_id.to_string(),
+            &client_bundle_url,
+        ))
+        .into_response();
+    };
+
+    // Get today's date as the highlighted day
+    let today = Local::now().date_naive();
+    let highlighted_day = today.to_string();
+
+    // Calculate date range (before=365, after=365)
+    let start = today - chrono::Duration::days(365);
+    let end = today + chrono::Duration::days(365);
+
+    // Get client bundle URL
+    let client_bundle_url = get_client_bundle_url();
+
+    // Fetch entries and optionally the specific entry for edit mode
+    let (days, modal) = {
+        let entries_store = state.entries.read().expect("Failed to acquire read lock");
+        let all_entries: Vec<CalendarEntry> = entries_store.values().cloned().collect();
+        let filtered: Vec<&CalendarEntry> =
+            filter_entries(&all_entries, None, Some(start), Some(end));
+        let days = entries_to_server_days(&filtered, start, end);
+
+        // Build modal state based on query params
+        let modal = if let Some(entry_id) = query.entry_id {
+            // Edit mode: look up the entry
+            match entries_store.get(&entry_id) {
+                Some(entry) => serde_json::json!({
+                    "mode": "edit",
+                    "entryId": entry_id.to_string(),
+                    "entry": entry_to_server_entry(entry),
+                }),
+                None => {
+                    // Entry not found - return 404
+                    return (
+                        StatusCode::NOT_FOUND,
+                        Html(error_html(
+                            "Entry not found",
+                            &calendar_id.to_string(),
+                            &client_bundle_url,
+                        )),
+                    )
+                        .into_response();
+                }
+            }
+        } else {
+            // Create mode: pre-fill with highlighted day
+            serde_json::json!({
+                "mode": "create",
+                "defaultDate": highlighted_day,
+            })
+        };
+
+        (days, modal)
+    };
+
+    // Build initial data for SSR with modal state
+    let initial_data = serde_json::json!({
+        "calendarId": calendar_id.to_string(),
+        "highlightedDay": highlighted_day,
+        "days": days,
+        "clientBundleUrl": client_bundle_url,
+        "controlPlaneUrl": "",
+        "modal": modal,
+    });
+
+    // Create SSR config (with payload size validation)
+    let config = match SsrConfig::new(initial_data) {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to create SSR config");
+            return Html(error_html(
+                &sanitize_error(&SsrError::Core(e)),
+                &calendar_id.to_string(),
+                &client_bundle_url,
+            ))
+            .into_response();
+        }
+    };
+
+    // Render using SSR pool
+    render_with_ssr_pool(
+        ssr_pool,
+        config,
+        &calendar_id.to_string(),
+        &client_bundle_url,
+    )
+    .await
+}
+
+/// Helper to render with SSR pool and handle errors consistently.
+async fn render_with_ssr_pool(
+    ssr_pool: &calendsync_ssr::SsrPool,
+    config: SsrConfig,
+    calendar_id: &str,
+    client_bundle_url: &str,
+) -> Response {
     match ssr_pool.render(config).await {
         Ok(html) => Html(html).into_response(),
         Err(SsrError::Overloaded { retry_after_secs }) => {
@@ -301,8 +433,8 @@ pub async fn calendar_react_ssr(
                 [("Retry-After", retry_after_secs.to_string())],
                 Html(error_html(
                     &sanitize_error(&SsrError::Overloaded { retry_after_secs }),
-                    &calendar_id.to_string(),
-                    &client_bundle_url,
+                    calendar_id,
+                    client_bundle_url,
                 )),
             )
                 .into_response()
@@ -311,8 +443,8 @@ pub async fn calendar_react_ssr(
             tracing::error!(error = %e, "SSR render failed");
             Html(error_html(
                 &sanitize_error(&e),
-                &calendar_id.to_string(),
-                &client_bundle_url,
+                calendar_id,
+                client_bundle_url,
             ))
             .into_response()
         }

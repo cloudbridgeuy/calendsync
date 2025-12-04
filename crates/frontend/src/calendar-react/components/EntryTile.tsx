@@ -8,12 +8,14 @@ import type { FlashState } from "../types"
 interface EntryTileProps {
     entry: ServerEntry
     flashState?: FlashState
+    /** Click handler for opening edit modal */
+    onClick?: () => void
 }
 
 /**
  * Render a single entry tile.
  */
-export function EntryTile({ entry, flashState }: EntryTileProps) {
+export function EntryTile({ entry, flashState, onClick }: EntryTileProps) {
     const colorStyle = entry.color ? { borderLeftColor: entry.color } : undefined
 
     // Build CSS classes
@@ -22,9 +24,28 @@ export function EntryTile({ entry, flashState }: EntryTileProps) {
         entry.kind,
         entry.completed ? "completed" : "",
         flashState ? `flash-${flashState}` : "",
+        onClick ? "clickable" : "",
     ]
         .filter(Boolean)
         .join(" ")
+
+    // Handle keyboard activation (Enter/Space)
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (onClick && (e.key === "Enter" || e.key === " ")) {
+            e.preventDefault()
+            onClick()
+        }
+    }
+
+    // Common interactive props
+    const interactiveProps = onClick
+        ? {
+              onClick,
+              onKeyDown: handleKeyDown,
+              role: "button" as const,
+              tabIndex: 0,
+          }
+        : {}
 
     // Badge for multi-day or all-day events
     let badge: React.ReactNode = null
@@ -60,7 +81,12 @@ export function EntryTile({ entry, flashState }: EntryTileProps) {
     // Task entries have a checkbox layout
     if (entry.isTask) {
         return (
-            <div className={classes} style={colorStyle} data-entry-id={entry.id}>
+            <div
+                className={classes}
+                style={colorStyle}
+                data-entry-id={entry.id}
+                {...interactiveProps}
+            >
                 <div className="task-row">
                     <div className={`task-checkbox${entry.completed ? " checked" : ""}`} />
                     <div>{content}</div>
@@ -71,7 +97,7 @@ export function EntryTile({ entry, flashState }: EntryTileProps) {
 
     // Regular entry layout
     return (
-        <div className={classes} style={colorStyle} data-entry-id={entry.id}>
+        <div className={classes} style={colorStyle} data-entry-id={entry.id} {...interactiveProps}>
             {badge}
             {time}
             {content}

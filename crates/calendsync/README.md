@@ -128,13 +128,34 @@ API endpoints support cross-origin requests via `tower-http::cors::CorsLayer`:
 
 ## API Endpoints
 
-| Method | Path              | Description                        |
-| ------ | ----------------- | ---------------------------------- |
-| GET    | `/`               | Main page with user table and form |
-| GET    | `/api/users`      | List all users (JSON)              |
-| POST   | `/api/users`      | Create a new user                  |
-| GET    | `/api/users/{id}` | Get a single user by ID            |
-| DELETE | `/api/users/{id}` | Delete a user by ID                |
+| Method | Path                                | Description                                |
+| ------ | ----------------------------------- | ------------------------------------------ |
+| GET    | `/`                                 | Main page with user table and form         |
+| GET    | `/calendar/{calendar_id}`           | React SSR calendar page                    |
+| GET    | `/calendar/{calendar_id}/entry`     | Calendar with entry modal (create mode)    |
+| GET    | `/calendar/{calendar_id}/entry?entry_id={id}` | Calendar with entry modal (edit mode) |
+| GET    | `/api/users`                        | List all users (JSON)                      |
+| POST   | `/api/users`                        | Create a new user                          |
+| GET    | `/api/users/{id}`                   | Get a single user by ID                    |
+| DELETE | `/api/users/{id}`                   | Delete a user by ID                        |
+| GET    | `/api/entries`                      | List all entries                           |
+| POST   | `/api/entries`                      | Create a new entry                         |
+| GET    | `/api/entries/{id}`                 | Get entry by ID                            |
+| PUT    | `/api/entries/{id}`                 | Update an entry                            |
+| DELETE | `/api/entries/{id}`                 | Delete an entry                            |
+
+### Entry Modal Routes
+
+The calendar supports URL-based modal state for creating and editing entries:
+
+- **Create mode**: `/calendar/{calendar_id}/entry`
+  - Opens modal pre-filled with the current highlighted day
+  - SSR renders the modal open on page load
+
+- **Edit mode**: `/calendar/{calendar_id}/entry?entry_id={entry_id}`
+  - Opens modal with the entry data pre-populated
+  - SSR fetches entry and includes it in initial data
+  - Returns 404 if entry not found
 
 ### Example API Usage
 

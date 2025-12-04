@@ -19,12 +19,21 @@ interface DayColumnProps {
     isLastVisible?: boolean
     /** Flash states for entry animations */
     flashStates?: Map<string, FlashState>
+    /** Callback when an entry is clicked */
+    onEntryClick?: (entry: ServerEntry) => void
 }
 
 /**
  * Render a single day column with its entries.
  */
-export function DayColumn({ dateKey, entries, style, isLastVisible, flashStates }: DayColumnProps) {
+export function DayColumn({
+    dateKey,
+    entries,
+    style,
+    isLastVisible,
+    flashStates,
+    onEntryClick,
+}: DayColumnProps) {
     // Sort entries: all-day first, then multi-day, then timed by start time, then tasks
     const sortedEntries = sortDayEntries(entries)
 
@@ -45,7 +54,12 @@ export function DayColumn({ dateKey, entries, style, isLastVisible, flashStates 
     return (
         <div className={classes} data-date={dateKey} style={style}>
             {sortedEntries.map((entry) => (
-                <EntryTile key={entry.id} entry={entry} flashState={flashStates?.get(entry.id)} />
+                <EntryTile
+                    key={entry.id}
+                    entry={entry}
+                    flashState={flashStates?.get(entry.id)}
+                    onClick={onEntryClick ? () => onEntryClick(entry) : undefined}
+                />
             ))}
         </div>
     )
