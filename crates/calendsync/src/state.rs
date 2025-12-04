@@ -24,9 +24,6 @@ pub struct StoredEvent {
     pub event: CalendarEvent,
 }
 
-/// Maximum number of events to keep in history for reconnection catch-up.
-const MAX_EVENT_HISTORY: usize = 1000;
-
 /// Shared application state.
 ///
 /// This is cloned for each request handler and contains shared resources
@@ -119,27 +116,6 @@ impl AppState {
             .read()
             .ok()
             .and_then(|calendars| calendars.keys().next().copied())
-    }
-
-    /// Add an event to the history and return its ID.
-    pub fn add_event(&self, calendar_id: Uuid, event: CalendarEvent) -> u64 {
-        let event_id = self.event_counter.fetch_add(1, Ordering::SeqCst);
-
-        let stored = StoredEvent {
-            id: event_id,
-            calendar_id,
-            event,
-        };
-
-        if let Ok(mut history) = self.event_history.write() {
-            history.push_back(stored);
-            // Keep history bounded
-            while history.len() > MAX_EVENT_HISTORY {
-                history.pop_front();
-            }
-        }
-
-        event_id
     }
 
     /// Get events since a given event ID for a specific calendar.

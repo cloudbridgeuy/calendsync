@@ -7,12 +7,7 @@ use axum::{
     extract::{Query, State},
     response::sse::{Event, KeepAlive, Sse},
 };
-use chrono::{Days, Local, NaiveDate, NaiveTime};
-use rand::prelude::*;
-use rand::rngs::StdRng;
 use uuid::Uuid;
-
-use calendsync_core::calendar::{CalendarEntry, EntryKind};
 
 use crate::state::{AppState, CalendarEvent};
 
@@ -57,14 +52,11 @@ pub async fn events_sse(
                 .data(event_data));
         }
 
-        // Create a thread-safe RNG
-        let mut rng = StdRng::from_os_rng();
-
         // Track session start for max duration (1 hour)
         let session_start = std::time::Instant::now();
         let max_duration = Duration::from_secs(3600);
 
-        // Then generate random events every 3-5 seconds
+        // Keep connection alive, waiting for real events or shutdown
         loop {
             // Check if we've exceeded max session duration
             if session_start.elapsed() > max_duration {
@@ -72,205 +64,18 @@ pub async fn events_sse(
                 break;
             }
 
-            // Random delay between 3 and 5 seconds, or shutdown
-            let delay_ms = rng.random_range(3000..=5000);
+            // Wait for shutdown signal (keep-alive is handled by Sse::keep_alive)
             tokio::select! {
-                _ = tokio::time::sleep(Duration::from_millis(delay_ms)) => {}
+                _ = tokio::time::sleep(Duration::from_secs(60)) => {
+                    // Periodic check for max duration
+                }
                 _ = shutdown_rx.recv() => {
                     tracing::info!("SSE session received shutdown signal");
                     break;
                 }
             }
-
-            // Generate a random event
-            let event = generate_random_event(&state, calendar_id, &mut rng);
-
-            // Add to history and get event ID
-            let event_id = state.add_event(calendar_id, event.clone());
-
-            // Convert to SSE event
-            let event_data = serde_json::to_string(&event).unwrap_or_default();
-            let event_type = match &event {
-                CalendarEvent::EntryAdded { .. } => "entry_added",
-                CalendarEvent::EntryUpdated { .. } => "entry_updated",
-                CalendarEvent::EntryDeleted { .. } => "entry_deleted",
-            };
-
-            yield Ok(Event::default()
-                .id(event_id.to_string())
-                .event(event_type)
-                .data(event_data));
         }
     };
 
     Sse::new(stream).keep_alive(KeepAlive::default())
-}
-
-/// Generate a random calendar event for simulation.
-fn generate_random_event(state: &AppState, calendar_id: Uuid, rng: &mut StdRng) -> CalendarEvent {
-    let today = Local::now().date_naive();
-
-    // Random date within ±7 days of today
-    let day_offset: i64 = rng.random_range(-7..=7);
-    let date = if day_offset >= 0 {
-        today
-            .checked_add_days(Days::new(day_offset as u64))
-            .unwrap_or(today)
-    } else {
-        today
-            .checked_sub_days(Days::new((-day_offset) as u64))
-            .unwrap_or(today)
-    };
-    let date_str = date.format("%Y-%m-%d").to_string();
-
-    // Decide what type of event to generate
-    let event_type: u8 = rng.random_range(0..=2);
-
-    match event_type {
-        0 => {
-            // Add new entry
-            let entry = generate_random_entry(calendar_id, date, rng);
-            // Also add to state entries
-            if let Ok(mut entries) = state.entries.write() {
-                entries.insert(entry.id, entry.clone());
-            }
-            CalendarEvent::EntryAdded {
-                entry,
-                date: date_str,
-            }
-        }
-        1 => {
-            // Update existing entry (if any exist)
-            if let Ok(entries) = state.entries.read() {
-                let entry_ids: Vec<_> = entries.keys().copied().collect();
-                if !entry_ids.is_empty() {
-                    let idx = rng.random_range(0..entry_ids.len());
-                    let entry_id = entry_ids[idx];
-                    drop(entries);
-
-                    // Modify the entry
-                    if let Ok(mut entries) = state.entries.write() {
-                        if let Some(entry) = entries.get_mut(&entry_id) {
-                            // Update the title
-                            entry.title = format!("{} (updated)", entry.title);
-                            let entry_date = entry.date.format("%Y-%m-%d").to_string();
-                            return CalendarEvent::EntryUpdated {
-                                entry: entry.clone(),
-                                date: entry_date,
-                            };
-                        }
-                    }
-                }
-            }
-            // Fallback to adding if no entries exist
-            let entry = generate_random_entry(calendar_id, date, rng);
-            if let Ok(mut entries) = state.entries.write() {
-                entries.insert(entry.id, entry.clone());
-            }
-            CalendarEvent::EntryAdded {
-                entry,
-                date: date_str,
-            }
-        }
-        _ => {
-            // Delete existing entry (if any exist)
-            if let Ok(mut entries) = state.entries.write() {
-                let entry_ids: Vec<_> = entries.keys().copied().collect();
-                if !entry_ids.is_empty() {
-                    let idx = rng.random_range(0..entry_ids.len());
-                    let entry_id = entry_ids[idx];
-                    if let Some(removed) = entries.remove(&entry_id) {
-                        let entry_date = removed.date.format("%Y-%m-%d").to_string();
-                        return CalendarEvent::EntryDeleted {
-                            entry_id,
-                            date: entry_date,
-                        };
-                    }
-                }
-            }
-            // Fallback to adding if no entries to delete
-            let entry = generate_random_entry(calendar_id, date, rng);
-            if let Ok(mut entries) = state.entries.write() {
-                entries.insert(entry.id, entry.clone());
-            }
-            CalendarEvent::EntryAdded {
-                entry,
-                date: date_str,
-            }
-        }
-    }
-}
-
-/// Generate a random calendar entry.
-fn generate_random_entry(calendar_id: Uuid, date: NaiveDate, rng: &mut StdRng) -> CalendarEntry {
-    let titles = [
-        "Team Meeting",
-        "Coffee with Sarah",
-        "Project Review",
-        "Lunch Break",
-        "Call with Client",
-        "Dentist Appointment",
-        "Gym Session",
-        "Book Club",
-        "Movie Night",
-        "Grocery Shopping",
-    ];
-
-    let descriptions = [
-        Some("Don't forget to prepare the agenda"),
-        Some("At the usual place"),
-        Some("Q4 planning discussion"),
-        None,
-        Some("Discuss contract renewal"),
-        None,
-        Some("Leg day!"),
-        Some("Currently reading: The Midnight Library"),
-        None,
-        Some("Need milk, eggs, bread"),
-    ];
-
-    let locations = [
-        Some("Conference Room A"),
-        Some("Downtown Cafe"),
-        Some("Zoom"),
-        None,
-        Some("Phone"),
-        Some("Dr. Smith's Office"),
-        Some("Fitness Center"),
-        Some("Library"),
-        Some("Cinema"),
-        Some("Whole Foods"),
-    ];
-
-    let idx = rng.random_range(0..titles.len());
-
-    // Random hour between 8 and 18
-    let hour: u32 = rng.random_range(8..=18);
-    let start_time = NaiveTime::from_hms_opt(hour, 0, 0)
-        .unwrap_or_else(|| NaiveTime::from_hms_opt(9, 0, 0).unwrap());
-    let end_time = start_time + chrono::Duration::hours(1);
-
-    // Random entry kind
-    let kind_choice: u8 = rng.random_range(0..=9);
-    let kind = match kind_choice {
-        0..=1 => EntryKind::Task {
-            completed: rng.random_bool(0.3),
-        },
-        2 => EntryKind::AllDay,
-        _ => EntryKind::Timed {
-            start: start_time,
-            end: end_time,
-        },
-    };
-
-    CalendarEntry {
-        id: Uuid::new_v4(),
-        calendar_id,
-        title: titles[idx].to_string(),
-        description: descriptions[idx].map(|s| s.to_string()),
-        location: locations[idx].map(|s| s.to_string()),
-        kind,
-        date,
-        color: None,
-    }
 }

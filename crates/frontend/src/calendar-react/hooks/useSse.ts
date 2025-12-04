@@ -155,7 +155,6 @@ export function useSse(config: UseSseConfig): UseSseResult {
      * Connect to SSE endpoint.
      */
     const connect = useCallback(() => {
-        console.log("[SSE] connect() called, enabled:", enabled)
         // Don't connect if disabled or already connected
         if (!enabled) return
         if (eventSourceRef.current?.readyState === EventSource.OPEN) return
@@ -174,62 +173,53 @@ export function useSse(config: UseSseConfig): UseSseResult {
             sseUrl += `&last_event_id=${lastEventIdRef.current}`
         }
 
-        console.log("[SSE] Creating EventSource with URL:", sseUrl)
-        console.log("[SSE] Base URL:", baseUrl)
-        console.log("[SSE] Calendar ID:", calendarId)
-
         const eventSource = new EventSource(sseUrl)
         eventSourceRef.current = eventSource
 
         // Handle connection open
         eventSource.onopen = () => {
-            console.log("[SSE] Connection opened to:", sseUrl)
             reconnectAttemptsRef.current = 0
             updateConnectionState("connected")
         }
 
         // Handle entry_added events
         eventSource.addEventListener("entry_added", (e: MessageEvent) => {
-            console.log("[SSE] entry_added event:", e.lastEventId, e.data)
             lastEventIdRef.current = e.lastEventId
             try {
                 const data = JSON.parse(e.data) as EntryAddedEvent
                 callbacksRef.current.onEvent?.(data)
                 callbacksRef.current.onEntryAdded?.(data.entry, data.date)
             } catch (err) {
-                console.error("[SSE] Failed to parse entry_added event:", err)
+                console.error("Failed to parse entry_added event:", err)
             }
         })
 
         // Handle entry_updated events
         eventSource.addEventListener("entry_updated", (e: MessageEvent) => {
-            console.log("[SSE] entry_updated event:", e.lastEventId, e.data)
             lastEventIdRef.current = e.lastEventId
             try {
                 const data = JSON.parse(e.data) as EntryUpdatedEvent
                 callbacksRef.current.onEvent?.(data)
                 callbacksRef.current.onEntryUpdated?.(data.entry, data.date)
             } catch (err) {
-                console.error("[SSE] Failed to parse entry_updated event:", err)
+                console.error("Failed to parse entry_updated event:", err)
             }
         })
 
         // Handle entry_deleted events
         eventSource.addEventListener("entry_deleted", (e: MessageEvent) => {
-            console.log("[SSE] entry_deleted event:", e.lastEventId, e.data)
             lastEventIdRef.current = e.lastEventId
             try {
                 const data = JSON.parse(e.data) as EntryDeletedEvent
                 callbacksRef.current.onEvent?.(data)
                 callbacksRef.current.onEntryDeleted?.(data.entry_id, data.date)
             } catch (err) {
-                console.error("[SSE] Failed to parse entry_deleted event:", err)
+                console.error("Failed to parse entry_deleted event:", err)
             }
         })
 
         // Handle errors and reconnection
-        eventSource.onerror = (e) => {
-            console.error("[SSE] Connection error:", e)
+        eventSource.onerror = () => {
             eventSource.close()
             eventSourceRef.current = null
 
