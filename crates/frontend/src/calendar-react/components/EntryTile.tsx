@@ -10,12 +10,14 @@ interface EntryTileProps {
     flashState?: FlashState
     /** Click handler for opening edit modal */
     onClick?: () => void
+    /** Toggle handler for task checkbox (tasks only) */
+    onToggle?: () => void
 }
 
 /**
  * Render a single entry tile.
  */
-export function EntryTile({ entry, flashState, onClick }: EntryTileProps) {
+export function EntryTile({ entry, flashState, onClick, onToggle }: EntryTileProps) {
     const colorStyle = entry.color ? { borderLeftColor: entry.color } : undefined
 
     // Build CSS classes
@@ -78,6 +80,21 @@ export function EntryTile({ entry, flashState, onClick }: EntryTileProps) {
         </>
     )
 
+    // Handle checkbox click for tasks
+    const handleCheckboxClick = (e: React.MouseEvent) => {
+        e.stopPropagation() // Prevent opening the modal
+        onToggle?.()
+    }
+
+    // Handle checkbox keyboard activation
+    const handleCheckboxKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault()
+            e.stopPropagation()
+            onToggle?.()
+        }
+    }
+
     // Task entries have a checkbox layout
     if (entry.isTask) {
         return (
@@ -88,7 +105,15 @@ export function EntryTile({ entry, flashState, onClick }: EntryTileProps) {
                 {...interactiveProps}
             >
                 <div className="task-row">
-                    <div className={`task-checkbox${entry.completed ? " checked" : ""}`} />
+                    <input
+                        type="checkbox"
+                        className="task-checkbox"
+                        checked={entry.completed}
+                        onClick={handleCheckboxClick}
+                        onKeyDown={handleCheckboxKeyDown}
+                        onChange={() => {}} // Controlled by onClick
+                        aria-label={`Mark ${entry.title} as ${entry.completed ? "incomplete" : "complete"}`}
+                    />
                     <div>{content}</div>
                 </div>
             </div>

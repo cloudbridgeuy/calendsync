@@ -21,6 +21,8 @@ interface DayColumnProps {
     flashStates?: Map<string, FlashState>
     /** Callback when an entry is clicked */
     onEntryClick?: (entry: ServerEntry) => void
+    /** Callback when a task entry is toggled */
+    onEntryToggle?: (entry: ServerEntry) => void
 }
 
 /**
@@ -33,6 +35,7 @@ export function DayColumn({
     isLastVisible,
     flashStates,
     onEntryClick,
+    onEntryToggle,
 }: DayColumnProps) {
     // Sort entries: all-day first, then multi-day, then timed by start time, then tasks
     const sortedEntries = sortDayEntries(entries)
@@ -59,6 +62,9 @@ export function DayColumn({
                     entry={entry}
                     flashState={flashStates?.get(entry.id)}
                     onClick={onEntryClick ? () => onEntryClick(entry) : undefined}
+                    onToggle={
+                        entry.isTask && onEntryToggle ? () => onEntryToggle(entry) : undefined
+                    }
                 />
             ))}
         </div>

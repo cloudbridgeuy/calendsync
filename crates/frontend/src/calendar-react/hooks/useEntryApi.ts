@@ -30,6 +30,8 @@ export interface UseEntryApiResult {
     deleteEntry: (entryId: string) => Promise<void>
     /** Fetch a specific entry by ID */
     fetchEntry: (entryId: string) => Promise<ServerEntry>
+    /** Toggle a task's completed status */
+    toggleEntry: (entryId: string) => Promise<ServerEntry>
 }
 
 /**
@@ -131,10 +133,30 @@ export function useEntryApi(config: UseEntryApiConfig): UseEntryApiResult {
         [baseUrl],
     )
 
+    /**
+     * Toggle a task's completed status.
+     */
+    const toggleEntry = useCallback(
+        async (entryId: string): Promise<ServerEntry> => {
+            const response = await fetch(`${baseUrl}/api/entries/${entryId}/toggle`, {
+                method: "PATCH",
+            })
+
+            if (!response.ok) {
+                const text = await response.text()
+                throw new Error(`Failed to toggle entry: ${response.status} ${text}`)
+            }
+
+            return response.json()
+        },
+        [baseUrl],
+    )
+
     return {
         createEntry,
         updateEntry,
         deleteEntry,
         fetchEntry,
+        toggleEntry,
     }
 }

@@ -124,6 +124,24 @@ export function Calendar({ initialData }: CalendarProps) {
     )
 
     /**
+     * Handle task toggle - optimistic update with API call.
+     */
+    const handleEntryToggle = useCallback(
+        (entry: ServerEntry) => {
+            // Optimistic update: immediately toggle completed state
+            const toggledEntry = { ...entry, completed: !entry.completed }
+            actions.updateEntryOptimistic(toggledEntry)
+
+            // Call API in background
+            entryApi.toggleEntry(entry.id).catch(() => {
+                // On error, revert to original state
+                actions.updateEntryOptimistic(entry)
+            })
+        },
+        [actions, entryApi],
+    )
+
+    /**
      * Handle modal save - apply optimistic update immediately.
      * SSE will confirm/reconcile when the server event arrives.
      */
@@ -388,6 +406,7 @@ export function Calendar({ initialData }: CalendarProps) {
                         entries={entries}
                         flashStates={flashStates}
                         onEntryClick={handleEntryClick}
+                        onEntryToggle={handleEntryToggle}
                         style={{
                             width: "100%",
                             flexBasis: "100%",
@@ -421,6 +440,7 @@ export function Calendar({ initialData }: CalendarProps) {
                     flashStates={flashStates}
                     isLastVisible={isLastVisible}
                     onEntryClick={handleEntryClick}
+                    onEntryToggle={handleEntryToggle}
                     style={{
                         width: `${columnWidth}%`,
                         flexBasis: `${columnWidth}%`,
