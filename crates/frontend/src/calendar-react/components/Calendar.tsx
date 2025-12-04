@@ -83,17 +83,21 @@ export function Calendar({ initialData }: CalendarProps) {
 
     /**
      * Handle wheel navigation (Cmd+Scroll or Ctrl+Scroll).
-     * Uses threshold-based accumulation for real-time navigation with controlled sensitivity.
-     * First navigation of a gesture uses a higher threshold to avoid direction stutter.
+     * Detects mouse wheel vs trackpad and handles each appropriately:
+     * - Mouse wheel: 1 event = 1 day (direct mapping)
+     * - Trackpad: threshold-based accumulation for smooth scrolling
      */
     useEffect(() => {
+        // Device detection state (undefined = not yet determined)
+        let isTouchPad: boolean | undefined
+        let eventCount = 0
+        let eventCountStart = 0
+
+        // Trackpad accumulation state
         let accumulatedDelta = 0
-        let lastEventTime = 0
-        let gestureConfirmed = false
         let lastDirection = 0
-        const DELTA_THRESHOLD = 2 // pixels of scroll needed to navigate 1 day
-        const INITIAL_THRESHOLD = 4 // higher threshold for first navigation to confirm direction
-        const GESTURE_TIMEOUT = 50 // ms - new gesture if no events for this long
+
+        const TRACKPAD_THRESHOLD = 30 // Pixels per day for trackpad
 
         const handleWheel = (e: WheelEvent) => {
             // Only handle if Cmd (Mac) or Ctrl (Windows/Linux) is held
@@ -101,43 +105,61 @@ export function Calendar({ initialData }: CalendarProps) {
 
             e.preventDefault()
 
-            const now = Date.now()
+            // === Device Detection Phase ===
+            // Count events in first 50ms to detect device type
+            // Mouse wheel: ≤5 events (discrete clicks)
+            // Trackpad: >5 events (continuous touch)
+            if (isTouchPad === undefined) {
+                if (eventCount === 0) {
+                    eventCountStart = Date.now()
+                }
+                eventCount++
 
-            // Detect new gesture start (time gap)
-            if (now - lastEventTime > GESTURE_TIMEOUT) {
-                accumulatedDelta = 0
-                gestureConfirmed = false
-                lastDirection = 0
+                // Accumulate delta during detection (for trackpad case)
+                accumulatedDelta += e.deltaY
+
+                // After 50ms, determine device type
+                if (Date.now() - eventCountStart > 50) {
+                    isTouchPad = eventCount > 5
+
+                    // If mouse wheel, process the accumulated delta as single navigation
+                    if (!isTouchPad) {
+                        const direction = accumulatedDelta > 0 ? 1 : -1
+                        actions.navigateDays(direction)
+                        accumulatedDelta = 0
+                    }
+                }
+                return
             }
-            lastEventTime = now
 
-            // Detect direction change - reset accumulator to prevent drift
-            const currentDirection = e.deltaY > 0 ? 1 : e.deltaY < 0 ? -1 : 0
-            if (
-                lastDirection !== 0 &&
-                currentDirection !== 0 &&
-                currentDirection !== lastDirection
-            ) {
-                accumulatedDelta = 0
-                gestureConfirmed = false
-            }
-            if (currentDirection !== 0) {
-                lastDirection = currentDirection
-            }
+            // === Handle Based on Device Type ===
+            if (isTouchPad) {
+                // Trackpad: accumulate and navigate when threshold crossed
+                accumulatedDelta += e.deltaY
 
-            // Accumulate delta
-            accumulatedDelta += e.deltaY
+                // Detect direction change - reset accumulator for immediate response
+                const currentDirection = e.deltaY > 0 ? 1 : e.deltaY < 0 ? -1 : 0
+                if (
+                    lastDirection !== 0 &&
+                    currentDirection !== 0 &&
+                    currentDirection !== lastDirection
+                ) {
+                    accumulatedDelta = e.deltaY // Reset to just this event
+                }
+                if (currentDirection !== 0) {
+                    lastDirection = currentDirection
+                }
 
-            // Use higher threshold for first navigation, normal threshold after
-            const threshold = gestureConfirmed ? DELTA_THRESHOLD : INITIAL_THRESHOLD
-
-            // Navigate when threshold is crossed
-            if (Math.abs(accumulatedDelta) >= threshold) {
-                const direction = accumulatedDelta > 0 ? 1 : -1
+                // Navigate when threshold crossed (use while to handle large deltas)
+                while (Math.abs(accumulatedDelta) >= TRACKPAD_THRESHOLD) {
+                    const direction = accumulatedDelta > 0 ? 1 : -1
+                    actions.navigateDays(direction)
+                    accumulatedDelta -= direction * TRACKPAD_THRESHOLD
+                }
+            } else {
+                // Mouse wheel: 1 event = 1 day (simple, direct)
+                const direction = e.deltaY > 0 ? 1 : -1
                 actions.navigateDays(direction)
-                // Subtract threshold to allow continuous scrolling without drift
-                accumulatedDelta -= direction * threshold
-                gestureConfirmed = true
             }
         }
 
