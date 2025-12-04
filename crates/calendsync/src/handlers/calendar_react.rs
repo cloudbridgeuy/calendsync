@@ -278,9 +278,7 @@ pub async fn calendar_react_ssr(
     });
 
     // Create SSR config (with payload size validation)
-    let config = match SsrConfig::new(serde_json::json!({
-        "initialData": initial_data,
-    })) {
+    let config = match SsrConfig::new(initial_data) {
         Ok(c) => c,
         Err(e) => {
             tracing::error!(error = %e, "Failed to create SSR config");

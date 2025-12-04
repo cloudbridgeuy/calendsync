@@ -6,6 +6,7 @@ use crate::error::{Result, SsrCoreError, MAX_INITIAL_DATA_SIZE};
 
 /// Configuration for a single SSR render request.
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SsrConfig {
     /// Initial data to inject as `globalThis.__SSR_CONFIG__`.
     pub initial_data: serde_json::Value,
