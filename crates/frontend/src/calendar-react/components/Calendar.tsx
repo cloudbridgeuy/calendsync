@@ -83,33 +83,42 @@ export function Calendar({ initialData }: CalendarProps) {
 
     /**
      * Handle wheel navigation (Cmd+Scroll or Ctrl+Scroll).
-     * Debounced to prevent rapid-fire navigation from trackpad momentum.
+     * Accumulates scroll delta during gesture and navigates once when gesture ends.
      */
     useEffect(() => {
-        let lastWheelTime = 0
-        const DEBOUNCE_MS = 300 // Increased to handle momentum better
+        // Accumulate delta during gesture, navigate when gesture ends
+        let wheelDelta = 0
+        let idleTimer: ReturnType<typeof setTimeout> | null = null
+        const IDLE_TIMEOUT = 150 // ms - gesture ends when no events for this duration
+        const DELTA_PER_DAY = 50 // pixels of scroll per day navigation
 
         const handleWheel = (e: WheelEvent) => {
             // Only handle if Cmd (Mac) or Ctrl (Windows/Linux) is held
-            if (e.metaKey || e.ctrlKey) {
-                e.preventDefault()
+            if (!(e.metaKey || e.ctrlKey)) return
 
-                // Debounce: ignore if too soon after last navigation
-                const now = Date.now()
-                if (now - lastWheelTime < DEBOUNCE_MS) {
-                    return
+            e.preventDefault()
+
+            // Accumulate delta (deltaY for vertical scroll gesture)
+            wheelDelta += e.deltaY
+
+            // Reset idle timer
+            if (idleTimer) clearTimeout(idleTimer)
+            idleTimer = setTimeout(() => {
+                // Gesture ended - calculate days to navigate
+                const daysToMove = Math.round(wheelDelta / DELTA_PER_DAY)
+                if (daysToMove !== 0) {
+                    actions.navigateDays(daysToMove)
                 }
-                lastWheelTime = now
-
-                // deltaY > 0 = scroll down = navigate forward (right)
-                // deltaY < 0 = scroll up = navigate backward (left)
-                const direction = e.deltaY > 0 ? 1 : -1
-                actions.navigateDays(direction)
-            }
+                // Reset accumulator
+                wheelDelta = 0
+            }, IDLE_TIMEOUT)
         }
 
         window.addEventListener("wheel", handleWheel, { passive: false })
-        return () => window.removeEventListener("wheel", handleWheel)
+        return () => {
+            window.removeEventListener("wheel", handleWheel)
+            if (idleTimer) clearTimeout(idleTimer)
+        }
     }, [actions])
 
     /**
