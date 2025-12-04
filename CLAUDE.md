@@ -174,6 +174,7 @@ crates/frontend/
         ├── dates.ts        # Pure date calculations
         ├── entries.ts      # Pure entry filtering/sorting
         ├── layout.ts       # Pure layout calculations
+        ├── modal.ts        # Pure modal URL parsing and form utilities
         └── index.ts        # Re-exports
 ```
 
@@ -633,6 +634,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | DynamoDB xtask | `.claude/context/dynamodb.md` |
 | React SSR Example | `crates/calendsync/examples/README.md` |
 | React Calendar | `.claude/context/react-calendar.md` |
+| Entry Modal | `.claude/context/entry-modal.md` |
 | Wheel Navigation | `.claude/context/wheel-navigation.md` |
 | SSR Worker Pool | `.claude/context/ssr-worker-pool.md` |
 | Axum Reference | `.claude/context/AXUM.md` |
