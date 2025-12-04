@@ -636,6 +636,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | React Calendar | `.claude/context/react-calendar.md` |
 | Entry Modal | `.claude/context/entry-modal.md` |
 | Wheel Navigation | `.claude/context/wheel-navigation.md` |
+| SSE Event Publishing | `.claude/context/sse-events.md` |
 | SSR Worker Pool | `.claude/context/ssr-worker-pool.md` |
 | Axum Reference | `.claude/context/AXUM.md` |
 | HTMX Reference | `.claude/context/HTMX.md` |
