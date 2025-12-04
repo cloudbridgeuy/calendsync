@@ -95,7 +95,6 @@ export function Calendar({ initialData }: CalendarProps) {
 
         // Trackpad accumulation state
         let accumulatedDelta = 0
-        let lastDirection = 0
 
         const TRACKPAD_THRESHOLD = 30 // Pixels per day for trackpad
 
@@ -135,20 +134,9 @@ export function Calendar({ initialData }: CalendarProps) {
             // === Handle Based on Device Type ===
             if (isTouchPad) {
                 // Trackpad: accumulate and navigate when threshold crossed
+                // No direction change detection - let the accumulator naturally handle
+                // reversals (opposite deltas will reduce the accumulator)
                 accumulatedDelta += e.deltaY
-
-                // Detect direction change - reset accumulator for immediate response
-                const currentDirection = e.deltaY > 0 ? 1 : e.deltaY < 0 ? -1 : 0
-                if (
-                    lastDirection !== 0 &&
-                    currentDirection !== 0 &&
-                    currentDirection !== lastDirection
-                ) {
-                    accumulatedDelta = e.deltaY // Reset to just this event
-                }
-                if (currentDirection !== 0) {
-                    lastDirection = currentDirection
-                }
 
                 // Navigate when threshold crossed (use while to handle large deltas)
                 while (Math.abs(accumulatedDelta) >= TRACKPAD_THRESHOLD) {
