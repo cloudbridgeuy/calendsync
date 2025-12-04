@@ -13,7 +13,7 @@ import { addDays, formatDateKey, isSameDay } from "@core/calendar/dates"
 import { mergeEntryCache, serverDaysToMap } from "@core/calendar/entries"
 import { calculateVisibleDays, isMobileViewport } from "@core/calendar/layout"
 import type { ServerEntry } from "@core/calendar/types"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import type {
     CalendarActions,
@@ -487,8 +487,9 @@ export function useCalendarState(config: UseCalendarStateConfig): [CalendarState
         })
     }, [])
 
-    // Initialize layout on mount
-    useEffect(() => {
+    // Initialize layout on mount - useLayoutEffect ensures layout is calculated
+    // before browser paint, avoiding flash of incorrect column count
+    useLayoutEffect(() => {
         if (typeof window !== "undefined") {
             updateLayout(window.innerWidth)
 
