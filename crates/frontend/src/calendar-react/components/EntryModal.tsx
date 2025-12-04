@@ -5,7 +5,7 @@
 import { createDefaultFormData, entryToFormData, validateFormData } from "@core/calendar"
 import type { ServerEntry } from "@core/calendar/types"
 import { useCallback, useEffect, useState } from "react"
-import { useEntryApi } from "../hooks/useEntryApi"
+import { useEntryApi, useFocusTrap } from "../hooks"
 import type { EntryFormData } from "../types"
 
 /**
@@ -50,6 +50,13 @@ export function EntryModal(props: EntryModalProps) {
     // API hook
     const api = useEntryApi({ calendarId })
 
+    // Focus trap for accessibility (traps Tab navigation within modal)
+    const { containerRef: modalRef } = useFocusTrap({
+        isActive: !isSubmitting,
+        onEscape: onClose,
+        autoFocusId: "entry-title",
+    })
+
     // Update form data if entry prop changes (for client-side fetch)
     useEffect(() => {
         if (mode === "edit" && entry) {
@@ -64,13 +71,37 @@ export function EntryModal(props: EntryModalProps) {
         setFormData((prev) => {
             const updated = { ...prev, [field]: value }
 
-            // When toggling all-day, update entryType
-            if (field === "isAllDay") {
-                updated.entryType = value ? "all_day" : "timed"
-                if (value) {
-                    // Clear time fields when switching to all-day
-                    updated.startTime = undefined
-                    updated.endTime = undefined
+            // Handle entry type changes
+            if (field === "entryType") {
+                switch (value) {
+                    case "all_day":
+                        updated.isAllDay = true
+                        updated.startTime = undefined
+                        updated.endTime = undefined
+                        updated.endDate = undefined
+                        updated.completed = undefined
+                        break
+                    case "timed":
+                        updated.isAllDay = false
+                        updated.endDate = undefined
+                        updated.completed = undefined
+                        break
+                    case "multi_day":
+                        updated.isAllDay = false
+                        updated.startTime = undefined
+                        updated.endTime = undefined
+                        updated.completed = undefined
+                        break
+                    case "task":
+                        updated.isAllDay = false
+                        updated.startTime = undefined
+                        updated.endTime = undefined
+                        updated.endDate = undefined
+                        // Preserve existing completed value or default to false
+                        if (updated.completed === undefined) {
+                            updated.completed = false
+                        }
+                        break
                 }
             }
 
@@ -141,19 +172,7 @@ export function EntryModal(props: EntryModalProps) {
         }
     }, [entry, api, onDelete, onClose])
 
-    /**
-     * Handle Escape key to close modal.
-     */
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === "Escape" && !isSubmitting) {
-                onClose()
-            }
-        }
-
-        window.addEventListener("keydown", handleKeyDown)
-        return () => window.removeEventListener("keydown", handleKeyDown)
-    }, [onClose, isSubmitting])
+    // Note: Escape key handling is now done by useFocusTrap
 
     /**
      * Handle overlay click to close modal.
@@ -169,13 +188,9 @@ export function EntryModal(props: EntryModalProps) {
 
     return (
         // biome-ignore lint/a11y/noStaticElementInteractions: Modal overlay click-to-close is intentional
-        <div
-            className="modal-overlay"
-            onClick={handleOverlayClick}
-            onKeyDown={(e) => e.key === "Escape" && !isSubmitting && onClose()}
-            role="presentation"
-        >
+        <div className="modal-overlay" onClick={handleOverlayClick} role="presentation">
             <div
+                ref={modalRef}
                 className="modal"
                 onClick={(e) => e.stopPropagation()}
                 onKeyDown={(e) => e.stopPropagation()}
@@ -203,7 +218,9 @@ export function EntryModal(props: EntryModalProps) {
 
                     {/* Date */}
                     <div className="form-group">
-                        <label htmlFor="entry-date">Date</label>
+                        <label htmlFor="entry-date">
+                            {formData.entryType === "multi_day" ? "Start Date" : "Date"}
+                        </label>
                         <input
                             id="entry-date"
                             type="date"
@@ -213,21 +230,24 @@ export function EntryModal(props: EntryModalProps) {
                         />
                     </div>
 
-                    {/* All-day toggle */}
-                    <div className="form-group form-checkbox">
-                        <label>
-                            <input
-                                type="checkbox"
-                                checked={formData.isAllDay}
-                                onChange={(e) => handleChange("isAllDay", e.target.checked)}
-                                disabled={isSubmitting}
-                            />
-                            All day
-                        </label>
+                    {/* Entry Type Selector */}
+                    <div className="form-group">
+                        <label htmlFor="entry-type">Type</label>
+                        <select
+                            id="entry-type"
+                            value={formData.entryType}
+                            onChange={(e) => handleChange("entryType", e.target.value)}
+                            disabled={isSubmitting}
+                        >
+                            <option value="all_day">All Day</option>
+                            <option value="timed">Timed</option>
+                            <option value="multi_day">Multi-Day</option>
+                            <option value="task">Task</option>
+                        </select>
                     </div>
 
-                    {/* Time inputs (only when not all-day) */}
-                    {!formData.isAllDay && (
+                    {/* Time inputs (only for timed entries) */}
+                    {formData.entryType === "timed" && (
                         <div className="form-row time-inputs">
                             <div className="form-group">
                                 <label htmlFor="entry-start-time">Start</label>
@@ -249,6 +269,36 @@ export function EntryModal(props: EntryModalProps) {
                                     disabled={isSubmitting}
                                 />
                             </div>
+                        </div>
+                    )}
+
+                    {/* End Date (for multi-day entries) */}
+                    {formData.entryType === "multi_day" && (
+                        <div className="form-group">
+                            <label htmlFor="entry-end-date">End Date</label>
+                            <input
+                                id="entry-end-date"
+                                type="date"
+                                value={formData.endDate || ""}
+                                min={formData.date}
+                                onChange={(e) => handleChange("endDate", e.target.value)}
+                                disabled={isSubmitting}
+                            />
+                        </div>
+                    )}
+
+                    {/* Completed checkbox (for task entries) */}
+                    {formData.entryType === "task" && (
+                        <div className="form-group form-checkbox">
+                            <label>
+                                <input
+                                    type="checkbox"
+                                    checked={formData.completed || false}
+                                    onChange={(e) => handleChange("completed", e.target.checked)}
+                                    disabled={isSubmitting}
+                                />
+                                Completed
+                            </label>
                         </div>
                     )}
 

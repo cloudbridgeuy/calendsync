@@ -32,21 +32,8 @@ export interface ModalState {
     defaultDate?: string
 }
 
-/**
- * Entry form data for creating/editing entries.
- * Used by the modal form state.
- */
-export interface EntryFormData {
-    title: string
-    date: string
-    startTime?: string
-    endTime?: string
-    isAllDay: boolean
-    description?: string
-    location?: string
-    entryType: "all_day" | "timed" | "task" | "multi_day"
-    endDate?: string // For multi-day entries
-}
+// Re-export EntryFormData from core modal utilities
+export type { EntryFormData } from "@core/calendar/modal"
 
 /**
  * Initial data passed from server to client via __INITIAL_DATA__
@@ -158,6 +145,10 @@ export interface CalendarActions {
     updateLayout: (width: number) => void
     /** Remove a toast notification */
     removeToast: (id: string) => void
+    /** Add entry to cache optimistically (before SSE confirmation) */
+    addEntryOptimistic: (entry: import("@core/calendar/types").ServerEntry) => void
+    /** Update entry in cache optimistically (before SSE confirmation) */
+    updateEntryOptimistic: (entry: import("@core/calendar/types").ServerEntry) => void
 }
 
 /**

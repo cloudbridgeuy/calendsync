@@ -436,6 +436,57 @@ export function useCalendarState(config: UseCalendarStateConfig): [CalendarState
         reconnectSse()
     }, [reconnectSse])
 
+    /**
+     * Add entry to cache optimistically (before SSE confirmation).
+     * Used for immediate UI feedback when creating entries.
+     * SSE handler will deduplicate when the server event arrives.
+     */
+    const addEntryOptimistic = useCallback((entry: ServerEntry) => {
+        const date = entry.date
+        setEntryCache((prev) => {
+            const next = new Map(prev)
+            const existing = next.get(date) || []
+            // Avoid duplicates
+            if (!existing.some((e) => e.id === entry.id)) {
+                next.set(date, [...existing, entry])
+            }
+            return next
+        })
+    }, [])
+
+    /**
+     * Update entry in cache optimistically (before SSE confirmation).
+     * Used for immediate UI feedback when updating entries.
+     * SSE handler will reconcile if server data differs.
+     */
+    const updateEntryOptimistic = useCallback((entry: ServerEntry) => {
+        const date = entry.date
+        setEntryCache((prev) => {
+            const next = new Map(prev)
+
+            // First, remove the entry from any existing date (in case date changed)
+            for (const [key, entries] of next.entries()) {
+                const filtered = entries.filter((e) => e.id !== entry.id)
+                if (filtered.length !== entries.length) {
+                    next.set(key, filtered)
+                }
+            }
+
+            // Then add/update at the correct date
+            const existing = next.get(date) || []
+            const index = existing.findIndex((e) => e.id === entry.id)
+            if (index >= 0) {
+                const updated = [...existing]
+                updated[index] = entry
+                next.set(date, updated)
+            } else {
+                next.set(date, [...existing, entry])
+            }
+
+            return next
+        })
+    }, [])
+
     // Initialize layout on mount
     useEffect(() => {
         if (typeof window !== "undefined") {
@@ -479,6 +530,8 @@ export function useCalendarState(config: UseCalendarStateConfig): [CalendarState
         refresh,
         updateLayout,
         removeToast,
+        addEntryOptimistic,
+        updateEntryOptimistic,
     }
 
     return [state, actions]

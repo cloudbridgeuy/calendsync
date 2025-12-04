@@ -124,16 +124,28 @@ export function Calendar({ initialData }: CalendarProps) {
     )
 
     /**
-     * Handle modal save - SSE will update the cache.
+     * Handle modal save - apply optimistic update immediately.
+     * SSE will confirm/reconcile when the server event arrives.
      */
-    const handleModalSave = useCallback(() => {
-        closeAfterSave()
-    }, [closeAfterSave])
+    const handleModalSave = useCallback(
+        (savedEntry: ServerEntry) => {
+            // Apply optimistic update immediately for instant feedback
+            if (modalState?.mode === "create") {
+                actions.addEntryOptimistic(savedEntry)
+            } else {
+                actions.updateEntryOptimistic(savedEntry)
+            }
+            closeAfterSave()
+        },
+        [modalState, actions, closeAfterSave],
+    )
 
     /**
      * Handle modal delete.
      */
     const handleModalDelete = useCallback(() => {
+        // Note: We don't do optimistic delete here - the SSE event handles removal
+        // This ensures proper animation timing
         closeAfterSave()
     }, [closeAfterSave])
 

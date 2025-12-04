@@ -58,7 +58,9 @@ export {
     buildModalUrl,
     createDefaultFormData,
     entryToFormData,
+    FOCUSABLE_SELECTOR,
     formDataToApiPayload,
+    getNextFocusIndex,
     parseModalUrl,
     validateFormData,
 } from "./modal"

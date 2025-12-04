@@ -26,6 +26,7 @@ export interface EntryFormData {
     location?: string
     entryType: "all_day" | "timed" | "task" | "multi_day"
     endDate?: string
+    completed?: boolean
 }
 
 /**
@@ -120,6 +121,7 @@ export function entryToFormData(entry: ServerEntry): EntryFormData {
         location: entry.location ?? undefined,
         entryType,
         endDate: entry.multiDayEndDate ?? undefined,
+        completed: entry.isTask ? entry.completed : undefined,
     }
 }
 
@@ -172,6 +174,10 @@ export function formDataToApiPayload(data: EntryFormData, calendarId: string): U
         params.set("end_date", data.endDate)
     }
 
+    if (data.entryType === "task" && data.completed !== undefined) {
+        params.set("completed", data.completed.toString())
+    }
+
     return params
 }
 
@@ -221,4 +227,33 @@ export function validateFormData(data: EntryFormData): ValidationResult {
         valid: errors.length === 0,
         errors,
     }
+}
+
+/**
+ * CSS selector for focusable elements within a container.
+ * Used by focus trap logic to find elements that can receive focus.
+ */
+export const FOCUSABLE_SELECTOR =
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"]):not([disabled])'
+
+/**
+ * Calculate the next focusable element index for tab navigation.
+ * Wraps around to create a focus trap.
+ *
+ * @param currentIndex - Current element index
+ * @param totalElements - Total number of focusable elements
+ * @param direction - Tab direction ('forward' for Tab, 'backward' for Shift+Tab)
+ * @returns The next element index (wrapping around)
+ */
+export function getNextFocusIndex(
+    currentIndex: number,
+    totalElements: number,
+    direction: "forward" | "backward",
+): number {
+    if (totalElements === 0) return -1
+
+    if (direction === "forward") {
+        return currentIndex >= totalElements - 1 ? 0 : currentIndex + 1
+    }
+    return currentIndex <= 0 ? totalElements - 1 : currentIndex - 1
 }
