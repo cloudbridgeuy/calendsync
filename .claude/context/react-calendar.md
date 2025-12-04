@@ -207,6 +207,77 @@ open http://localhost:3000/calendar/{calendar_id}
 curl http://localhost:3000/api/calendars
 ```
 
+## Responsive Layout
+
+The calendar adapts to viewport width, showing different numbers of day columns:
+
+### Breakpoints
+
+| Viewport Width | Visible Days | Layout |
+|----------------|--------------|--------|
+| < 768px | 1 | Mobile (swipe navigation) |
+| 750-1249px | 3 | Narrow desktop |
+| 1250-1749px | 5 | Medium desktop |
+| ≥ 1750px | 7 | Wide desktop |
+
+### Layout Constants
+
+Defined in `crates/frontend/src/core/calendar/types.ts`:
+
+```typescript
+export const DEFAULT_LAYOUT_CONSTANTS: LayoutConstants = {
+    minDayWidth: 250,        // Minimum 250px per day column
+    mobileBreakpoint: 768,   // Below this = mobile (1 day)
+    swipeThreshold: 50,      // Swipe distance to navigate
+    velocityThreshold: 0.3,  // Fast swipe detection
+    animationDuration: 200,  // Transition timing
+    mobileBuffer: 30,        // Days rendered for mobile infinite scroll
+}
+```
+
+### Pure Calculation Functions
+
+Located in `crates/frontend/src/core/calendar/layout.ts`:
+
+- `calculateVisibleDays(containerWidth)` - Returns odd number (1, 3, 5, or 7)
+- `isMobileViewport(containerWidth)` - Boolean check against breakpoint
+- `calculateDayWidth(containerWidth, visibleDays)` - Per-column width
+
+### Hydration and Layout Timing
+
+**Critical**: Layout calculation uses `useLayoutEffect` (not `useEffect`) to ensure correct column count before browser paint:
+
+```typescript
+// In useCalendarState.ts
+useLayoutEffect(() => {
+    if (typeof window !== "undefined") {
+        updateLayout(window.innerWidth)
+        window.addEventListener("resize", handleResize)
+        return () => window.removeEventListener("resize", handleResize)
+    }
+}, [updateLayout])
+```
+
+**Why `useLayoutEffect`?**
+- SSR defaults to desktop layout (7 days)
+- `useEffect` runs AFTER paint → flash of 7 cramped columns on mobile
+- `useLayoutEffect` runs BEFORE paint → correct layout from first render
+
+### Mobile Rendering
+
+When `isMobile = true`:
+- Renders `mobileBuffer * 2 + 1 = 61` day columns for smooth swiping
+- Each column is 100% width
+- Uses CSS transform (`translateX`) for swipe animation
+- Only center day visible, others off-screen
+
+### Desktop Rendering
+
+When `isMobile = false`:
+- Renders exactly `visibleDays` columns (3, 5, or 7)
+- Each column width = `100 / visibleDays` percent
+- No swipe animation, uses arrow/wheel navigation
+
 ## CSS Variables
 
 The calendar uses CSS custom properties for theming:
