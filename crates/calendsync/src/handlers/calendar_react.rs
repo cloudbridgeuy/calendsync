@@ -5,7 +5,7 @@
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
-    response::{Html, IntoResponse, Response},
+    response::{Html, IntoResponse, Redirect, Response},
 };
 use chrono::Local;
 use uuid::Uuid;
@@ -238,11 +238,40 @@ fn error_html(error: &str, calendar_id: &str, client_bundle_url: &str) -> String
 /// SSR handler for `/calendar/{calendar_id}`.
 ///
 /// Renders the React calendar server-side using the SSR worker pool.
+/// If the calendar doesn't exist, redirects to the default calendar.
 #[axum::debug_handler]
 pub async fn calendar_react_ssr(
     State(state): State<AppState>,
     Path(calendar_id): Path<Uuid>,
 ) -> Response {
+    // Validate calendar exists, redirect to default if not found
+    let calendar_exists = state
+        .calendars
+        .read()
+        .expect("Failed to acquire read lock")
+        .contains_key(&calendar_id);
+
+    if !calendar_exists {
+        tracing::warn!(
+            calendar_id = %calendar_id,
+            "Calendar not found, redirecting to default"
+        );
+
+        // Try to redirect to default calendar
+        if let Some(default_id) = state.default_calendar_id() {
+            return Redirect::to(&format!("/calendar/{default_id}")).into_response();
+        }
+
+        // No calendars available at all
+        let client_bundle_url = get_client_bundle_url();
+        return Html(error_html(
+            "No calendars available",
+            &calendar_id.to_string(),
+            &client_bundle_url,
+        ))
+        .into_response();
+    }
+
     // Check if SSR pool is available
     let Some(ssr_pool) = &state.ssr_pool else {
         tracing::error!("SSR pool not initialized");
@@ -313,12 +342,47 @@ pub async fn calendar_react_ssr(
 /// Renders the React calendar with entry modal open for creating or editing.
 /// - Without `entry_id` query param: Create mode (modal open with highlighted day)
 /// - With `entry_id=uuid` query param: Edit mode (modal open with entry data)
+/// If the calendar doesn't exist, redirects to the default calendar.
 #[axum::debug_handler]
 pub async fn calendar_react_ssr_entry(
     State(state): State<AppState>,
     Path(calendar_id): Path<Uuid>,
     Query(query): Query<EntryModalQuery>,
 ) -> Response {
+    // Validate calendar exists, redirect to default if not found
+    let calendar_exists = state
+        .calendars
+        .read()
+        .expect("Failed to acquire read lock")
+        .contains_key(&calendar_id);
+
+    if !calendar_exists {
+        tracing::warn!(
+            calendar_id = %calendar_id,
+            "Calendar not found, redirecting to default"
+        );
+
+        // Try to redirect to default calendar (with /entry path)
+        if let Some(default_id) = state.default_calendar_id() {
+            // Preserve entry_id query param if present
+            let redirect_url = if let Some(entry_id) = query.entry_id {
+                format!("/calendar/{default_id}/entry?entry_id={entry_id}")
+            } else {
+                format!("/calendar/{default_id}/entry")
+            };
+            return Redirect::to(&redirect_url).into_response();
+        }
+
+        // No calendars available at all
+        let client_bundle_url = get_client_bundle_url();
+        return Html(error_html(
+            "No calendars available",
+            &calendar_id.to_string(),
+            &client_bundle_url,
+        ))
+        .into_response();
+    }
+
     // Check if SSR pool is available
     let Some(ssr_pool) = &state.ssr_pool else {
         tracing::error!("SSR pool not initialized");

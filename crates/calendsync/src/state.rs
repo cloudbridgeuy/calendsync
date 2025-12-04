@@ -74,15 +74,22 @@ impl AppState {
         self
     }
 
+    /// Fixed demo calendar ID for predictable development URLs.
+    /// Use: `/calendar/00000000-0000-0000-0000-000000000001`
+    pub const DEMO_CALENDAR_ID: &'static str = "00000000-0000-0000-0000-000000000001";
+
     /// Create a new application state with demo data.
     pub fn with_demo_data() -> Self {
         let state = Self::new();
 
-        // Create default "Personal" calendar
-        let default_calendar =
-            Calendar::new("Personal", "#3B82F6").with_description("My personal calendar");
+        // Use fixed UUID for predictable demo URLs
+        let calendar_id =
+            Uuid::parse_str(Self::DEMO_CALENDAR_ID).expect("Invalid demo calendar UUID constant");
 
-        let calendar_id = default_calendar.id;
+        // Create default "Personal" calendar with fixed ID
+        let default_calendar = Calendar::new("Personal", "#3B82F6")
+            .with_id(calendar_id)
+            .with_description("My personal calendar");
 
         // Store the calendar
         state
