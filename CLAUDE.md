@@ -637,6 +637,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | Entry Modal | `.claude/context/entry-modal.md` |
 | Wheel Navigation | `.claude/context/wheel-navigation.md` |
 | SSE Event Publishing | `.claude/context/sse-events.md` |
+| Task Entries | `.claude/context/task-entries.md` |
 | SSR Worker Pool | `.claude/context/ssr-worker-pool.md` |
 | Axum Reference | `.claude/context/AXUM.md` |
 | HTMX Reference | `.claude/context/HTMX.md` |
