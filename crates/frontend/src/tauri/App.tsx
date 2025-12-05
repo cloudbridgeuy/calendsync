@@ -4,12 +4,12 @@
  * It fetches data on mount since there's no SSR to embed it.
  */
 
-import { useEffect, useState } from "react"
 import { Calendar } from "@calendsync/components"
 import { initControlPlaneUrl } from "@calendsync/hooks/useApi"
 import type { InitialData } from "@calendsync/types"
 import { formatDateKey } from "@core/calendar/dates"
 import type { ServerDay } from "@core/calendar/types"
+import { useEffect, useState } from "react"
 
 interface AppProps {
     apiUrl: string
@@ -30,7 +30,7 @@ export function App({ apiUrl, calendarId }: AppProps) {
 
         // Fetch initial data
         const highlightedDay = formatDateKey(new Date())
-        const url = `${apiUrl}/api/calendar-entries?calendar_id=${calendarId}&highlighted_day=${highlightedDay}&before=3&after=3`
+        const url = `${apiUrl}/api/entries/calendar?calendar_id=${calendarId}&highlighted_day=${highlightedDay}&before=3&after=3`
 
         console.log(`[Tauri] Fetching initial data from: ${url}`)
 
