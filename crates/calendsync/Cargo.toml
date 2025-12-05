@@ -22,7 +22,6 @@ calendsync_ssr = { workspace = true }
 
 # External dependencies
 anyhow = { workspace = true }
-askama = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
