@@ -58,3 +58,8 @@ http-body-util = "0.1"
 deno_core = "0.371"
 deno_error = "0.7"
 reqwest = { version = "0.12", features = ["json", "stream"] }
+
+# Tauri dependencies
+tauri = { version = "2.4", features = [] }
+tauri-build = { version = "2.4", features = [] }
+tauri-plugin-http = { version = "2.1" }

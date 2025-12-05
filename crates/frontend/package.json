@@ -13,6 +13,13 @@
         "build:calendsync:server:dev": "bun build ./src/calendsync/server.tsx --outdir ./dist --entry-naming calendsync-server.js --format esm --target browser --sourcemap=external",
         "build:calendsync:client": "bun build ./src/calendsync/client.tsx --outdir ./dist --entry-naming calendsync-client-[hash].js --format esm --target browser --minify --define:process.env.NODE_ENV='\"production\"'",
         "build:calendsync:client:dev": "bun build ./src/calendsync/client.tsx --outdir ./dist --entry-naming calendsync-client-[hash].js --format esm --target browser --sourcemap=external --define:process.env.NODE_ENV='\"development\"'",
+        "build:tauri": "bun run build:tauri:client && bun run build:tauri:css && bun run build:tauri:html",
+        "build:tauri:dev": "bun run build:tauri:client:dev && bun run build:tauri:css && bun run build:tauri:html",
+        "build:tauri:client": "bun build ./src/tauri/client.tsx --outdir ./dist --entry-naming calendsync-tauri.js --format esm --target browser --minify --define:process.env.NODE_ENV='\"production\"'",
+        "build:tauri:client:dev": "bun build ./src/tauri/client.tsx --outdir ./dist --entry-naming calendsync-tauri.js --format esm --target browser --sourcemap=external --define:process.env.NODE_ENV='\"development\"'",
+        "build:tauri:css": "cp ./src/calendsync/styles.css ./dist/calendsync.css",
+        "build:tauri:html": "cp ./src/tauri/index.html ./dist/index.html",
+        "dev:tauri": "bun run build:tauri:dev && bun run ./dev-server.ts",
         "typecheck": "tsc --noEmit",
         "test": "bun test",
         "watch": "bun run build:calendsync:dev --watch"

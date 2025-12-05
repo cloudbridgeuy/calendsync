@@ -9,6 +9,7 @@ calendsync is a Rust web application for creating calendars to sync with friends
 This is a technical exploration of the **"Rust full-stack" pattern**: server-side rendering React with `deno_core`, real-time updates via SSE, and a pure Rust backend - demonstrating that modern web apps can be built entirely in Rust without Node.js.
 
 **Current State**: Working web application with:
+
 - REST API for calendar entries
 - React SSR calendar with real-time SSE updates
 - In-memory state with demo data for development
@@ -46,6 +47,16 @@ cargo test -p calendsync_core
 
 # Run the React SSR example
 cargo run --example react-ssr -p calendsync
+
+# Tauri desktop app (requires: cargo install tauri-cli)
+cargo tauri dev                           # Run desktop app in dev mode
+cargo tauri build                         # Build desktop app for distribution
+
+# Tauri iOS app
+cargo tauri ios init                      # Initialize iOS project (first time only)
+cargo tauri ios dev                       # Run on iOS simulator
+cargo tauri ios dev --host                # Run on physical iOS device
+cargo tauri ios build                     # Build iOS app
 ```
 
 ## Architecture
@@ -58,6 +69,7 @@ cargo run --example react-ssr -p calendsync
 - **crates/frontend** - TypeScript build crate (bun bundler)
 - **crates/ssr_core** - Pure SSR functions (config, validation, polyfills)
 - **crates/ssr** - SSR worker pool (threading, JsRuntime execution)
+- **crates/src-tauri** - Tauri desktop/mobile app (macOS, iOS)
 - **xtask/** - Development automation tasks (cargo-xtask pattern)
 
 ### Web Application Structure (crates/calendsync)
@@ -133,6 +145,7 @@ bunx biome check --write --unsafe
 ```
 
 Configuration is in `crates/frontend/biome.json`:
+
 - **Indent**: 4 spaces (matches Rust)
 - **Line width**: 100 (matches Rust)
 - **Quotes**: double
@@ -173,6 +186,7 @@ crates/frontend/
 ### Build Integration
 
 The TypeScript build is triggered by Cargo:
+
 1. `cargo build -p calendsync` triggers `calendsync/build.rs`
 2. `calendsync/build.rs` depends on `calendsync_frontend` crate
 3. `frontend/build.rs` runs `bun build`, outputs to `frontend/dist/`
@@ -192,20 +206,16 @@ The TypeScript build is triggered by Cargo:
 The `cargo xtask lint` command runs these checks in order:
 
 **Rust checks:**
+
 1. `cargo fmt --check` - Code formatting
 2. `cargo check --all-targets` - Compilation
 3. `cargo clippy --all-targets -- -D warnings` - Linting (warnings are errors)
 4. `cargo test --all-targets` - Tests
 5. `cargo machete` - Unused dependencies detection
 
-**TypeScript checks (crates/frontend):**
-6. `biome check --write --unsafe` - Format and lint with auto-fix
-7. `bun run typecheck` - TypeScript type checking
-8. `bun test` - Run TypeScript tests
+**TypeScript checks (crates/frontend):** 6. `biome check --write --unsafe` - Format and lint with auto-fix 7. `bun run typecheck` - TypeScript type checking 8. `bun test` - Run TypeScript tests
 
-**TypeScript checks (examples/hello-world):**
-9. `biome check --write --unsafe` - Format and lint example TypeScript
-10. `bun run typecheck` - Example TypeScript type checking
+**TypeScript checks (examples/hello-world):** 9. `biome check --write --unsafe` - Format and lint example TypeScript 10. `bun run typecheck` - Example TypeScript type checking
 
 Pre-commit hooks can be installed with `cargo xtask lint --install-hooks`.
 
@@ -216,10 +226,12 @@ The `calendsync_core` crate contains pure business logic following the Functiona
 **STRICT RULES:**
 
 1. **No Async Functions**: All functions MUST be synchronous. No `async fn` allowed.
+
    - Core logic should not perform I/O operations
    - Use regular functions that can be called from sync or async contexts
 
 2. **No Side Effects**: Functions must be pure:
+
    - No file system operations (no reading/writing files)
    - No network requests (no API calls)
    - No external command execution
@@ -228,14 +240,17 @@ The `calendsync_core` crate contains pure business logic following the Functiona
    - No global state mutations
 
 3. **Configuration via Arguments**:
+
    - All configuration must be passed as function parameters
    - No reading from config files inside core functions
    - If a function requires more than 5 arguments, create a config struct
 
 4. **Workspace Dependencies**:
+
    - Use `{ workspace = true }` for all dependencies in `calendsync_core/Cargo.toml`
 
 5. **Error Handling**:
+
    - Use domain-specific error types per module (e.g., `RegistryError`, `IamError`)
    - Each module should define its own `Result<T>` type alias
    - Only include error variants for parsing, validation, and transformation failures
@@ -243,6 +258,7 @@ The `calendsync_core` crate contains pure business logic following the Functiona
    - The shell should implement `From<DomainError>` to convert core errors
 
 6. **Naming Conventions**:
+
    - **Module files**: Use operation-based names that describe what the code does
      - ✅ `parsing.rs`, `validation.rs`, `formatting.rs`, `comparison.rs`
      - ❌ `core.rs`, `utils.rs`, `helpers.rs` (too generic)
@@ -254,6 +270,7 @@ The `calendsync_core` crate contains pure business logic following the Functiona
      - ❌ `Result`, `Data`, `Info` (too vague)
 
 7. **API Design Best Practices**:
+
    - Prefer named structs over tuples for return types with multiple values
      - Use `ImageComponents { name, tag }` instead of `(String, String)`
      - Named fields are self-documenting and easier to extend
@@ -309,10 +326,13 @@ crates/core/src/
 Releases are managed via `cargo xtask release`:
 
 1. **Create Release**:
+
    ```bash
    cargo xtask release create 1.2.3
    ```
+
    This will:
+
    - Validate you're on main branch with clean working directory
    - Check CI status
    - Update version in all Cargo.toml files
@@ -323,6 +343,7 @@ Releases are managed via `cargo xtask release`:
    - Optionally upgrade local binary with `--auto-upgrade`
 
 2. **GitHub Actions** (`.github/workflows/release.yml`):
+
    - Triggered on tag push (`v*`)
    - Builds for multiple platforms: Linux x86_64, macOS Intel, macOS ARM64
    - Strips binaries
@@ -338,6 +359,7 @@ Releases are managed via `cargo xtask release`:
 GitHub Actions workflows in `.github/workflows/`:
 
 - **ci.yml** - Runs on push/PR to main/develop:
+
   - Tests with `cargo test`
   - Clippy with `-D warnings`
   - Format check with `cargo fmt`
@@ -346,6 +368,7 @@ GitHub Actions workflows in `.github/workflows/`:
   - Build check on Ubuntu and macOS
 
 - **release.yml** - Triggered on version tags:
+
   - Multi-platform builds (Linux x86_64, macOS x86_64, macOS ARM64)
   - Creates GitHub release with binaries
 
@@ -356,12 +379,14 @@ GitHub Actions workflows in `.github/workflows/`:
 When working with this codebase:
 
 1. **Adding New Handlers**:
+
    - Add handler functions in `handlers/` module
    - Register routes in `app.rs` using axum's routing macros
    - Use `State<AppState>` extractor for shared state access
    - Return appropriate response types (`Json`, `Html`, `StatusCode`)
 
 2. **Error Handling**:
+
    - Return `Result<T, AppError>` from handlers
    - Use `?` operator for propagation
    - Errors are converted to appropriate HTTP responses
@@ -498,6 +523,7 @@ async fn send_user_expiry_emails(db: &Database, email_service: &EmailService) ->
 **After (separated):**
 
 **Functional Core:**
+
 ```rust
 // Pure filtering logic - no side effects
 fn get_expired_users(users: &[User], cutoff: DateTime<Utc>) -> Vec<&User> {
@@ -522,6 +548,7 @@ fn generate_expiry_emails(users: &[&User]) -> Vec<Email> {
 ```
 
 **Imperative Shell:**
+
 ```rust
 // Orchestrates I/O operations using pure functions
 async fn send_user_expiry_emails(db: &Database, email_service: &EmailService) -> Result<()> {
@@ -547,6 +574,7 @@ When adding new features to `calendsync`:
 1. **Separate concerns**: Extract pure logic (filtering, sorting, validation) from I/O operations (HTTP handlers, state access)
 
 2. **Example - Calendar entry filtering:**
+
    ```rust
    // Functional Core (in calendsync_core) - pure filtering logic
    fn filter_entries_by_date_range(
@@ -580,22 +608,23 @@ The pattern is based on [Gary Bernhardt's original talk](https://www.destroyalls
 
 Detailed documentation is kept in dedicated files. Consult these when working on related features:
 
-| Topic | Location |
-|-------|----------|
-| Web Application | `crates/calendsync/README.md` |
-| CLI Client | `crates/client/README.md` |
-| DynamoDB Schema | `docs/dynamodb.md` |
-| DynamoDB xtask | `.claude/context/dynamodb.md` |
-| React SSR Example | `crates/calendsync/examples/README.md` |
-| React Calendar | `.claude/context/react-calendar.md` |
-| Entry Modal | `.claude/context/entry-modal.md` |
-| Wheel Navigation | `.claude/context/wheel-navigation.md` |
-| SSE Event Publishing | `.claude/context/sse-events.md` |
-| Task Entries | `.claude/context/task-entries.md` |
-| SSR Worker Pool | `.claude/context/ssr-worker-pool.md` |
-| Axum Reference | `.claude/context/AXUM.md` |
-| React SSR Context | `.claude/context/react-ssr-example.md` |
-| Shared Types | `.claude/context/shared-types.md` |
+| Topic                | Location                               |
+| -------------------- | -------------------------------------- |
+| Web Application      | `crates/calendsync/README.md`          |
+| CLI Client           | `crates/client/README.md`              |
+| DynamoDB Schema      | `docs/dynamodb.md`                     |
+| DynamoDB xtask       | `.claude/context/dynamodb.md`          |
+| React SSR Example    | `crates/calendsync/examples/README.md` |
+| React Calendar       | `.claude/context/react-calendar.md`    |
+| Entry Modal          | `.claude/context/entry-modal.md`       |
+| Wheel Navigation     | `.claude/context/wheel-navigation.md`  |
+| SSE Event Publishing | `.claude/context/sse-events.md`        |
+| Task Entries         | `.claude/context/task-entries.md`      |
+| SSR Worker Pool      | `.claude/context/ssr-worker-pool.md`   |
+| Axum Reference       | `.claude/context/AXUM.md`              |
+| Tauri                | `.claude/context/tauri.md`             |
+| React SSR Context    | `.claude/context/react-ssr-example.md` |
+| Shared Types         | `.claude/context/shared-types.md`      |
 
 ### Examples
 
@@ -604,22 +633,22 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 
 ## Glossary
 
-| Term | Definition |
-|------|------------|
-| **calendsync** | Main binary crate - the web server application |
-| **calendsync_core** | Pure business logic library following Functional Core pattern |
-| **calendsync_client** | CLI client crate for interacting with calendsync API |
-| **calendsync_frontend** | TypeScript build crate using bun bundler |
-| **Functional Core** | Pure, testable functions with no side effects (no I/O, no state mutations) |
-| **Imperative Shell** | Thin layer handling I/O (HTTP, database) that calls into the Functional Core |
-| **SSR** | Server-Side Rendering - generating HTML on the server (e.g., React with deno_core) |
-| **Hydration** | Client-side process of attaching event handlers to server-rendered HTML |
-| **bun** | Fast JavaScript/TypeScript bundler and runtime used for frontend builds |
-| **deno_core** | Minimal JavaScript runtime from Deno, used for SSR in Rust |
-| **ops** | Custom Rust functions callable from JavaScript in deno_core |
-| **xtask** | Cargo pattern for project-specific dev automation (`cargo xtask lint`) |
-| **SSE** | Server-Sent Events - one-way real-time updates from server to client |
-| **Notification Center** | UI component showing real-time SSE events (added/updated/deleted entries) |
-| **DynamoDB** | AWS NoSQL database used for persistence (single-table design) |
-| **GSI** | Global Secondary Index - alternate query pattern in DynamoDB |
-| **CalendarMembership** | Entity linking users to calendars with roles (owner/writer/reader) |
+| Term                    | Definition                                                                         |
+| ----------------------- | ---------------------------------------------------------------------------------- |
+| **calendsync**          | Main binary crate - the web server application                                     |
+| **calendsync_core**     | Pure business logic library following Functional Core pattern                      |
+| **calendsync_client**   | CLI client crate for interacting with calendsync API                               |
+| **calendsync_frontend** | TypeScript build crate using bun bundler                                           |
+| **Functional Core**     | Pure, testable functions with no side effects (no I/O, no state mutations)         |
+| **Imperative Shell**    | Thin layer handling I/O (HTTP, database) that calls into the Functional Core       |
+| **SSR**                 | Server-Side Rendering - generating HTML on the server (e.g., React with deno_core) |
+| **Hydration**           | Client-side process of attaching event handlers to server-rendered HTML            |
+| **bun**                 | Fast JavaScript/TypeScript bundler and runtime used for frontend builds            |
+| **deno_core**           | Minimal JavaScript runtime from Deno, used for SSR in Rust                         |
+| **ops**                 | Custom Rust functions callable from JavaScript in deno_core                        |
+| **xtask**               | Cargo pattern for project-specific dev automation (`cargo xtask lint`)             |
+| **SSE**                 | Server-Sent Events - one-way real-time updates from server to client               |
+| **Notification Center** | UI component showing real-time SSE events (added/updated/deleted entries)          |
+| **DynamoDB**            | AWS NoSQL database used for persistence (single-table design)                      |
+| **GSI**                 | Global Secondary Index - alternate query pattern in DynamoDB                       |
+| **CalendarMembership**  | Entity linking users to calendars with roles (owner/writer/reader)                 |
