@@ -1,178 +1,77 @@
-# CalendSync Web Application
+# CalendSync Web Server
 
-A web application built with Axum, Askama templates, and HTMX for dynamic user interface interactions.
+The main axum web server providing REST API and React SSR.
 
 ## Tech Stack
 
 - **Axum** - Web framework
-- **Askama** - Type-safe templating engine
-- **HTMX** - Frontend interactivity without JavaScript
+- **React 19** - Frontend UI with SSR
+- **deno_core** - JavaScript runtime for SSR
 - **Tokio** - Async runtime
-- **Tower-HTTP** - HTTP middleware (CORS, tracing, timeouts)
-
-## Development Setup
-
-### Prerequisites
-
-- Rust toolchain (1.70+)
-- `systemfd` and `cargo-watch` for auto-reload (optional but recommended)
-
-### Installation
-
-Install development tools for auto-reload:
-
-```bash
-cargo install systemfd
-
-# macOS (recommended - avoids compilation issues)
-brew install watchexec
-
-# Other platforms
-cargo install watchexec-cli
-```
+- **Tower-HTTP** - Middleware (CORS, tracing, timeouts)
 
 ## Running the Server
 
-### Standard Mode
-
 ```bash
+# Standard mode
 cargo run -p calendsync
+
+# With auto-reload
+systemfd --no-pid -s http::3000 -- cargo watch -x 'run -p calendsync'
 ```
 
-The server will start at `http://127.0.0.1:3000`.
-
-### With Auto-Reload (Recommended for Development)
-
-**Using watchexec (recommended):**
-
-```bash
-# Watches all files in crates/calendsync (including templates)
-watchexec -w crates/calendsync -r -- cargo run -p calendsync
-```
-
-**With socket preservation (avoids connection drops during restart):**
-
-```bash
-systemfd --no-pid -s http::3000 -- watchexec -w crates/calendsync -r -- cargo run -p calendsync
-```
-
-The `-r` flag restarts the process on file changes. The `-w` flag specifies the directory to watch.
-
-## Architecture Patterns
-
-### Graceful Shutdown
-
-The server handles shutdown signals gracefully:
-
-- **Ctrl+C** - Interactive termination
-- **SIGTERM** - Process termination (e.g., from container orchestrators)
-
-In-flight requests are allowed to complete with a 10-second timeout before the server fully shuts down.
-
-### Error Handling
-
-- Uses `anyhow` for flexible error handling
-- `AppError` wrapper converts any error into an HTTP 500 response
-- Errors are logged via `tracing` for debugging
-
-```rust
-// Example: Any function returning Result<_, anyhow::Error> can use ?
-async fn handler() -> Result<String, AppError> {
-    let value = some_fallible_operation()?;
-    Ok(value)
-}
-```
-
-### Dependency Injection
-
-Application state is managed via Axum's `State` extractor:
-
-```rust
-#[derive(Clone)]
-pub struct AppState {
-    pub users: Arc<RwLock<HashMap<Uuid, User>>>,
-}
-
-async fn handler(State(state): State<AppState>) -> impl IntoResponse {
-    // Access shared state
-}
-```
-
-### HTMX Integration
-
-The server returns HTML fragments for HTMX requests, enabling dynamic UI updates without full page reloads:
-
-- `HX-Request` header is used to detect HTMX calls
-- Form submissions return new table rows directly
-- Delete operations return empty responses (HTMX removes the element)
-
-Example HTMX attributes used:
-
-```html
-<form hx-post="/api/users" hx-target="#user-table-body" hx-swap="beforeend">
-  <!-- Form fields -->
-</form>
-
-<button hx-delete="/api/users/{id}" hx-target="closest tr" hx-swap="outerHTML">
-  Delete
-</button>
-```
-
-### CORS
-
-API endpoints support cross-origin requests via `tower-http::cors::CorsLayer`:
-
-- Allows any origin
-- Supports GET, POST, DELETE methods
-- Accepts Content-Type header
+Server runs at `http://localhost:3000`
 
 ## API Endpoints
 
-| Method | Path                                | Description                                |
-| ------ | ----------------------------------- | ------------------------------------------ |
-| GET    | `/`                                 | Main page with user table and form         |
-| GET    | `/calendar/{calendar_id}`           | React SSR calendar page                    |
-| GET    | `/calendar/{calendar_id}/entry`     | Calendar with entry modal (create mode)    |
-| GET    | `/calendar/{calendar_id}/entry?entry_id={id}` | Calendar with entry modal (edit mode) |
-| GET    | `/api/users`                        | List all users (JSON)                      |
-| POST   | `/api/users`                        | Create a new user                          |
-| GET    | `/api/users/{id}`                   | Get a single user by ID                    |
-| DELETE | `/api/users/{id}`                   | Delete a user by ID                        |
-| GET    | `/api/entries`                      | List all entries                           |
-| POST   | `/api/entries`                      | Create a new entry                         |
-| GET    | `/api/entries/{id}`                 | Get entry by ID                            |
-| PUT    | `/api/entries/{id}`                 | Update an entry                            |
-| DELETE | `/api/entries/{id}`                 | Delete an entry                            |
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/calendar/{id}` | React SSR calendar page |
+| GET | `/calendar/{id}/entry` | Calendar with create modal |
+| GET | `/calendar/{id}/entry?entry_id={id}` | Calendar with edit modal |
+| GET | `/api/calendar-entries` | Get entries for date range |
+| POST | `/api/entries` | Create entry |
+| PUT | `/api/entries/{id}` | Update entry |
+| DELETE | `/api/entries/{id}` | Delete entry |
+| GET | `/api/events?calendar_id={id}` | SSE event stream |
+| GET | `/healthz` | Health check |
 
-### Entry Modal Routes
+## Architecture
 
-The calendar supports URL-based modal state for creating and editing entries:
+The server uses React SSR via deno_core:
 
-- **Create mode**: `/calendar/{calendar_id}/entry`
-  - Opens modal pre-filled with the current highlighted day
-  - SSR renders the modal open on page load
+1. Request comes in for `/calendar/{id}`
+2. Server fetches calendar data from in-memory store
+3. `SsrPool` renders React to HTML using deno_core workers
+4. HTML returned with embedded initial data
+5. Client-side React hydrates for interactivity
+6. SSE connection provides real-time updates
 
-- **Edit mode**: `/calendar/{calendar_id}/entry?entry_id={entry_id}`
-  - Opens modal with the entry data pre-populated
-  - SSR fetches entry and includes it in initial data
-  - Returns 404 if entry not found
+See `crates/ssr/` and `crates/ssr_core/` for SSR implementation details.
 
-### Example API Usage
+## Project Structure
+
+```
+src/
+├── main.rs         # Entry point, graceful shutdown
+├── app.rs          # Router, middleware
+├── state.rs        # AppState, SSE support
+├── mock_data.rs    # Demo data generation
+├── handlers/
+│   ├── entries.rs      # Entry CRUD
+│   ├── calendar_react.rs  # React SSR handler
+│   ├── events.rs       # SSE handler
+│   └── health.rs       # Health endpoints
+└── models/
+    └── entry.rs    # Request types
+```
+
+## Environment Variables
+
+- `RUST_LOG` - Logging level (default: info)
 
 ```bash
-# List all users
-curl http://localhost:3000/api/users
-
-# Create a user
-curl -X POST http://localhost:3000/api/users \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "name=John&email=john@example.com"
-
-# Get a specific user
-curl http://localhost:3000/api/users/{uuid}
-
-# Delete a user
-curl -X DELETE http://localhost:3000/api/users/{uuid}
+RUST_LOG=debug cargo run -p calendsync
 ```
 
 ## Testing
@@ -183,43 +82,4 @@ cargo test -p calendsync
 
 # Run with output
 cargo test -p calendsync -- --nocapture
-
-# Run a specific test
-cargo test -p calendsync test_create_and_get_user
-```
-
-## Project Structure
-
-```
-crates/calendsync/
-├── Cargo.toml
-├── README.md
-├── src/
-│   ├── main.rs           # Entry point, server setup, graceful shutdown
-│   ├── app.rs            # Router construction, middleware, tests
-│   ├── error.rs          # AppError type with anyhow integration
-│   ├── state.rs          # AppState with user repository
-│   ├── handlers/
-│   │   ├── mod.rs
-│   │   ├── pages.rs      # HTML page handlers
-│   │   └── api.rs        # JSON/HTML API handlers
-│   └── models/
-│       ├── mod.rs
-│       └── user.rs       # User model
-└── templates/
-    ├── base.html         # Base layout with HTMX
-    ├── index.html        # Main page
-    └── partials/
-        ├── user_row.html     # Single user row
-        └── user_table.html   # User table body
-```
-
-## Environment Variables
-
-- `RUST_LOG` - Configure logging level (default: `calendsync=debug,tower_http=debug`)
-
-Example:
-
-```bash
-RUST_LOG=calendsync=info,tower_http=warn cargo run -p calendsync
 ```
