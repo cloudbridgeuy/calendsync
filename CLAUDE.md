@@ -4,13 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-calendsync is a Rust web application for creating calendars to sync with friends. It uses axum as the web framework with htmx for frontend interactivity.
+calendsync is a Rust web application for creating calendars to sync with friends. It uses axum as the web framework with React SSR for the frontend.
 
 This is a technical exploration of the **"Rust full-stack" pattern**: server-side rendering React with `deno_core`, real-time updates via SSE, and a pure Rust backend - demonstrating that modern web apps can be built entirely in Rust without Node.js.
 
 **Current State**: Working web application with:
-- REST API for users, calendars, and calendar entries
-- htmx-powered HTML pages
+- REST API for calendar entries
 - React SSR calendar with real-time SSE updates
 - In-memory state with demo data for development
 - Graceful shutdown support
@@ -68,22 +67,14 @@ src/
 ├── main.rs          # Entry point, server setup, graceful shutdown
 ├── app.rs           # Router configuration, middleware (CORS, tracing, timeout)
 ├── state.rs         # AppState with in-memory data stores, SSE support
-├── error.rs         # Error types and conversions
 ├── mock_data.rs     # Demo data generation
 ├── handlers/        # HTTP request handlers
-│   ├── api.rs       # User CRUD endpoints
-│   ├── calendars.rs # Calendar CRUD endpoints
-│   ├── entries.rs   # Entry CRUD endpoints
-│   ├── pages.rs     # HTML page handlers
-│   ├── calendar.rs  # Calendar demo page (htmx)
+│   ├── entries.rs   # Entry CRUD endpoints + calendar entries list
 │   ├── calendar_react.rs # React SSR calendar handler (uses SsrPool)
 │   ├── events.rs    # SSE events handler for real-time updates
-│   └── health.rs    # SSR pool health check endpoints
+│   └── health.rs    # Health check endpoints (/healthz, /readyz)
 └── models/          # Data models
-    ├── user.rs
-    ├── calendar.rs
-    └── entry.rs
-templates/           # Askama HTML templates
+    └── entry.rs     # CreateEntry, UpdateEntry request types
 ```
 
 ### xtask Commands
@@ -99,12 +90,12 @@ The project uses the [cargo-xtask](https://github.com/matklad/cargo-xtask/) patt
 ### Tech Stack
 
 - **axum** - Web framework
-- **htmx** - Frontend interactivity
-- **askama** - HTML templating
+- **React 19** - Frontend UI with SSR
+- **deno_core** - JavaScript runtime for SSR
 - **tokio** - Async runtime
 - **bun** - TypeScript bundler
 
-Reference documentation available in `.claude/context/AXUM.md` and `.claude/context/HTMX.md`.
+Reference documentation available in `.claude/context/AXUM.md`.
 
 ## TypeScript Development (crates/frontend)
 
@@ -380,37 +371,6 @@ When working with this codebase:
    - Derive `Serialize`, `Deserialize`, `Clone` as needed
    - Add corresponding storage in `AppState`
 
-## Calendar UI
-
-The main calendar view is implemented in `templates/calendar.html` as a single-page application using vanilla JavaScript modules.
-
-### Architecture
-
-The UI consists of two JavaScript modules:
-- **`calendar`** - Manages the calendar grid, navigation, and day rendering
-- **`entryModal`** - Handles the modal for creating/editing calendar entries
-
-### Highlighted Day
-
-The **highlighted day** (`centerDate`) is the currently focused date in the calendar view:
-- On **mobile**: The single day displayed in the center of the screen
-- On **desktop**: The center day of the visible week (3, 5, or 7-day view)
-
-The highlighted day is tracked client-side in JavaScript and exposed via `calendar.getCenterDate()`. It updates when:
-- User navigates with prev/next buttons
-- User taps "Today" to jump to current date
-- User scrolls/swipes through the calendar
-
-When opening the "New Entry" modal (FAB button), the date field is pre-populated with the highlighted day.
-
-### Key Functions
-
-- `calendar.getCenterDate()` - Returns the current highlighted date as a JavaScript Date object
-- `calendar.navigateDays(offset)` - Move the highlighted day by offset days
-- `calendar.goToToday()` - Reset highlighted day to today
-- `entryModal.openCreate(dateStr?)` - Open modal for new entry (uses highlighted day if no date provided)
-- `entryModal.openEdit(tileElement)` - Open modal to edit existing entry
-
 ## Testing Strategy
 
 Integration tests using `tower::ServiceExt`:
@@ -634,7 +594,6 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | Task Entries | `.claude/context/task-entries.md` |
 | SSR Worker Pool | `.claude/context/ssr-worker-pool.md` |
 | Axum Reference | `.claude/context/AXUM.md` |
-| HTMX Reference | `.claude/context/HTMX.md` |
 | React SSR Context | `.claude/context/react-ssr-example.md` |
 | Shared Types | `.claude/context/shared-types.md` |
 
@@ -658,8 +617,6 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | **bun** | Fast JavaScript/TypeScript bundler and runtime used for frontend builds |
 | **deno_core** | Minimal JavaScript runtime from Deno, used for SSR in Rust |
 | **ops** | Custom Rust functions callable from JavaScript in deno_core |
-| **htmx** | Library for frontend interactivity via HTML attributes (no JavaScript) |
-| **askama** | Type-safe HTML templating engine for Rust |
 | **xtask** | Cargo pattern for project-specific dev automation (`cargo xtask lint`) |
 | **SSE** | Server-Sent Events - one-way real-time updates from server to client |
 | **Notification Center** | UI component showing real-time SSE events (added/updated/deleted entries) |
