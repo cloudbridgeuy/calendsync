@@ -27,6 +27,11 @@ bun.lock
 crates/calendsync/examples/hello-world/dist/
 crates/calendsync/examples/react-ssr/dist/
 
+# Tauri generated files (iOS/Android)
+crates/src-tauri/gen/apple/
+crates/src-tauri/gen/android/
+crates/src-tauri/gen/schemas/
+
 # Playwright MCP screenshots
 .playwright-mcp/
 
