@@ -4,18 +4,18 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "bun run build:calendar-react",
-        "build:dev": "bun run build:calendar-react:dev",
-        "build:calendar-react": "bun run build:calendar-react:server && bun run build:calendar-react:client && bun run build:calendar-react:css",
-        "build:calendar-react:dev": "bun run build:calendar-react:server:dev && bun run build:calendar-react:client:dev && bun run build:calendar-react:css",
-        "build:calendar-react:css": "cp ./src/calendar-react/styles.css ./dist/calendar-react.css",
-        "build:calendar-react:server": "bun build ./src/calendar-react/server.tsx --outdir ./dist --entry-naming calendar-react-server.js --format esm --target browser --minify",
-        "build:calendar-react:server:dev": "bun build ./src/calendar-react/server.tsx --outdir ./dist --entry-naming calendar-react-server.js --format esm --target browser --sourcemap=external",
-        "build:calendar-react:client": "bun build ./src/calendar-react/client.tsx --outdir ./dist --entry-naming calendar-react-client-[hash].js --format esm --target browser --minify --define:process.env.NODE_ENV='\"production\"'",
-        "build:calendar-react:client:dev": "bun build ./src/calendar-react/client.tsx --outdir ./dist --entry-naming calendar-react-client-[hash].js --format esm --target browser --sourcemap=external --define:process.env.NODE_ENV='\"development\"'",
+        "build": "bun run build:calendsync",
+        "build:dev": "bun run build:calendsync:dev",
+        "build:calendsync": "bun run build:calendsync:server && bun run build:calendsync:client && bun run build:calendsync:css",
+        "build:calendsync:dev": "bun run build:calendsync:server:dev && bun run build:calendsync:client:dev && bun run build:calendsync:css",
+        "build:calendsync:css": "cp ./src/calendsync/styles.css ./dist/calendsync.css",
+        "build:calendsync:server": "bun build ./src/calendsync/server.tsx --outdir ./dist --entry-naming calendsync-server.js --format esm --target browser --minify",
+        "build:calendsync:server:dev": "bun build ./src/calendsync/server.tsx --outdir ./dist --entry-naming calendsync-server.js --format esm --target browser --sourcemap=external",
+        "build:calendsync:client": "bun build ./src/calendsync/client.tsx --outdir ./dist --entry-naming calendsync-client-[hash].js --format esm --target browser --minify --define:process.env.NODE_ENV='\"production\"'",
+        "build:calendsync:client:dev": "bun build ./src/calendsync/client.tsx --outdir ./dist --entry-naming calendsync-client-[hash].js --format esm --target browser --sourcemap=external --define:process.env.NODE_ENV='\"development\"'",
         "typecheck": "tsc --noEmit",
         "test": "bun test",
-        "watch": "bun run build:calendar-react:dev --watch"
+        "watch": "bun run build:calendsync:dev --watch"
     },
     "dependencies": {
         "react": "^19.0.0",

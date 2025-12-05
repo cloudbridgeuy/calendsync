@@ -21,7 +21,7 @@ export function App({ initialData }: AppProps) {
                 <meta charSet="utf-8" />
                 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
                 <title>Calendar - CalendSync</title>
-                <link rel="stylesheet" href="/dist/calendar-react.css" />
+                <link rel="stylesheet" href="/dist/calendsync.css" />
             </head>
             <body>
                 <Calendar initialData={initialData} />

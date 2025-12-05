@@ -81,7 +81,7 @@ Backend handlers:
 crates/frontend/src/
 ├── core/calendar/
 │   └── modal.ts                    # Pure modal utilities
-├── calendar-react/
+├── calendsync/
 │   ├── components/
 │   │   └── EntryModal.tsx          # Modal component
 │   ├── hooks/

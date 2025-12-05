@@ -139,7 +139,7 @@ Real-time updates are essential for shared calendars:
 - No ARIA labels or roles
 - No keyboard navigation support
 - No screen reader testing
-- Location: `crates/frontend/src/calendar-react/components/`
+- Location: `crates/frontend/src/calendsync/components/`
 
 ### Rationale
 Accessibility is:
@@ -172,9 +172,9 @@ Accessibility is:
 3. Live regions for SSE updates
 
 **Key Files to Modify**
-- `crates/frontend/src/calendar-react/components/*.tsx` - Add ARIA
-- `crates/frontend/src/calendar-react/hooks/` - Keyboard handlers
-- `crates/frontend/src/calendar-react/styles.css` - Focus styles
+- `crates/frontend/src/calendsync/components/*.tsx` - Add ARIA
+- `crates/frontend/src/calendsync/hooks/` - Keyboard handlers
+- `crates/frontend/src/calendsync/styles.css` - Focus styles
 
 ---
 

@@ -156,20 +156,14 @@ Follows Functional Core - Imperative Shell pattern:
 crates/frontend/
 ├── lib.rs                  # Rust placeholder (triggers build.rs)
 └── src/                    # Pure TypeScript
-    ├── calendar/           # htmx calendar (vanilla JS)
-    │   ├── api.ts          # Fetch calls to /api/entries
-    │   ├── render.ts       # DOM manipulation
-    │   ├── events.ts       # Event handlers (touch, scroll)
-    │   ├── entryModal.ts   # Modal UI controller
-    │   └── index.ts        # Entry point (exports window.initCalendar)
-    ├── calendar-react/     # React SSR calendar
+    ├── calendsync/         # React SSR calendar
     │   ├── server.tsx      # SSR entry point (prerender)
     │   ├── client.tsx      # Client hydration
     │   ├── styles.css      # Component styles
     │   ├── hooks/          # React hooks (useCalendar, useSSE, useNotifications)
     │   └── components/     # React components
     └── core/calendar/      # Functional Core (pure, testable)
-        ├── __tests__/      # Unit tests (89 tests)
+        ├── __tests__/      # Unit tests
         ├── types.ts        # Data types (no DOM types)
         ├── dates.ts        # Pure date calculations
         ├── entries.ts      # Pure entry filtering/sorting

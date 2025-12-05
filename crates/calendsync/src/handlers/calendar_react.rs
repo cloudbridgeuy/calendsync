@@ -32,9 +32,9 @@ fn get_client_bundle_url() -> String {
         serde_json::from_str(manifest_str).unwrap_or(serde_json::json!({}));
 
     let client_bundle_name = manifest
-        .get("calendar-react-client.js")
+        .get("calendsync-client.js")
         .and_then(|v| v.as_str())
-        .unwrap_or("calendar-react-client.js");
+        .unwrap_or("calendsync-client.js");
 
     format!("/dist/{client_bundle_name}")
 }
@@ -83,7 +83,7 @@ fn error_html(error: &str, calendar_id: &str, client_bundle_url: &str) -> String
 <head>
     <title>Calendar</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="/dist/calendar-react.css">
+    <link rel="stylesheet" href="/dist/calendsync.css">
     <style>
         .error-container {{
             display: flex;

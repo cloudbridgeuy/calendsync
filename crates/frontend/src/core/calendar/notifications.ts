@@ -3,7 +3,7 @@
  * No side effects (localStorage operations happen in the imperative shell).
  */
 
-import type { Notification, NotificationType } from "../../calendar-react/types"
+import type { Notification, NotificationType } from "@calendsync/types"
 
 /** localStorage key prefix for notifications */
 export const NOTIFICATION_STORAGE_PREFIX = "calendsync_notifications_"

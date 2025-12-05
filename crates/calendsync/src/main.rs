@@ -87,9 +87,9 @@ fn init_ssr_pool() -> Result<SsrPool> {
     let manifest: serde_json::Value = serde_json::from_str(manifest_str)?;
 
     let server_bundle_name = manifest
-        .get("calendar-react.js")
+        .get("calendsync.js")
         .and_then(|v| v.as_str())
-        .unwrap_or("calendar-react-server.js");
+        .unwrap_or("calendsync-server.js");
 
     let bundle_path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../frontend/dist")

@@ -20,8 +20,7 @@
         "baseUrl": "./src",
         "paths": {
             "@core/*": ["./core/*"],
-            "@calendar/*": ["./calendar/*"],
-            "@calendar-react/*": ["./calendar-react/*"]
+            "@calendsync/*": ["./calendsync/*"]
         }
     },
     "include": ["src/**/*"],

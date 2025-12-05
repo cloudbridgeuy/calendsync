@@ -1,4 +1,4 @@
-# React Calendar (calendar-react)
+# React Calendar
 
 The React calendar is a server-side rendered (SSR) calendar view with real-time updates via Server-Sent Events (SSE).
 
@@ -20,13 +20,13 @@ Uses `deno_core` to render React 19 with the prerender API:
 
 1. Rust handler receives request at `/calendar/{calendar_id}`
 2. Loads entries for the calendar from AppState
-3. Runs JavaScript bundle (`calendar-react-server.js`) in deno_core
+3. Runs JavaScript bundle (`calendsync-server.js`) in deno_core
 4. React prerenders the calendar HTML with initial data
 5. Returns HTML with hydration script
 
 ### Client Hydration
 
-The client bundle (`calendar-react-client-[hash].js`) hydrates the server-rendered HTML:
+The client bundle (`calendsync-client-[hash].js`) hydrates the server-rendered HTML:
 
 1. Attaches event handlers to server-rendered DOM
 2. Connects to SSE endpoint for real-time updates
@@ -53,7 +53,7 @@ Features:
 
 The notification center displays real-time SSE events:
 
-**Component**: `crates/frontend/src/calendar-react/components/NotificationCenter.tsx`
+**Component**: `crates/frontend/src/calendsync/components/NotificationCenter.tsx`
 
 **Features**:
 - Bell icon in top-right header with unread badge
@@ -71,7 +71,7 @@ The notification center displays real-time SSE events:
 ## File Structure
 
 ```
-crates/frontend/src/calendar-react/
+crates/frontend/src/calendsync/
 ├── server.tsx           # SSR entry point (prerender)
 ├── client.tsx           # Client hydration entry point
 ├── styles.css           # All component styles
@@ -94,19 +94,19 @@ Frontend build scripts in `package.json`:
 
 ```bash
 # Server bundle (no hash, for deno_core)
-bun run build:calendar-react:server
+bun run build:calendsync:server
 
 # Client bundle (hashed, for browser caching)
-bun run build:calendar-react:client
+bun run build:calendsync:client
 
 # CSS (copied directly)
-bun run build:calendar-react:css
+bun run build:calendsync:css
 ```
 
 Output files:
-- `dist/calendar-react-server.js` - Server bundle (loaded by Rust)
-- `dist/calendar-react-client-[hash].js` - Client bundle (loaded in browser)
-- `dist/calendar-react.css` - Styles (loaded in browser)
+- `dist/calendsync-server.js` - Server bundle (loaded by Rust)
+- `dist/calendsync-client-[hash].js` - Client bundle (loaded in browser)
+- `dist/calendsync.css` - Styles (loaded in browser)
 
 ## State Management
 
@@ -335,15 +335,16 @@ The modal state is controlled by the URL, enabling:
 crates/frontend/src/
 ├── core/calendar/
 │   └── modal.ts                    # Pure modal utilities
-├── calendar-react/
+├── calendsync/
 │   ├── components/
 │   │   └── EntryModal.tsx          # Modal component
 │   ├── hooks/
 │   │   ├── useModalUrl.ts          # URL state hook
 │   │   └── useEntryApi.ts          # Entry API hook
 │   └── types.ts                    # ModalState, EntryFormData
-└── calendsync/src/handlers/
-    └── calendar_react.rs           # SSR handlers (calendar_react_ssr_entry)
+└── ...
+crates/calendsync/src/handlers/
+└── calendar_react.rs               # SSR handlers (calendar_react_ssr_entry)
 ```
 
 ### InitialData Extension
