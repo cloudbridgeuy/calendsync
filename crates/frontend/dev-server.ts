@@ -14,8 +14,8 @@
  *   TAURI_DEV_HOST - Set by Tauri CLI for iOS physical device development
  */
 
-import { watch } from "fs"
-import { join } from "path"
+import { watch } from "node:fs"
+import { join } from "node:path"
 import { spawn } from "bun"
 
 // Configuration
@@ -75,7 +75,7 @@ function getHmrScript(): string {
 }
 
 // WebSocket server for hot reload notifications
-const wsServer = Bun.serve({
+const _wsServer = Bun.serve({
     port: WS_PORT,
     hostname: HOST,
     fetch(req, server) {
@@ -116,7 +116,7 @@ function notifyReload() {
 }
 
 // HTTP server for static file serving
-const httpServer = Bun.serve({
+const _httpServer = Bun.serve({
     port: PORT,
     hostname: HOST,
     async fetch(req) {
@@ -198,7 +198,7 @@ async function rebuild() {
 }
 
 // Watch src directory for changes
-watch(SRC_DIR, { recursive: true }, (event, filename) => {
+watch(SRC_DIR, { recursive: true }, (_event, filename) => {
     if (!filename) return
 
     // Ignore non-source files
