@@ -100,6 +100,7 @@ crates/
 ## Documentation
 
 For detailed documentation, see:
+
 - [Web Server](crates/calendsync/README.md)
 - [CLI Client](crates/client/README.md)
 - [CLAUDE.md](CLAUDE.md) - Development guidelines
