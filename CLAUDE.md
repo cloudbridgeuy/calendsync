@@ -48,11 +48,18 @@ cargo test -p calendsync_core
 # Run the React SSR example
 cargo run --example react-ssr -p calendsync
 
-# Tauri desktop app (requires: cargo install tauri-cli)
+# Unified dev command (web, desktop, iOS)
+cargo xtask dev web                       # Run web server on port 3000
+cargo xtask dev web --port 8080           # Run on custom port
+cargo xtask dev desktop                   # Run Tauri desktop app
+cargo xtask dev ios                       # Run iOS simulator
+cargo xtask dev ios --list-devices        # List available iOS simulators
+cargo xtask dev ios --device "iPhone 16"  # Run on specific simulator
+cargo xtask dev ios --open                # Open Xcode instead
+
+# Tauri direct commands (alternative to xtask dev)
 cargo tauri dev                           # Run desktop app in dev mode
 cargo tauri build                         # Build desktop app for distribution
-
-# Tauri iOS app
 cargo tauri ios init                      # Initialize iOS project (first time only)
 cargo tauri ios dev                       # Run on iOS simulator
 cargo tauri ios dev --host                # Run on physical iOS device
@@ -93,6 +100,11 @@ src/
 
 The project uses the [cargo-xtask](https://github.com/matklad/cargo-xtask/) pattern for development tasks:
 
+- `cargo xtask dev web` - Run the web server (port 3000 by default)
+- `cargo xtask dev desktop` - Run the Tauri desktop app
+- `cargo xtask dev ios` - Run the Tauri iOS app in simulator
+- `cargo xtask dev ios --list-devices` - List available iOS simulators
+- `cargo xtask dev ios --device "iPhone 16"` - Run on specific simulator
 - `cargo xtask lint` - Run all code quality checks (fmt, check, clippy, test, cargo-machete)
 - `cargo xtask install` - Build and install the binary locally
 - `cargo xtask release create <version>` - Create a new release
@@ -624,6 +636,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | Axum Reference       | `.claude/context/AXUM.md`              |
 | Tauri                | `.claude/context/tauri.md`             |
 | Tauri iOS            | `.claude/context/tauri-ios.md`         |
+| xtask dev Command    | `.claude/context/xtask-dev.md`         |
 | React SSR Context    | `.claude/context/react-ssr-example.md` |
 | Shared Types         | `.claude/context/shared-types.md`      |
 | Running Applications | `.claude/context/running-apps.md`      |

@@ -8,6 +8,7 @@
 
 use clap::Parser;
 
+mod dev;
 mod dynamodb;
 mod install;
 mod lint;
@@ -124,6 +125,9 @@ pub fn get_context_name_for_environment(env: Environment) -> &'static str {
 
 #[derive(Debug, clap::Subcommand)]
 enum Commands {
+    /// Run the application in development mode
+    Dev(dev::DevCommand),
+
     /// Install locally built vnt binary
     Install(install::InstallCommand),
 
@@ -158,6 +162,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::Dev(dev_cmd) => {
+            dev::run(dev_cmd, cli.global).await?;
+        }
         Commands::Install(install_cmd) => {
             install::run(install_cmd, cli.global).await?;
         }
