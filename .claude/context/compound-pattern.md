@@ -1,0 +1,793 @@
+# Compound Pattern
+
+The Compound Pattern creates components that work together through shared state via React Context. Components are "compound" because they're composed of multiple sub-components that only make sense together.
+
+## When to Use
+
+- Components with multiple related sub-components (dropdowns, menus, accordions, tabs)
+- UI elements that share state internally but expose a simple API externally
+- Building reusable component libraries
+
+## Basic Pattern Structure
+
+```typescript
+// 1. Create context for shared state
+const FlyOutContext = createContext<FlyOutContextValue | null>(null)
+
+// 2. Parent component provides state
+function FlyOut({ children }: { children: React.ReactNode }) {
+    const [open, setOpen] = useState(false)
+
+    return (
+        <FlyOutContext.Provider value={{ open, toggle: () => setOpen(!open) }}>
+            {children}
+        </FlyOutContext.Provider>
+    )
+}
+
+// 3. Child components consume state
+function Toggle() {
+    const ctx = useContext(FlyOutContext)
+    if (!ctx) throw new Error("Toggle must be inside FlyOut")
+
+    return <button onClick={ctx.toggle}>{ctx.open ? "Close" : "Open"}</button>
+}
+
+function List({ children }: { children: React.ReactNode }) {
+    const ctx = useContext(FlyOutContext)
+    if (!ctx) throw new Error("List must be inside FlyOut")
+
+    return ctx.open ? <ul>{children}</ul> : null
+}
+
+function Item({ children }: { children: React.ReactNode }) {
+    return <li>{children}</li>
+}
+
+// 4. Attach sub-components as properties
+FlyOut.Toggle = Toggle
+FlyOut.List = List
+FlyOut.Item = Item
+```
+
+## Usage
+
+```tsx
+import { FlyOut } from "./FlyOut"
+
+function Menu() {
+    return (
+        <FlyOut>
+            <FlyOut.Toggle />
+            <FlyOut.List>
+                <FlyOut.Item>Edit</FlyOut.Item>
+                <FlyOut.Item>Delete</FlyOut.Item>
+            </FlyOut.List>
+        </FlyOut>
+    )
+}
+```
+
+## Key Benefits
+
+| Benefit | Description |
+|---------|-------------|
+| **Encapsulated state** | Parent manages state; children access via context |
+| **Clean API** | Single import, discoverable sub-components |
+| **Flexible composition** | Arrange sub-components freely within parent |
+| **No prop drilling** | State flows through context, not props |
+
+## Controlled vs Uncontrolled Mode
+
+The basic pattern traps state inside the component. For parent components to read or control state, support both modes:
+
+```typescript
+interface FlyOutProps {
+    children: React.ReactNode
+    // Controlled mode
+    open?: boolean
+    onOpenChange?: (open: boolean) => void
+    // Uncontrolled mode
+    defaultOpen?: boolean
+}
+
+function FlyOut({
+    children,
+    open: controlledOpen,
+    onOpenChange,
+    defaultOpen = false
+}: FlyOutProps) {
+    const [internalOpen, setInternalOpen] = useState(defaultOpen)
+
+    // Use controlled value if provided, otherwise internal
+    const isControlled = controlledOpen !== undefined
+    const open = isControlled ? controlledOpen : internalOpen
+
+    const setOpen = useCallback((nextOpen: boolean) => {
+        if (isControlled) {
+            onOpenChange?.(nextOpen)
+        } else {
+            setInternalOpen(nextOpen)
+        }
+    }, [isControlled, onOpenChange])
+
+    const toggle = useCallback(() => setOpen(!open), [open, setOpen])
+
+    const value = useMemo(() => ({ open, toggle, setOpen }), [open, toggle, setOpen])
+
+    return (
+        <FlyOutContext.Provider value={value}>
+            {children}
+        </FlyOutContext.Provider>
+    )
+}
+```
+
+### Usage Modes
+
+```tsx
+// Uncontrolled (internal state)
+<FlyOut defaultOpen={false}>
+    <FlyOut.Toggle />
+    <FlyOut.List>...</FlyOut.List>
+</FlyOut>
+
+// Controlled (parent owns state)
+const [isOpen, setIsOpen] = useState(false)
+
+<FlyOut open={isOpen} onOpenChange={setIsOpen}>
+    <FlyOut.Toggle />
+    <FlyOut.List>...</FlyOut.List>
+</FlyOut>
+
+// Can now read/control from parent
+<button onClick={() => setIsOpen(true)}>Open Menu</button>
+{isOpen && <p>Menu is open!</p>}
+```
+
+## Event Callbacks
+
+Even in uncontrolled mode, parents often need to react to state changes:
+
+```typescript
+interface FlyOutProps {
+    children: React.ReactNode
+    defaultOpen?: boolean
+    onOpen?: () => void
+    onClose?: () => void
+}
+
+function FlyOut({ children, defaultOpen = false, onOpen, onClose }: FlyOutProps) {
+    const [open, setOpen] = useState(defaultOpen)
+
+    const handleSetOpen = useCallback((nextOpen: boolean) => {
+        setOpen(nextOpen)
+        if (nextOpen) {
+            onOpen?.()
+        } else {
+            onClose?.()
+        }
+    }, [onOpen, onClose])
+
+    // ...
+}
+```
+
+## Imperative Handle (Ref-Based Control)
+
+For triggering actions from parent without full controlled mode:
+
+```typescript
+interface FlyOutHandle {
+    open: () => void
+    close: () => void
+    toggle: () => void
+    isOpen: () => boolean
+}
+
+const FlyOut = forwardRef<FlyOutHandle, FlyOutProps>((props, ref) => {
+    const [open, setOpen] = useState(props.defaultOpen ?? false)
+
+    useImperativeHandle(ref, () => ({
+        open: () => setOpen(true),
+        close: () => setOpen(false),
+        toggle: () => setOpen(prev => !prev),
+        isOpen: () => open,
+    }), [open])
+
+    // ...
+})
+
+// Usage
+function Parent() {
+    const flyoutRef = useRef<FlyOutHandle>(null)
+
+    return (
+        <>
+            <button onClick={() => flyoutRef.current?.open()}>
+                Open from parent
+            </button>
+            <FlyOut ref={flyoutRef}>
+                <FlyOut.Toggle />
+                <FlyOut.List>...</FlyOut.List>
+            </FlyOut>
+        </>
+    )
+}
+```
+
+## Accessibility
+
+Compound components must coordinate ARIA attributes across sub-components:
+
+```typescript
+interface FlyOutContextValue {
+    open: boolean
+    toggle: () => void
+    // Shared IDs for ARIA relationships
+    triggerId: string
+    contentId: string
+}
+
+function FlyOut({ children }: FlyOutProps) {
+    const [open, setOpen] = useState(false)
+    const id = useId()
+    const triggerId = `${id}-trigger`
+    const contentId = `${id}-content`
+
+    const value = useMemo(() => ({
+        open,
+        toggle: () => setOpen(!open),
+        triggerId,
+        contentId,
+    }), [open, triggerId, contentId])
+
+    return (
+        <FlyOutContext.Provider value={value}>
+            {children}
+        </FlyOutContext.Provider>
+    )
+}
+
+function Toggle({ children }: { children: React.ReactNode }) {
+    const { open, toggle, triggerId, contentId } = useFlyOut()
+
+    return (
+        <button
+            id={triggerId}
+            onClick={toggle}
+            aria-expanded={open}
+            aria-controls={contentId}
+            aria-haspopup="menu"
+        >
+            {children}
+        </button>
+    )
+}
+
+function List({ children }: { children: React.ReactNode }) {
+    const { open, contentId, triggerId } = useFlyOut()
+
+    if (!open) return null
+
+    return (
+        <ul
+            id={contentId}
+            role="menu"
+            aria-labelledby={triggerId}
+        >
+            {children}
+        </ul>
+    )
+}
+
+function Item({ children, onSelect }: { children: React.ReactNode; onSelect?: () => void }) {
+    return (
+        <li role="menuitem" onClick={onSelect}>
+            {children}
+        </li>
+    )
+}
+```
+
+## Focus Management
+
+Trap focus inside when open, restore on close:
+
+```typescript
+function FlyOut({ children, ...props }: FlyOutProps) {
+    const [open, setOpen] = useState(false)
+    const triggerRef = useRef<HTMLElement>(null)
+    const contentRef = useRef<HTMLElement>(null)
+
+    // Store trigger element for focus restoration
+    const lastFocusedRef = useRef<HTMLElement | null>(null)
+
+    useEffect(() => {
+        if (open) {
+            // Save current focus
+            lastFocusedRef.current = document.activeElement as HTMLElement
+            // Focus first focusable element in content
+            contentRef.current?.querySelector<HTMLElement>(
+                'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+            )?.focus()
+        } else if (lastFocusedRef.current) {
+            // Restore focus on close
+            lastFocusedRef.current.focus()
+            lastFocusedRef.current = null
+        }
+    }, [open])
+
+    // Context includes refs for sub-components
+    const value = useMemo(() => ({
+        open,
+        toggle: () => setOpen(!open),
+        triggerRef,
+        contentRef,
+    }), [open])
+
+    return (
+        <FlyOutContext.Provider value={value}>
+            {children}
+        </FlyOutContext.Provider>
+    )
+}
+```
+
+## Keyboard Navigation
+
+Support standard keyboard patterns:
+
+```typescript
+function List({ children }: { children: React.ReactNode }) {
+    const { open, contentId, setOpen } = useFlyOut()
+    const listRef = useRef<HTMLUListElement>(null)
+
+    const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+        const items = listRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]')
+        if (!items?.length) return
+
+        const currentIndex = Array.from(items).findIndex(
+            item => item === document.activeElement
+        )
+
+        switch (e.key) {
+            case 'ArrowDown':
+                e.preventDefault()
+                items[(currentIndex + 1) % items.length].focus()
+                break
+            case 'ArrowUp':
+                e.preventDefault()
+                items[(currentIndex - 1 + items.length) % items.length].focus()
+                break
+            case 'Home':
+                e.preventDefault()
+                items[0].focus()
+                break
+            case 'End':
+                e.preventDefault()
+                items[items.length - 1].focus()
+                break
+            case 'Escape':
+                e.preventDefault()
+                setOpen(false)
+                break
+        }
+    }, [setOpen])
+
+    if (!open) return null
+
+    return (
+        <ul
+            ref={listRef}
+            id={contentId}
+            role="menu"
+            onKeyDown={handleKeyDown}
+        >
+            {children}
+        </ul>
+    )
+}
+```
+
+## Portal Rendering
+
+Dropdowns often need to escape overflow containers:
+
+```typescript
+function List({ children }: { children: React.ReactNode }) {
+    const { open, contentId } = useFlyOut()
+
+    if (!open) return null
+
+    return createPortal(
+        <ul id={contentId} role="menu" className="flyout-list">
+            {children}
+        </ul>,
+        document.body
+    )
+}
+```
+
+**Note:** Portal rendering requires additional positioning logic (e.g., Floating UI) to position the menu relative to the trigger.
+
+## Animation States
+
+For enter/exit animations, track transition state:
+
+```typescript
+type AnimationState = 'closed' | 'opening' | 'open' | 'closing'
+
+function FlyOut({ children }: FlyOutProps) {
+    const [open, setOpen] = useState(false)
+    const [animationState, setAnimationState] = useState<AnimationState>('closed')
+
+    const handleOpen = useCallback(() => {
+        setOpen(true)
+        setAnimationState('opening')
+        // Transition to 'open' after animation
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => setAnimationState('open'))
+        })
+    }, [])
+
+    const handleClose = useCallback(() => {
+        setAnimationState('closing')
+        // Wait for animation to complete before unmounting
+        setTimeout(() => {
+            setOpen(false)
+            setAnimationState('closed')
+        }, 200) // Match CSS transition duration
+    }, [])
+
+    const value = useMemo(() => ({
+        open,
+        animationState,
+        toggle: () => open ? handleClose() : handleOpen(),
+    }), [open, animationState, handleOpen, handleClose])
+
+    return (
+        <FlyOutContext.Provider value={value}>
+            {children}
+        </FlyOutContext.Provider>
+    )
+}
+
+function List({ children }: { children: React.ReactNode }) {
+    const { open, animationState, contentId } = useFlyOut()
+
+    // Render during opening/closing for animation
+    if (!open && animationState === 'closed') return null
+
+    return (
+        <ul
+            id={contentId}
+            role="menu"
+            className={`flyout-list flyout-list--${animationState}`}
+        >
+            {children}
+        </ul>
+    )
+}
+```
+
+```css
+.flyout-list {
+    opacity: 0;
+    transform: translateY(-8px);
+    transition: opacity 200ms, transform 200ms;
+}
+
+.flyout-list--open {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.flyout-list--closing {
+    opacity: 0;
+    transform: translateY(-8px);
+}
+```
+
+## Implementation Approaches
+
+### Context API (Recommended)
+
+Uses `createContext` and `useContext`. Allows arbitrary nesting depth.
+
+```typescript
+const TabsContext = createContext<TabsContextValue | null>(null)
+
+function useTabs() {
+    const ctx = useContext(TabsContext)
+    if (!ctx) throw new Error("useTabs must be used within Tabs")
+    return ctx
+}
+```
+
+### React.Children.map (Limited)
+
+Clones children with additional props. Only works with direct children.
+
+```typescript
+function FlyOut({ children }: { children: React.ReactNode }) {
+    const [open, setOpen] = useState(false)
+
+    return (
+        <div>
+            {React.Children.map(children, child =>
+                React.cloneElement(child as React.ReactElement, {
+                    open,
+                    toggle: () => setOpen(!open)
+                })
+            )}
+        </div>
+    )
+}
+```
+
+**Limitation:** Wrapping children breaks prop injection:
+
+```tsx
+// This breaks with React.Children.map
+<FlyOut>
+    <div>
+        <FlyOut.Toggle /> {/* Won't receive props */}
+    </div>
+</FlyOut>
+```
+
+## TypeScript Types
+
+```typescript
+interface FlyOutContextValue {
+    open: boolean
+    toggle: () => void
+    setOpen: (open: boolean) => void
+    triggerId: string
+    contentId: string
+}
+
+interface FlyOutProps {
+    children: React.ReactNode
+    // Controlled
+    open?: boolean
+    onOpenChange?: (open: boolean) => void
+    // Uncontrolled
+    defaultOpen?: boolean
+    // Callbacks
+    onOpen?: () => void
+    onClose?: () => void
+}
+
+interface FlyOutComponent extends React.FC<FlyOutProps> {
+    Toggle: React.FC<{ children?: React.ReactNode }>
+    List: React.FC<{ children: React.ReactNode }>
+    Item: React.FC<{ children: React.ReactNode; onSelect?: () => void }>
+}
+
+const FlyOut: FlyOutComponent = ({ children, ...props }) => {
+    // implementation
+}
+```
+
+## Complete Example
+
+```typescript
+import {
+    createContext,
+    useContext,
+    useState,
+    useCallback,
+    useMemo,
+    useId,
+    useEffect,
+    useRef,
+    forwardRef,
+    useImperativeHandle,
+} from 'react'
+
+// Types
+interface FlyOutContextValue {
+    open: boolean
+    toggle: () => void
+    setOpen: (open: boolean) => void
+    triggerId: string
+    contentId: string
+}
+
+interface FlyOutProps {
+    children: React.ReactNode
+    open?: boolean
+    onOpenChange?: (open: boolean) => void
+    defaultOpen?: boolean
+    onOpen?: () => void
+    onClose?: () => void
+}
+
+interface FlyOutHandle {
+    open: () => void
+    close: () => void
+    toggle: () => void
+    isOpen: () => boolean
+}
+
+// Context
+const FlyOutContext = createContext<FlyOutContextValue | null>(null)
+
+function useFlyOut() {
+    const ctx = useContext(FlyOutContext)
+    if (!ctx) throw new Error('Component must be used within FlyOut')
+    return ctx
+}
+
+// Main component
+const FlyOutRoot = forwardRef<FlyOutHandle, FlyOutProps>((props, ref) => {
+    const {
+        children,
+        open: controlledOpen,
+        onOpenChange,
+        defaultOpen = false,
+        onOpen,
+        onClose,
+    } = props
+
+    const [internalOpen, setInternalOpen] = useState(defaultOpen)
+    const isControlled = controlledOpen !== undefined
+    const open = isControlled ? controlledOpen : internalOpen
+
+    const id = useId()
+    const triggerId = `flyout-${id}-trigger`
+    const contentId = `flyout-${id}-content`
+
+    const setOpen = useCallback((nextOpen: boolean) => {
+        if (isControlled) {
+            onOpenChange?.(nextOpen)
+        } else {
+            setInternalOpen(nextOpen)
+        }
+        if (nextOpen) onOpen?.()
+        else onClose?.()
+    }, [isControlled, onOpenChange, onOpen, onClose])
+
+    const toggle = useCallback(() => setOpen(!open), [open, setOpen])
+
+    useImperativeHandle(ref, () => ({
+        open: () => setOpen(true),
+        close: () => setOpen(false),
+        toggle,
+        isOpen: () => open,
+    }), [open, setOpen, toggle])
+
+    const value = useMemo(() => ({
+        open,
+        toggle,
+        setOpen,
+        triggerId,
+        contentId,
+    }), [open, toggle, setOpen, triggerId, contentId])
+
+    return (
+        <FlyOutContext.Provider value={value}>
+            <div className="flyout">{children}</div>
+        </FlyOutContext.Provider>
+    )
+})
+
+// Sub-components
+function Toggle({ children }: { children?: React.ReactNode }) {
+    const { open, toggle, triggerId, contentId } = useFlyOut()
+
+    return (
+        <button
+            id={triggerId}
+            type="button"
+            onClick={toggle}
+            aria-expanded={open}
+            aria-controls={contentId}
+            aria-haspopup="menu"
+            className="flyout-toggle"
+        >
+            {children ?? (open ? 'Close' : 'Open')}
+        </button>
+    )
+}
+
+function List({ children }: { children: React.ReactNode }) {
+    const { open, contentId, triggerId, setOpen } = useFlyOut()
+    const listRef = useRef<HTMLUListElement>(null)
+
+    // Close on Escape
+    useEffect(() => {
+        if (!open) return
+        const handleEscape = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setOpen(false)
+        }
+        document.addEventListener('keydown', handleEscape)
+        return () => document.removeEventListener('keydown', handleEscape)
+    }, [open, setOpen])
+
+    if (!open) return null
+
+    return (
+        <ul
+            ref={listRef}
+            id={contentId}
+            role="menu"
+            aria-labelledby={triggerId}
+            className="flyout-list"
+        >
+            {children}
+        </ul>
+    )
+}
+
+function Item({
+    children,
+    onSelect
+}: {
+    children: React.ReactNode
+    onSelect?: () => void
+}) {
+    const { setOpen } = useFlyOut()
+
+    const handleClick = useCallback(() => {
+        onSelect?.()
+        setOpen(false)
+    }, [onSelect, setOpen])
+
+    return (
+        <li
+            role="menuitem"
+            tabIndex={0}
+            onClick={handleClick}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    handleClick()
+                }
+            }}
+            className="flyout-item"
+        >
+            {children}
+        </li>
+    )
+}
+
+// Compose final component
+const FlyOut = Object.assign(FlyOutRoot, {
+    Toggle,
+    List,
+    Item,
+})
+
+export { FlyOut, useFlyOut }
+export type { FlyOutProps, FlyOutHandle }
+```
+
+## Common Pitfalls
+
+| Pitfall | Solution |
+|---------|----------|
+| Missing context check | Always throw if context is null |
+| Re-renders on every render | Memoize context value with `useMemo` |
+| Controlled/uncontrolled mixing | Pick one mode or implement both properly |
+| Focus not restored on close | Track and restore `document.activeElement` |
+| No keyboard support | Implement Arrow, Escape, Enter handlers |
+| ARIA attributes missing | Coordinate IDs between trigger and content |
+
+## Project Examples
+
+Components in this codebase that could benefit from compound patterns:
+
+| Component | Location | Notes |
+|-----------|----------|-------|
+| NotificationCenter | `crates/frontend/src/calendsync/components/NotificationCenter.tsx` | Currently monolithic; could split into `Notifications.Bell`, `Notifications.Panel`, `Notifications.Item` |
+| EntryModal | `crates/frontend/src/calendsync/components/EntryModal.tsx` | Could use compound pattern for form sections |
+
+## References
+
+- [React Patterns: Compound Components](https://www.patterns.dev/react/compound-pattern)
+- [Kent C. Dodds: Advanced React Patterns](https://kentcdodds.com/blog/compound-components-with-react-hooks)
+- [Radix UI Primitives](https://www.radix-ui.com/primitives) - Production compound components
+- [Reach UI](https://reach.tech/) - Accessible compound components

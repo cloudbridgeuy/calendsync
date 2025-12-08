@@ -640,6 +640,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | React SSR Context    | `.claude/context/react-ssr-example.md` |
 | Shared Types         | `.claude/context/shared-types.md`      |
 | Running Applications | `.claude/context/running-apps.md`      |
+| Compound Pattern     | `.claude/context/compound-pattern.md`  |
 
 ### Examples
 
