@@ -17,6 +17,7 @@
 
 # Frontend build artifacts
 crates/frontend/dist/
+crates/frontend/dist-dev/
 crates/frontend/manifest.json
 crates/calendsync/dist
 crates/calendsync/src/assets.rs

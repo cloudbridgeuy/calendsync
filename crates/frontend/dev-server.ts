@@ -14,7 +14,7 @@
  *   TAURI_DEV_HOST - Set by Tauri CLI for iOS physical device development
  */
 
-import { watch } from "node:fs"
+import { existsSync, mkdirSync, watch } from "node:fs"
 import { join } from "node:path"
 import { spawn } from "bun"
 
@@ -22,7 +22,7 @@ import { spawn } from "bun"
 const PORT = 5173
 const WS_PORT = 5174
 const HOST = process.env.TAURI_DEV_HOST || "localhost"
-const DIST_DIR = join(import.meta.dir, "dist")
+const DIST_DIR = join(import.meta.dir, "dist-dev")
 const SRC_DIR = join(import.meta.dir, "src")
 
 // Track connected WebSocket clients for HMR
@@ -165,6 +165,11 @@ const _httpServer = Bun.serve({
     },
 })
 
+// Ensure dist-dev directory exists
+if (!existsSync(DIST_DIR)) {
+    mkdirSync(DIST_DIR, { recursive: true })
+}
+
 console.log(`[Dev Server] HTTP server: http://${HOST}:${PORT}`)
 console.log(`[Dev Server] WebSocket HMR: ws://${HOST}:${WS_PORT}`)
 console.log(`[Dev Server] Serving from: ${DIST_DIR}`)
@@ -179,7 +184,7 @@ async function rebuild() {
 
     console.log("[Watch] Rebuilding...")
 
-    const proc = spawn(["bun", "run", "build:tauri:dev"], {
+    const proc = spawn(["bun", "run", "build:tauri:dev:live"], {
         cwd: import.meta.dir,
         stdout: "inherit",
         stderr: "inherit",
