@@ -1070,15 +1070,6 @@ export type { FlyOutProps, FlyOutHandle }
 | No keyboard support | Implement Arrow, Escape, Enter handlers |
 | ARIA attributes missing | Coordinate IDs between trigger and content |
 
-## Project Examples
-
-Components in this codebase that could benefit from compound patterns:
-
-| Component | Location | Notes |
-|-----------|----------|-------|
-| NotificationCenter | `crates/frontend/src/calendsync/components/NotificationCenter.tsx` | Currently monolithic; could split into `Notifications.Bell`, `Notifications.Panel`, `Notifications.Item` |
-| EntryModal | `crates/frontend/src/calendsync/components/EntryModal.tsx` | Could use compound pattern for form sections |
-
 ## References
 
 - [React Patterns: Compound Components](https://www.patterns.dev/react/compound-pattern)
