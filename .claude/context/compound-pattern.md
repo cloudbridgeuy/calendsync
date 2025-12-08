@@ -257,6 +257,120 @@ src/
         └── index.ts        # Composed export
 ```
 
+### Testing Pure Functions
+
+Tests for the Functional Core require no React, no DOM, no mocking:
+
+```typescript
+// __tests__/state.test.ts
+import { describe, expect, test } from "bun:test"
+import { resolveOpenState, getNextAnimationState } from "../state"
+
+describe("resolveOpenState", () => {
+    test("returns controlled state when provided", () => {
+        const result = resolveOpenState(true, false)
+        expect(result.open).toBe(true)
+        expect(result.isControlled).toBe(true)
+    })
+
+    test("returns internal state when controlled is undefined", () => {
+        const result = resolveOpenState(undefined, true)
+        expect(result.open).toBe(true)
+        expect(result.isControlled).toBe(false)
+    })
+
+    test("controlled false overrides internal true", () => {
+        const result = resolveOpenState(false, true)
+        expect(result.open).toBe(false)
+        expect(result.isControlled).toBe(true)
+    })
+})
+
+describe("getNextAnimationState", () => {
+    test("open action transitions to opening", () => {
+        expect(getNextAnimationState("closed", "open")).toBe("opening")
+    })
+
+    test("close action from open transitions to closing", () => {
+        expect(getNextAnimationState("open", "close")).toBe("closing")
+    })
+
+    test("close action from closed stays closed", () => {
+        expect(getNextAnimationState("closed", "close")).toBe("closed")
+    })
+
+    test("animationEnd from opening transitions to open", () => {
+        expect(getNextAnimationState("opening", "animationEnd")).toBe("open")
+    })
+
+    test("animationEnd from closing transitions to closed", () => {
+        expect(getNextAnimationState("closing", "animationEnd")).toBe("closed")
+    })
+})
+```
+
+```typescript
+// __tests__/navigation.test.ts
+import { describe, expect, test } from "bun:test"
+import { getNextFocusIndex } from "../navigation"
+
+describe("getNextFocusIndex", () => {
+    test("down wraps from last to first", () => {
+        expect(getNextFocusIndex(4, 5, "down")).toBe(0)
+    })
+
+    test("down increments normally", () => {
+        expect(getNextFocusIndex(2, 5, "down")).toBe(3)
+    })
+
+    test("up wraps from first to last", () => {
+        expect(getNextFocusIndex(0, 5, "up")).toBe(4)
+    })
+
+    test("up decrements normally", () => {
+        expect(getNextFocusIndex(2, 5, "up")).toBe(1)
+    })
+
+    test("home returns 0", () => {
+        expect(getNextFocusIndex(3, 5, "home")).toBe(0)
+    })
+
+    test("end returns last index", () => {
+        expect(getNextFocusIndex(1, 5, "end")).toBe(4)
+    })
+})
+```
+
+```typescript
+// __tests__/aria.test.ts
+import { describe, expect, test } from "bun:test"
+import { buildAriaIds } from "../aria"
+
+describe("buildAriaIds", () => {
+    test("builds trigger and content IDs from base", () => {
+        const ids = buildAriaIds("menu-1")
+        expect(ids.triggerId).toBe("menu-1-trigger")
+        expect(ids.contentId).toBe("menu-1-content")
+    })
+
+    test("handles empty base ID", () => {
+        const ids = buildAriaIds("")
+        expect(ids.triggerId).toBe("-trigger")
+        expect(ids.contentId).toBe("-content")
+    })
+})
+```
+
+**Key testing principles:**
+
+| Principle | Example |
+|-----------|---------|
+| No DOM needed | `getNextFocusIndex` tests index math, not `element.focus()` |
+| No React needed | Pure functions don't use hooks |
+| No mocking needed | No external dependencies to mock |
+| Fast execution | Runs in milliseconds, no setup/teardown |
+| Easy to understand | Input → output, no side effects |
+
 ## Controlled vs Uncontrolled Mode
 
 The basic pattern traps state inside the component. For parent components to read or control state, support both modes:
