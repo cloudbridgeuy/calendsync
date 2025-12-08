@@ -36,6 +36,8 @@ crates/src-tauri/gen/schemas/
 # Playwright MCP screenshots
 .playwright-mcp/
 
+.local/
+
 *.md
 !README.md
 !TODO.md
