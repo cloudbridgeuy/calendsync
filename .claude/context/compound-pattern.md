@@ -77,6 +77,186 @@ function Menu() {
 | **Flexible composition** | Arrange sub-components freely within parent |
 | **No prop drilling** | State flows through context, not props |
 
+## Functional Core - Imperative Shell
+
+Apply the FC-IS pattern to compound components by separating pure logic from side effects.
+
+### Functional Core (Pure Functions)
+
+Extract testable logic into pure functions:
+
+```typescript
+// core/flyout.ts - Pure functions, no React, no DOM
+
+/** Determine effective open state from controlled/uncontrolled props */
+export function resolveOpenState(
+    controlledOpen: boolean | undefined,
+    internalOpen: boolean
+): { open: boolean; isControlled: boolean } {
+    const isControlled = controlledOpen !== undefined
+    return {
+        open: isControlled ? controlledOpen : internalOpen,
+        isControlled,
+    }
+}
+
+/** Calculate next focused index for keyboard navigation */
+export function getNextFocusIndex(
+    currentIndex: number,
+    itemCount: number,
+    direction: 'up' | 'down' | 'home' | 'end'
+): number {
+    switch (direction) {
+        case 'down':
+            return (currentIndex + 1) % itemCount
+        case 'up':
+            return (currentIndex - 1 + itemCount) % itemCount
+        case 'home':
+            return 0
+        case 'end':
+            return itemCount - 1
+    }
+}
+
+/** Build ARIA IDs from base ID */
+export function buildAriaIds(baseId: string): { triggerId: string; contentId: string } {
+    return {
+        triggerId: `${baseId}-trigger`,
+        contentId: `${baseId}-content`,
+    }
+}
+
+/** Determine animation state transitions */
+export function getNextAnimationState(
+    currentState: AnimationState,
+    action: 'open' | 'close' | 'animationEnd'
+): AnimationState {
+    switch (action) {
+        case 'open':
+            return 'opening'
+        case 'close':
+            return currentState === 'open' ? 'closing' : currentState
+        case 'animationEnd':
+            return currentState === 'opening' ? 'open' : 'closed'
+    }
+}
+```
+
+### Imperative Shell (React Components)
+
+Components handle side effects and use pure functions:
+
+```typescript
+// components/FlyOut.tsx - React component with side effects
+
+import { resolveOpenState, buildAriaIds, getNextFocusIndex } from '../core/flyout'
+
+function FlyOut({ children, open: controlledOpen, defaultOpen = false }: FlyOutProps) {
+    const [internalOpen, setInternalOpen] = useState(defaultOpen)
+
+    // Use pure function to resolve state
+    const { open, isControlled } = resolveOpenState(controlledOpen, internalOpen)
+
+    // Use pure function to build IDs
+    const id = useId()
+    const { triggerId, contentId } = buildAriaIds(id)
+
+    // Imperative: DOM side effects
+    const lastFocusedRef = useRef<HTMLElement | null>(null)
+
+    useEffect(() => {
+        if (open) {
+            // Side effect: save focus
+            lastFocusedRef.current = document.activeElement as HTMLElement
+        } else if (lastFocusedRef.current) {
+            // Side effect: restore focus
+            lastFocusedRef.current.focus()
+        }
+    }, [open])
+
+    // ...
+}
+
+function List({ children }: { children: React.ReactNode }) {
+    const { open, setOpen } = useFlyOut()
+    const listRef = useRef<HTMLUListElement>(null)
+
+    const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+        const items = listRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]')
+        if (!items?.length) return
+
+        const currentIndex = Array.from(items).findIndex(
+            item => item === document.activeElement
+        )
+
+        // Use pure function for navigation logic
+        let nextIndex: number | null = null
+        switch (e.key) {
+            case 'ArrowDown':
+                nextIndex = getNextFocusIndex(currentIndex, items.length, 'down')
+                break
+            case 'ArrowUp':
+                nextIndex = getNextFocusIndex(currentIndex, items.length, 'up')
+                break
+            case 'Home':
+                nextIndex = getNextFocusIndex(currentIndex, items.length, 'home')
+                break
+            case 'End':
+                nextIndex = getNextFocusIndex(currentIndex, items.length, 'end')
+                break
+            case 'Escape':
+                setOpen(false)
+                return
+        }
+
+        if (nextIndex !== null) {
+            e.preventDefault()
+            // Side effect: DOM focus
+            items[nextIndex].focus()
+        }
+    }, [setOpen])
+
+    // ...
+}
+```
+
+### What Goes Where
+
+| Functional Core | Imperative Shell |
+|-----------------|------------------|
+| State resolution (controlled vs uncontrolled) | `useState`, `useEffect` |
+| ARIA ID generation | `useId()`, DOM attributes |
+| Focus index calculation | `element.focus()`, `document.activeElement` |
+| Animation state machine | `setTimeout`, `requestAnimationFrame` |
+| Keyboard action mapping | Event listeners, `e.preventDefault()` |
+| Validation logic | Error throwing, context checks |
+
+### Benefits for Compound Components
+
+1. **Testable**: Core logic tested without React/DOM
+2. **Reusable**: Same logic works across different UI frameworks
+3. **Debuggable**: Pure functions easier to reason about
+4. **Type-safe**: TypeScript catches errors in pure functions
+
+### File Structure
+
+```
+src/
+├── core/
+│   └── flyout/
+│       ├── state.ts        # resolveOpenState, animation state
+│       ├── navigation.ts   # getNextFocusIndex
+│       ├── aria.ts         # buildAriaIds
+│       └── index.ts        # re-exports
+└── components/
+    └── FlyOut/
+        ├── FlyOut.tsx      # Main component (shell)
+        ├── Toggle.tsx      # Sub-component (shell)
+        ├── List.tsx        # Sub-component (shell)
+        ├── Item.tsx        # Sub-component (shell)
+        └── index.ts        # Composed export
+```
+
 ## Controlled vs Uncontrolled Mode
 
 The basic pattern traps state inside the component. For parent components to read or control state, support both modes:
