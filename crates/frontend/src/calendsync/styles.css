@@ -102,17 +102,16 @@ body {
   }
 }
 
-/* Header - 25% on mobile, auto on desktop */
+/* Header - simplified for month/year display */
 .calendar-header {
-  flex: 0 0 25%;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
   padding: 1rem;
   background-color: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
 /* Notification center container - positioned in header area */
@@ -225,31 +224,102 @@ body {
   display: none;
 }
 
-/* Entry container - flex on desktop */
+/* Day Container - new component for day columns */
+.day-container {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  height: 100%;
+}
+
+.day-container-header {
+  flex-shrink: 0;
+  padding: 0.75rem;
+  text-align: center;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+}
+
+.day-container-number {
+  font-size: 1.5rem;
+  font-weight: 300;
+}
+
+.day-container-name {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.day-container-today {
+  font-size: 0.5rem;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-top: 0.25rem;
+}
+
+.day-container-header.highlighted {
+  background-color: var(--accent);
+  color: white;
+}
+
+.day-container-header.highlighted .day-container-name,
+.day-container-header.highlighted .day-container-today {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.day-container-content {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Desktop: Add border between day containers */
+@media (min-width: 768px) {
+  .day-container {
+    border-right: 1px solid var(--border);
+  }
+
+  .day-container:last-child {
+    border-right: none;
+  }
+
+}
+
+/* Entry container - scroll container for virtual scrolling */
 .entry-container {
   flex: 1;
   overflow: hidden;
   position: relative;
 }
 
-/* Days scroll container */
+/* Scroll container with hidden scrollbar for native scroll physics */
+.scroll-container {
+  overflow-x: scroll;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.scroll-container::-webkit-scrollbar {
+  display: none; /* Chrome/Safari/Opera */
+}
+
+/* Days scroll container - flex row of day columns */
 .days-scroll {
   display: flex;
   height: 100%;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
 }
 
-.days-scroll.dragging {
-  cursor: grabbing;
-}
-
+/* Day column - each day in the virtual window */
 .day-column {
   flex-shrink: 0;
   overflow-y: auto;
   padding: 1rem;
-  transition: transform 0.2s ease-out;
-  /* Width controlled by inline styles for desktop (14.29%) and mobile (100%) */
+  /* Width controlled by inline styles based on dayWidth calculation */
 }
 
 .day-column.hidden {
@@ -471,7 +541,6 @@ body {
 /* Desktop styles */
 @media (min-width: 768px) {
   .calendar-header {
-    flex: 0 0 auto;
     padding: 1.5rem 2rem;
   }
 
@@ -485,8 +554,7 @@ body {
   }
 
   .days-scroll {
-    width: 100%;
-    overflow-x: auto;
+    /* Width and overflow handled by parent .scroll-container for horizontal navigation */
   }
 
   .day-column {
@@ -934,7 +1002,9 @@ body {
   }
 }
 
+/* Desktop: hide backdrop */
 .notification-backdrop {
+  display: none;
   position: fixed;
   top: 0;
   left: 0;
@@ -971,19 +1041,6 @@ body {
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-.notification-panel.mobile {
-  position: fixed;
-  top: auto;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  width: 100%;
-  max-height: 60vh;
-  margin-top: 0;
-  border-radius: 16px 16px 0 0;
-  animation: panel-slide-up 0.3s ease-out;
 }
 
 @keyframes panel-slide-up {
@@ -1196,6 +1253,23 @@ body {
 
 /* Mobile touch targets */
 @media (max-width: 767px) {
+  .notification-backdrop {
+    display: block;
+  }
+
+  .notification-panel {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-height: 60vh;
+    margin-top: 0;
+    border-radius: 16px 16px 0 0;
+    animation: panel-slide-up 0.3s ease-out;
+  }
+
   .notification-item {
     padding: 1rem;
   }
