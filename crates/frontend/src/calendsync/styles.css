@@ -285,7 +285,6 @@ body {
   .day-container:last-child {
     border-right: none;
   }
-
 }
 
 /* Entry container - scroll container for virtual scrolling */
@@ -1294,19 +1293,18 @@ body {
   position: fixed;
   bottom: 1.5rem;
   right: 1.5rem;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 999px;
   background-color: var(--accent);
   color: white;
-  border: none;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.4);
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   transition: all 0.2s ease;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.4);
 }
 
 .fab:hover {
@@ -1319,16 +1317,16 @@ body {
   transform: scale(0.95);
 }
 
-.fab-icon {
-  font-size: 1.75rem;
-  font-weight: 300;
-  line-height: 1;
-}
-
 @media (min-width: 768px) {
   .fab {
     bottom: 2rem;
     right: 2rem;
+    padding: 0.75rem 1.25rem;
+    font-size: 0.875rem;
+  }
+
+  .fab:hover {
+    box-shadow: 0 6px 16px rgba(249, 115, 22, 0.5);
   }
 }
 

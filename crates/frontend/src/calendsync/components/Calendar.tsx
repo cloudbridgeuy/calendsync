@@ -451,7 +451,7 @@ function Fab() {
       onClick={() => openCreateModal(dateKey)}
       aria-label="Create new entry"
     >
-      <span className="fab-icon">+</span>
+      New
     </button>
   )
 }
