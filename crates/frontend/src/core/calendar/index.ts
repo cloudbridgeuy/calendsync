@@ -21,6 +21,9 @@ export {
   parseDateKey,
   startOfDay,
 } from "./dates"
+// Re-export day container functions
+export type { DayDisplayInfo } from "./dayContainer"
+export { getDayDisplayInfo, isDayToday } from "./dayContainer"
 // Re-export entry functions
 export {
   filterByCalendar,
@@ -36,20 +39,19 @@ export {
   serverDaysToMap,
   sortDayEntries,
 } from "./entries"
+// Re-export feedback functions
+export { isAudioSupported, isVibrationSupported } from "./feedback"
 // Re-export layout functions
 export {
   calculateAnimationDuration,
   calculateDayPosition,
   calculateDaysFromWheelDelta,
-  calculateDayWidth,
   calculateOffsetFromCenter,
   calculateSwipeTransform,
-  calculateVisibleDays,
   calculateWheelDragOffset,
   detectWheelDirection,
   getVisibleDateOffsets,
   getWheelNavigationDelta,
-  isMobileViewport,
   shouldLoadMoreDays,
   shouldNavigateFromSwipe,
   snapToNearestDay,
@@ -67,6 +69,13 @@ export {
   parseModalUrl,
   validateFormData,
 } from "./modal"
+// Re-export navigation functions
+export {
+  calculateCenterDayIndex,
+  calculateCenteredScrollPosition,
+  detectEdgeProximity,
+  isScrollable,
+} from "./navigation"
 // Re-export notification functions
 export {
   addNotification,
@@ -85,14 +94,24 @@ export {
   serializeNotifications,
 } from "./notifications"
 // Re-export all types
-export type {
-  LayoutConstants,
-  ServerDay,
-  ServerEntry,
-} from "./types"
+export type { LayoutConstants, ServerDay, ServerEntry } from "./types"
+export { DAY_NAMES, DAY_NAMES_FULL, DEFAULT_LAYOUT_CONSTANTS, MONTH_NAMES } from "./types"
+// Re-export virtual scroll functions
+export type { RecenterResult, VirtualScrollConfig } from "./virtualScroll"
 export {
-  DAY_NAMES,
-  DAY_NAMES_FULL,
-  DEFAULT_LAYOUT_CONSTANTS,
-  MONTH_NAMES,
-} from "./types"
+  calculateDayIndex,
+  calculateDayWidth,
+  calculateHighlightedDay,
+  calculateRecenterOffset,
+  calculateScrollPosition,
+  calculateSnapScrollPosition,
+  calculateTotalWidth,
+  calculateVirtualWindow,
+  calculateVisibleDays,
+  calculateWindowDates,
+  calculateWindowStartDate,
+  DEFAULT_VIRTUAL_SCROLL_CONFIG,
+  isSameCalendarDay,
+  shouldRecenter,
+  shouldSnapToDay,
+} from "./virtualScroll"
