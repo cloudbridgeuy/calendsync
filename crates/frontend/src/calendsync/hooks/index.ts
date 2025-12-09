@@ -32,3 +32,5 @@ export type {
   UseSseResult,
 } from "./useSse"
 export { useSse } from "./useSse"
+export type { UseVirtualScrollOptions, UseVirtualScrollReturn } from "./useVirtualScroll"
+export { useVirtualScroll } from "./useVirtualScroll"
