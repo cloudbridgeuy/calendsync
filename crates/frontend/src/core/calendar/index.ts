@@ -64,6 +64,9 @@ export {
     parseModalUrl,
     validateFormData,
 } from "./modal"
+// Re-export ARIA functions
+export type { AriaIds } from "./aria"
+export { buildAriaIds } from "./aria"
 // Re-export notification functions
 export {
     addNotification,
