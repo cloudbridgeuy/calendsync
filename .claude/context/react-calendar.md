@@ -77,15 +77,18 @@ crates/frontend/src/calendsync/
 ├── styles.css           # All component styles
 ├── types.ts             # TypeScript type definitions
 ├── hooks/               # React hooks
-│   ├── useCalendar.ts   # Calendar state management
-│   ├── useNotifications.ts # Notification center state
-│   └── useSSE.ts        # SSE connection management
+│   ├── useCalendarState.ts   # Calendar state management
+│   ├── useVirtualScroll.ts   # Virtual scroll hook
+│   ├── useNotificationCenter.ts # Notification center state
+│   └── useSse.ts        # SSE connection management
 └── components/
-    ├── Calendar.tsx     # Main calendar component
-    ├── DayColumn.tsx    # Single day view
+    ├── Calendar.tsx     # Main calendar compound component
+    ├── CalendarHeader.tsx # Month/year display header
+    ├── DayContainer.tsx # Day container compound component (header + content)
+    ├── DayColumn.tsx    # Entry tiles for a single day
     ├── EntryTile.tsx    # Calendar entry card
     ├── NotificationCenter.tsx # Bell + dropdown panel
-    └── Header.tsx       # Calendar header with navigation
+    └── EntryModal.tsx   # Entry create/edit modal
 ```
 
 ## Build Integration
@@ -207,76 +210,153 @@ open http://localhost:3000/calendar/{calendar_id}
 curl http://localhost:3000/api/calendars
 ```
 
-## Responsive Layout
+## Virtual Scroll Architecture
 
-The calendar adapts to viewport width, showing different numbers of day columns:
+The calendar uses native browser scrolling with a virtual scroll window for infinite day navigation.
 
-### Breakpoints
+### Architecture Overview
 
-| Viewport Width | Visible Days | Layout |
-|----------------|--------------|--------|
-| < 768px | 1 | Mobile (swipe navigation) |
-| 750-1249px | 3 | Narrow desktop |
-| 1250-1749px | 5 | Medium desktop |
-| ≥ 1750px | 7 | Wide desktop |
-
-### Layout Constants
-
-Defined in `crates/frontend/src/core/calendar/types.ts`:
-
-```typescript
-export const DEFAULT_LAYOUT_CONSTANTS: LayoutConstants = {
-    minDayWidth: 250,        // Minimum 250px per day column
-    mobileBreakpoint: 768,   // Below this = mobile (1 day)
-    swipeThreshold: 50,      // Swipe distance to navigate
-    velocityThreshold: 0.3,  // Fast swipe detection
-    animationDuration: 200,  // Transition timing
-    mobileBuffer: 30,        // Days rendered for mobile infinite scroll
-}
 ```
+┌─────────────────────────────────────────────────┐
+│  MONTH YEAR (fixed, from highlightedDate)       │
+├─────────────────────────────────────────────────┤
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐           │
+│  │ 8 MON   │ │ 9 TUE   │ │ 10 WED  │  ← Fixed  │
+│  │         │ │ TODAY   │ │         │    headers│
+│  ├─────────┤ ├─────────┤ ├─────────┤           │
+│  │         │ │         │ │         │           │
+│  │ Entries │ │ Entries │ │ Entries │  ← Scroll │
+│  │ (vert)  │ │ (vert)  │ │ (vert)  │    vert.  │
+│  └─────────┘ └─────────┘ └─────────┘           │
+│  ←────── Horizontal scroll (native) ──────→    │
+└─────────────────────────────────────────────────┘
+```
+
+### Key Components
+
+- **CalendarHeader** - Shows only month/year based on `highlightedDate`
+- **DayContainer** - Compound component with sticky header + scrollable content
+- **DayColumn** - Entry tiles for a single day
+
+### Virtual Scroll Strategy
+
+The virtual scroll renders a fixed window of 21 days (10 buffer + center + 10 buffer).
+When scrolling near edges, the window shifts and scroll position adjusts instantly for infinite scrolling.
+
+### Scroll Container Hierarchy
+
+The calendar uses a carefully structured DOM hierarchy for scrolling:
+
+```html
+<main class="entry-container scroll-container">  <!-- Scrolling element -->
+  <div class="days-scroll">                       <!-- Flex container -->
+    <!-- DayContainer components -->
+  </div>
+</main>
+```
+
+**Critical CSS Requirements**:
+- `.scroll-container` is the scrolling element with `overflow-x: scroll`
+- `.days-scroll` is a flex container that must NOT have `overflow-x` or `width: 100%` on desktop
+- If `.days-scroll` constrains width, no overflow occurs and scroll events won't fire on the parent
+- The `isScrollable` guard in `useLayoutEffect` ensures initial scroll position is only set when content actually overflows
+
+### Responsive Breakpoints
+
+| Container Width | Visible Days | Layout |
+|-----------------|--------------|--------|
+| < 480px | 1 | Mobile portrait |
+| 480-767px | 3 | Mobile landscape / small tablet |
+| 768-1023px | 5 | Tablet |
+| 1024-1439px | 5 | Desktop |
+| ≥ 1440px | 7 | Large desktop |
+
+**Note**: Mobile/desktop behavior is controlled entirely via CSS media queries at `767px` breakpoint. There is no `isMobile` JavaScript state - only `visibleDays` derived from viewport width.
 
 ### Pure Calculation Functions
 
-Located in `crates/frontend/src/core/calendar/layout.ts`:
+Located in `crates/frontend/src/core/calendar/virtualScroll.ts`:
 
-- `calculateVisibleDays(containerWidth)` - Returns odd number (1, 3, 5, or 7)
-- `isMobileViewport(containerWidth)` - Boolean check against breakpoint
-- `calculateDayWidth(containerWidth, visibleDays)` - Per-column width
+- `calculateVisibleDays(containerWidth)` - Returns 1, 3, 5, or 7 based on breakpoints
+- `calculateDayWidth(containerWidth, visibleDays)` - Width per day column
+- `calculateVirtualWindow(centerDate, config)` - Array of dates in virtual window
+- `calculateScrollPosition(targetDate, windowStart, dayWidth, containerWidth)` - ScrollLeft to center a date
+- `calculateHighlightedDay(scrollLeft, containerWidth, dayWidth, windowStart)` - Date at viewport center
+- `shouldRecenter(scrollLeft, totalWidth, containerWidth, dayWidth, threshold)` - Detect edge proximity
+- `calculateRecenterOffset(direction, windowStart, dayWidth, shiftDays)` - New window position + scroll adjustment
 
-### Hydration and Layout Timing
+Located in `crates/frontend/src/core/calendar/navigation.ts`:
 
-**Critical**: Layout calculation uses `useLayoutEffect` (not `useEffect`) to ensure correct column count before browser paint:
+- `isScrollable(scrollWidth, clientWidth)` - Check if element has scrollable content
+- `calculateCenteredScrollPosition(targetDayIndex, dayWidth, containerWidth, totalContentWidth)` - Calculate scroll position to center a date
+- `calculateCenterDayIndex(scrollLeft, containerWidth, dayWidth)` - Calculate which day is at viewport center
+- `detectEdgeProximity(scrollLeft, maxScroll, thresholdPx)` - Detect if near scroll edges
+
+### Virtual Scroll Hook
+
+`useVirtualScroll` in `crates/frontend/src/calendsync/hooks/useVirtualScroll.ts` provides:
+
+- `scrollContainerRef` - Ref for scroll container
+- `highlightedDate` - Date closest to viewport center
+- `renderedDates` - Array of dates to render
+- `dayWidth` - Width of each day column
+- `visibleDays` - Number of visible days
+- `scrollToDate(date, animated?)` - Programmatic navigation
+- `scrollToToday()` - Jump to today
+
+### Single-Day Snap Scrolling
+
+When `visibleDays === 1` (mobile portrait), the calendar snaps to show a complete day after scrolling ends:
+
+**Pure Functions** (`virtualScroll.ts`):
+- `shouldSnapToDay(visibleDays)` - Returns true only when `visibleDays === 1`
+- `calculateSnapScrollPosition(scrollLeft, dayWidth, containerWidth, windowStartDate)` - Calculates snap target
+
+**Behavior**:
+- Snap only triggers after user releases touch/mouse (not during active drag)
+- 50ms debounce after scroll stops
+- Instant snap (no animation) for responsive feel
+- Tracks `isDraggingRef` via touch/mouse events to prevent snapping during drag
+
+### Click-to-Navigate Headers
+
+Day headers are clickable and navigate to center that day:
 
 ```typescript
-// In useCalendarState.ts
-useLayoutEffect(() => {
-    if (typeof window !== "undefined") {
-        updateLayout(window.innerWidth)
-        window.addEventListener("resize", handleResize)
-        return () => window.removeEventListener("resize", handleResize)
-    }
-}, [updateLayout])
+<DayContainer
+  onHeaderClick={() => scrollToDate(date)}
+>
+  <DayContainer.Header />  {/* Clickable */}
+</DayContainer>
 ```
 
-**Why `useLayoutEffect`?**
-- SSR defaults to desktop layout (7 days)
-- `useEffect` runs AFTER paint → flash of 7 cramped columns on mobile
-- `useLayoutEffect` runs BEFORE paint → correct layout from first render
+**Accessibility**:
+- `role="button"` and `tabIndex={0}` on header
+- Keyboard support (Enter/Space)
+- `aria-label` with day name and number
 
-### Mobile Rendering
+### Day Container Compound Component
 
-When `isMobile = true`:
-- Renders `mobileBuffer * 2 + 1 = 61` day columns for smooth swiping
-- Each column is 100% width
-- Uses CSS transform (`translateX`) for swipe animation
-- Only center day visible, others off-screen
+`DayContainer` in `crates/frontend/src/calendsync/components/DayContainer.tsx`:
 
-### Desktop Rendering
+```typescript
+<DayContainer date={date} dayWidth={dayWidth} isHighlighted={isHighlighted}>
+  <DayContainer.Header />
+  <DayContainer.Content>
+    <DayColumn dateKey={dateKey} entries={entries} />
+  </DayContainer.Content>
+</DayContainer>
+```
 
-When `isMobile = false`:
-- Renders exactly `visibleDays` columns (3, 5, or 7)
-- Each column width = `100 / visibleDays` percent
-- No swipe animation, uses arrow/wheel navigation
+### Navigation Feedback
+
+- **Haptic**: Vibrates on day change (if supported)
+- **Audio**: Short tick sound on day change (if supported)
+
+### Keyboard Navigation
+
+- **Arrow Left/Right**: Navigate days
+- **T key**: Jump to today
 
 ## CSS Variables
 
