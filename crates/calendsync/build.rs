@@ -1,6 +1,34 @@
 use std::env;
 use std::fs;
 use std::path::Path;
+use std::process::Command;
+
+fn ensure_frontend_built(frontend_dir: &Path) {
+    let dist_dir = frontend_dir.join("dist");
+
+    if dist_dir.exists() {
+        return;
+    }
+
+    println!("cargo:warning=Frontend dist/ not found, running bun build...");
+
+    let profile = std::env::var("PROFILE").unwrap_or_default();
+    let build_script = if profile == "release" {
+        "build"
+    } else {
+        "build:dev"
+    };
+
+    let status = Command::new("bun")
+        .args(["run", build_script])
+        .current_dir(frontend_dir)
+        .status()
+        .expect("Failed to run bun build. Is bun installed?");
+
+    if !status.success() {
+        panic!("bun build failed");
+    }
+}
 
 fn main() {
     let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
@@ -20,6 +48,10 @@ fn main() {
         "cargo:rerun-if-changed={}",
         frontend_dir.join("src/ts").to_string_lossy()
     );
+    println!("cargo:rerun-if-changed={}", frontend_dist.to_string_lossy());
+
+    // Ensure frontend is built before creating symlink
+    ensure_frontend_built(&frontend_dir);
 
     // The frontend crate is built automatically via Cargo dependency
     // (calendsync depends on calendsync_frontend in Cargo.toml)
