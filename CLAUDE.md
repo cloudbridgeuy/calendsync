@@ -641,6 +641,18 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | Shared Types         | `.claude/context/shared-types.md`      |
 | Running Applications | `.claude/context/running-apps.md`      |
 | Compound Pattern     | `.claude/context/compound-pattern.md`  |
+| React Contexts       | `.claude/context/react-contexts.md`    |
+
+### Local Working Directories (gitignored)
+
+The `.local/` directory contains working files that are not committed to git:
+
+| Directory         | Purpose                                                    |
+| ----------------- | ---------------------------------------------------------- |
+| `.local/plans/`   | Implementation plans created during planning sessions      |
+| `.local/reports/` | Investigation reports, analysis documents, research output |
+
+These directories are for temporary working artifacts. Move finalized documentation to `docs/` or `.claude/context/` when ready to commit.
 
 ### Examples
 
