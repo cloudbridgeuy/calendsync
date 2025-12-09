@@ -5,6 +5,7 @@
 export { Calendar } from "./Calendar"
 export { CalendarHeader } from "./CalendarHeader"
 export { DayColumn } from "./DayColumn"
+export { DayContainer } from "./DayContainer"
 export type { EntryModalProps } from "./EntryModal"
 export { EntryModal } from "./EntryModal"
 export { EntryTile } from "./EntryTile"
