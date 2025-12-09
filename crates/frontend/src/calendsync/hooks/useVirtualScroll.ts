@@ -222,7 +222,12 @@ export function useVirtualScroll(options: UseVirtualScrollOptions): UseVirtualSc
    * Handle scroll end - snap to nearest day when in single-day view.
    */
   const handleScrollEnd = useCallback(() => {
-    if (!enabled || !scrollContainerRef.current || isRecenteringRef.current || isSnappingRef.current)
+    if (
+      !enabled ||
+      !scrollContainerRef.current ||
+      isRecenteringRef.current ||
+      isSnappingRef.current
+    )
       return
     if (isDraggingRef.current) return // Don't snap while user is still dragging
     if (!shouldSnapToDay(visibleDays)) return

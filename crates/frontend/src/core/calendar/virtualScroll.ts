@@ -345,7 +345,12 @@ export function calculateSnapScrollPosition(
   // Find which day is most visible (closest to being fully shown)
   const dayIndex = Math.round(scrollLeft / dayWidth)
   const targetDate = addDays(windowStartDate, dayIndex)
-  const scrollPosition = calculateScrollPosition(targetDate, windowStartDate, dayWidth, containerWidth)
+  const scrollPosition = calculateScrollPosition(
+    targetDate,
+    windowStartDate,
+    dayWidth,
+    containerWidth,
+  )
 
   return { targetDate, scrollPosition }
 }
