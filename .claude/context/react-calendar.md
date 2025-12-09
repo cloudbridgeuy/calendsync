@@ -358,6 +358,24 @@ Day headers are clickable and navigate to center that day:
 - **Arrow Left/Right**: Navigate days
 - **T key**: Jump to today
 
+### Floating Buttons
+
+Two pill-shaped floating buttons provide quick actions:
+
+| Button | Position | Visibility | Action |
+|--------|----------|------------|--------|
+| **New** | Bottom-right | Always visible | Opens create entry modal for highlighted day |
+| **Today** | Bottom-left | Hidden when viewing today | Scrolls to today's date |
+
+Both buttons share the same visual style:
+- Pill shape (`border-radius: 999px`)
+- Orange accent background (`--accent`)
+- Responsive sizing (larger on desktop)
+
+**Components**:
+- `Fab` - New button (in `Calendar.tsx`)
+- `TodayButton` - Today button (in `TodayButton.tsx`)
+
 ## CSS Variables
 
 The calendar uses CSS custom properties for theming:
