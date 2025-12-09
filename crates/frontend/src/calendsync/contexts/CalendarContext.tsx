@@ -21,10 +21,8 @@ export interface CalendarContextValue {
   onEntryClick: (entry: ServerEntry) => void
   /** Callback when a task entry checkbox is toggled */
   onEntryToggle: (entry: ServerEntry) => void
-  /** Whether the viewport is mobile-sized */
-  isMobile: boolean
 
-  // New - calendar state
+  // Calendar state
   /** The current center/highlighted date */
   centerDate: Date
   /** Number of visible days (1 for mobile, 3/5/7 for desktop) */
@@ -36,7 +34,19 @@ export interface CalendarContextValue {
   /** Error message if data loading failed */
   error: string | null
 
-  // New - navigation actions
+  // Virtual scroll state
+  /** Ref to attach to the scroll container */
+  scrollContainerRef: React.RefObject<HTMLDivElement | null>
+  /** Currently highlighted date (center of viewport) */
+  highlightedDate: Date
+  /** Array of dates currently rendered in virtual window */
+  renderedDates: Date[]
+  /** Width of each day column in pixels */
+  dayWidth: number
+
+  // Navigation actions
+  /** Scroll to a specific date */
+  scrollToDate: (date: Date, animated?: boolean) => void
   /** Navigate by a number of days (positive = forward, negative = back) */
   navigateDays: (offset: number) => void
   /** Jump to today */

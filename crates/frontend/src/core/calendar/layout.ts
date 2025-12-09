@@ -38,16 +38,6 @@ export function calculateDayWidth(containerWidth: number, visibleDays: number): 
 }
 
 /**
- * Check if the viewport is considered mobile.
- */
-export function isMobileViewport(
-  containerWidth: number,
-  constants: LayoutConstants = DEFAULT_LAYOUT_CONSTANTS,
-): boolean {
-  return containerWidth < constants.mobileBreakpoint
-}
-
-/**
  * Calculate the offset index from center for a given position.
  * Used for keyboard navigation and swipe handling.
  */

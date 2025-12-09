@@ -129,7 +129,7 @@ interface PanelProps {
  * NotificationCenter.Panel - the dropdown panel containing notifications.
  */
 function Panel({ children }: PanelProps) {
-  const { state, actions, isMobile, triggerId, contentId, panelRef } = useNotificationContext()
+  const { state, actions, triggerId, contentId, panelRef } = useNotificationContext()
   const { isOpen, notifications, unreadCount } = state
   const { close, markAllAsRead, clearAll } = actions
 
@@ -169,13 +169,13 @@ function Panel({ children }: PanelProps) {
 
   return (
     <>
-      {/* Backdrop for mobile - purely decorative overlay */}
-      {isMobile && <div className="notification-backdrop" onClick={close} aria-hidden="true" />}
+      {/* Backdrop - purely decorative overlay */}
+      <div className="notification-backdrop" onClick={close} aria-hidden="true" />
 
       <div
         ref={panelRef}
         id={contentId}
-        className={`notification-panel${isMobile ? " mobile" : ""}`}
+        className="notification-panel"
         role="dialog"
         aria-labelledby={triggerId}
         aria-label="Notifications"
@@ -359,15 +359,13 @@ interface NotificationCenterProps {
   state: NotificationCenterState
   /** Notification center actions */
   actions: NotificationCenterActions
-  /** Whether the viewport is mobile */
-  isMobile: boolean
 }
 
 /**
  * NotificationCenter compound component.
  *
  * @example
- * <NotificationCenter state={state} actions={actions} isMobile={isMobile}>
+ * <NotificationCenter state={state} actions={actions}>
  *     <NotificationCenter.Bell />
  *     <NotificationCenter.Panel>
  *         <NotificationCenter.Items />
@@ -377,11 +375,10 @@ interface NotificationCenterProps {
 function NotificationCenterRoot({
   state,
   actions,
-  isMobile,
   children,
 }: NotificationCenterProps & { children: React.ReactNode }) {
   return (
-    <NotificationCenterProvider state={state} actions={actions} isMobile={isMobile}>
+    <NotificationCenterProvider state={state} actions={actions}>
       <div className="notification-center">{children}</div>
     </NotificationCenterProvider>
   )

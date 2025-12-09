@@ -115,8 +115,6 @@ export interface CalendarState {
   centerDate: Date
   /** Number of visible days (1 for mobile, 3/5/7 for desktop) */
   visibleDays: number
-  /** Whether the viewport is mobile-sized */
-  isMobile: boolean
   /** Cache of entries by date key (YYYY-MM-DD) */
   entryCache: Map<string, import("@core/calendar/types").ServerEntry[]>
   /** SSE connection state for real-time updates */

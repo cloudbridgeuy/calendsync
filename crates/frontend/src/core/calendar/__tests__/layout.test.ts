@@ -11,7 +11,6 @@ import {
   detectWheelDirection,
   getVisibleDateOffsets,
   getWheelNavigationDelta,
-  isMobileViewport,
   shouldLoadMoreDays,
   shouldNavigateFromSwipe,
   snapToNearestDay,
@@ -58,20 +57,6 @@ describe("calculateDayWidth", () => {
 
   test("handles single day", () => {
     expect(calculateDayWidth(500, 1)).toBe(500)
-  })
-})
-
-describe("isMobileViewport", () => {
-  test("returns true below breakpoint", () => {
-    expect(isMobileViewport(700)).toBe(true)
-  })
-
-  test("returns false at breakpoint", () => {
-    expect(isMobileViewport(768)).toBe(false)
-  })
-
-  test("returns false above breakpoint", () => {
-    expect(isMobileViewport(1024)).toBe(false)
   })
 })
 

@@ -11,7 +11,7 @@
 
 import { addDays, formatDateKey, isSameDay } from "@core/calendar/dates"
 import { mergeEntryCache, serverDaysToMap } from "@core/calendar/entries"
-import { calculateVisibleDays, isMobileViewport } from "@core/calendar/layout"
+import { calculateVisibleDays } from "@core/calendar/layout"
 import type { ServerEntry } from "@core/calendar/types"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
@@ -108,9 +108,8 @@ export function useCalendarState(config: UseCalendarStateConfig): [CalendarState
     serverDaysToMap(initialData.days),
   )
 
-  // Layout state - default to desktop view for SSR (7 days, not mobile)
+  // Layout state - default to desktop view for SSR (7 days)
   const [visibleDays, setVisibleDays] = useState<number>(7)
-  const [isMobile, setIsMobile] = useState<boolean>(false)
 
   // SSE connection state (replaces loading states)
   const [sseConnectionState, setSseConnectionState] = useState<SseConnectionState>("disconnected")
@@ -385,9 +384,7 @@ export function useCalendarState(config: UseCalendarStateConfig): [CalendarState
    */
   const updateLayout = useCallback((width: number) => {
     const newVisibleDays = calculateVisibleDays(width)
-    const newIsMobile = isMobileViewport(width)
     setVisibleDays(newVisibleDays)
-    setIsMobile(newIsMobile)
   }, [])
 
   /**
@@ -515,7 +512,6 @@ export function useCalendarState(config: UseCalendarStateConfig): [CalendarState
   const state: CalendarState = {
     centerDate,
     visibleDays,
-    isMobile,
     entryCache,
     sseConnectionState,
     error,

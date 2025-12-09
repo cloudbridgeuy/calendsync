@@ -13,8 +13,6 @@ export interface NotificationContextValue {
   state: NotificationCenterState
   /** Available actions (markAsRead, clearAll, etc.) */
   actions: NotificationCenterActions
-  /** Whether viewport is mobile */
-  isMobile: boolean
   /** ARIA ID for the bell trigger button */
   triggerId: string
   /** ARIA ID for the notification panel */
@@ -33,7 +31,6 @@ export interface NotificationCenterProviderProps {
   children: React.ReactNode
   state: NotificationCenterState
   actions: NotificationCenterActions
-  isMobile: boolean
 }
 
 /**
@@ -43,7 +40,6 @@ export function NotificationCenterProvider({
   children,
   state,
   actions,
-  isMobile,
 }: NotificationCenterProviderProps) {
   const id = useId()
   const { triggerId, contentId } = buildAriaIds(`notification-center-${id}`)
@@ -62,13 +58,12 @@ export function NotificationCenterProvider({
     () => ({
       state,
       actions,
-      isMobile,
       triggerId,
       contentId,
       panelRef,
       buttonRef,
     }),
-    [state, actions, isMobile, triggerId, contentId, panelRef, buttonRef],
+    [state, actions, triggerId, contentId, panelRef, buttonRef],
   )
 
   return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>
