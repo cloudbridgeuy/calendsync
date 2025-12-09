@@ -14,24 +14,24 @@ import { getControlPlaneUrl } from "./useApi"
  * Configuration for useEntryApi hook.
  */
 export interface UseEntryApiConfig {
-    /** Calendar ID for API calls */
-    calendarId: string
+  /** Calendar ID for API calls */
+  calendarId: string
 }
 
 /**
  * Result from useEntryApi hook.
  */
 export interface UseEntryApiResult {
-    /** Create a new entry */
-    createEntry: (data: EntryFormData) => Promise<ServerEntry>
-    /** Update an existing entry */
-    updateEntry: (entryId: string, data: EntryFormData) => Promise<ServerEntry>
-    /** Delete an entry */
-    deleteEntry: (entryId: string) => Promise<void>
-    /** Fetch a specific entry by ID */
-    fetchEntry: (entryId: string) => Promise<ServerEntry>
-    /** Toggle a task's completed status */
-    toggleEntry: (entryId: string) => Promise<ServerEntry>
+  /** Create a new entry */
+  createEntry: (data: EntryFormData) => Promise<ServerEntry>
+  /** Update an existing entry */
+  updateEntry: (entryId: string, data: EntryFormData) => Promise<ServerEntry>
+  /** Delete an entry */
+  deleteEntry: (entryId: string) => Promise<void>
+  /** Fetch a specific entry by ID */
+  fetchEntry: (entryId: string) => Promise<ServerEntry>
+  /** Toggle a task's completed status */
+  toggleEntry: (entryId: string) => Promise<ServerEntry>
 }
 
 /**
@@ -44,119 +44,119 @@ export interface UseEntryApiResult {
  * - Fetch individual entries (GET /api/entries/{id})
  */
 export function useEntryApi(config: UseEntryApiConfig): UseEntryApiResult {
-    const { calendarId } = config
+  const { calendarId } = config
 
-    const baseUrl = useMemo(() => getControlPlaneUrl(), [])
+  const baseUrl = useMemo(() => getControlPlaneUrl(), [])
 
-    /**
-     * Create a new entry.
-     */
-    const createEntry = useCallback(
-        async (data: EntryFormData): Promise<ServerEntry> => {
-            const payload = formDataToApiPayload(data, calendarId)
+  /**
+   * Create a new entry.
+   */
+  const createEntry = useCallback(
+    async (data: EntryFormData): Promise<ServerEntry> => {
+      const payload = formDataToApiPayload(data, calendarId)
 
-            const response = await fetch(`${baseUrl}/api/entries`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                },
-                body: payload.toString(),
-            })
-
-            if (!response.ok) {
-                const text = await response.text()
-                throw new Error(`Failed to create entry: ${response.status} ${text}`)
-            }
-
-            return response.json()
+      const response = await fetch(`${baseUrl}/api/entries`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
         },
-        [baseUrl, calendarId],
-    )
+        body: payload.toString(),
+      })
 
-    /**
-     * Update an existing entry.
-     */
-    const updateEntry = useCallback(
-        async (entryId: string, data: EntryFormData): Promise<ServerEntry> => {
-            const payload = formDataToApiPayload(data, calendarId)
+      if (!response.ok) {
+        const text = await response.text()
+        throw new Error(`Failed to create entry: ${response.status} ${text}`)
+      }
 
-            const response = await fetch(`${baseUrl}/api/entries/${entryId}`, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                },
-                body: payload.toString(),
-            })
+      return response.json()
+    },
+    [baseUrl, calendarId],
+  )
 
-            if (!response.ok) {
-                const text = await response.text()
-                throw new Error(`Failed to update entry: ${response.status} ${text}`)
-            }
+  /**
+   * Update an existing entry.
+   */
+  const updateEntry = useCallback(
+    async (entryId: string, data: EntryFormData): Promise<ServerEntry> => {
+      const payload = formDataToApiPayload(data, calendarId)
 
-            return response.json()
+      const response = await fetch(`${baseUrl}/api/entries/${entryId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
         },
-        [baseUrl, calendarId],
-    )
+        body: payload.toString(),
+      })
 
-    /**
-     * Delete an entry.
-     */
-    const deleteEntry = useCallback(
-        async (entryId: string): Promise<void> => {
-            const response = await fetch(`${baseUrl}/api/entries/${entryId}`, {
-                method: "DELETE",
-            })
+      if (!response.ok) {
+        const text = await response.text()
+        throw new Error(`Failed to update entry: ${response.status} ${text}`)
+      }
 
-            if (!response.ok) {
-                const text = await response.text()
-                throw new Error(`Failed to delete entry: ${response.status} ${text}`)
-            }
-        },
-        [baseUrl],
-    )
+      return response.json()
+    },
+    [baseUrl, calendarId],
+  )
 
-    /**
-     * Fetch a specific entry by ID.
-     * Used when navigating directly to an edit URL on the client side.
-     */
-    const fetchEntry = useCallback(
-        async (entryId: string): Promise<ServerEntry> => {
-            const response = await fetch(`${baseUrl}/api/entries/${entryId}`)
+  /**
+   * Delete an entry.
+   */
+  const deleteEntry = useCallback(
+    async (entryId: string): Promise<void> => {
+      const response = await fetch(`${baseUrl}/api/entries/${entryId}`, {
+        method: "DELETE",
+      })
 
-            if (!response.ok) {
-                const text = await response.text()
-                throw new Error(`Failed to fetch entry: ${response.status} ${text}`)
-            }
+      if (!response.ok) {
+        const text = await response.text()
+        throw new Error(`Failed to delete entry: ${response.status} ${text}`)
+      }
+    },
+    [baseUrl],
+  )
 
-            return response.json()
-        },
-        [baseUrl],
-    )
+  /**
+   * Fetch a specific entry by ID.
+   * Used when navigating directly to an edit URL on the client side.
+   */
+  const fetchEntry = useCallback(
+    async (entryId: string): Promise<ServerEntry> => {
+      const response = await fetch(`${baseUrl}/api/entries/${entryId}`)
 
-    /**
-     * Toggle a task's completed status.
-     */
-    const toggleEntry = useCallback(
-        async (entryId: string): Promise<ServerEntry> => {
-            const response = await fetch(`${baseUrl}/api/entries/${entryId}/toggle`, {
-                method: "PATCH",
-            })
+      if (!response.ok) {
+        const text = await response.text()
+        throw new Error(`Failed to fetch entry: ${response.status} ${text}`)
+      }
 
-            if (!response.ok) {
-                const text = await response.text()
-                throw new Error(`Failed to toggle entry: ${response.status} ${text}`)
-            }
+      return response.json()
+    },
+    [baseUrl],
+  )
 
-            return response.json()
-        },
-        [baseUrl],
-    )
+  /**
+   * Toggle a task's completed status.
+   */
+  const toggleEntry = useCallback(
+    async (entryId: string): Promise<ServerEntry> => {
+      const response = await fetch(`${baseUrl}/api/entries/${entryId}/toggle`, {
+        method: "PATCH",
+      })
 
-    return {
-        createEntry,
-        updateEntry,
-        deleteEntry,
-        fetchEntry,
-        toggleEntry,
-    }
+      if (!response.ok) {
+        const text = await response.text()
+        throw new Error(`Failed to toggle entry: ${response.status} ${text}`)
+      }
+
+      return response.json()
+    },
+    [baseUrl],
+  )
+
+  return {
+    createEntry,
+    updateEntry,
+    deleteEntry,
+    fetchEntry,
+    toggleEntry,
+  }
 }

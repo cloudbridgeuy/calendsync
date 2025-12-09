@@ -12,7 +12,7 @@ let CONTROL_PLANE_URL = ""
  * This should be called once during hydration.
  */
 export function initControlPlaneUrl(url: string): void {
-    CONTROL_PLANE_URL = url
+  CONTROL_PLANE_URL = url
 }
 
 /**
@@ -26,41 +26,41 @@ export function initControlPlaneUrl(url: string): void {
  * @returns Promise resolving to array of ServerDay objects
  */
 export async function fetchEntries(
-    calendarId: string,
-    highlightedDay: string,
-    before: number = 3,
-    after: number = 3,
-    signal?: AbortSignal,
+  calendarId: string,
+  highlightedDay: string,
+  before: number = 3,
+  after: number = 3,
+  signal?: AbortSignal,
 ): Promise<ServerDay[]> {
-    const params = new URLSearchParams({
-        calendar_id: calendarId,
-        highlighted_day: highlightedDay,
-        before: before.toString(),
-        after: after.toString(),
-    })
+  const params = new URLSearchParams({
+    calendar_id: calendarId,
+    highlighted_day: highlightedDay,
+    before: before.toString(),
+    after: after.toString(),
+  })
 
-    const url = `${CONTROL_PLANE_URL}/api/entries/calendar?${params.toString()}`
+  const url = `${CONTROL_PLANE_URL}/api/entries/calendar?${params.toString()}`
 
-    const response = await fetch(url, { signal })
+  const response = await fetch(url, { signal })
 
-    if (!response.ok) {
-        throw new Error(`Failed to fetch entries: ${response.status} ${response.statusText}`)
-    }
+  if (!response.ok) {
+    throw new Error(`Failed to fetch entries: ${response.status} ${response.statusText}`)
+  }
 
-    return response.json()
+  return response.json()
 }
 
 /**
  * Hook configuration for API calls
  */
 export interface UseApiConfig {
-    calendarId: string
-    controlPlaneUrl?: string
+  calendarId: string
+  controlPlaneUrl?: string
 }
 
 /**
  * Get the control plane URL (for use in SSR context where process.env might not be available)
  */
 export function getControlPlaneUrl(): string {
-    return CONTROL_PLANE_URL
+  return CONTROL_PLANE_URL
 }

@@ -30,24 +30,24 @@ const clients = new Set<WebSocket>()
 
 // Content type mapping
 const CONTENT_TYPES: Record<string, string> = {
-    ".html": "text/html",
-    ".js": "application/javascript",
-    ".css": "text/css",
-    ".json": "application/json",
-    ".png": "image/png",
-    ".jpg": "image/jpeg",
-    ".svg": "image/svg+xml",
-    ".ico": "image/x-icon",
+  ".html": "text/html",
+  ".js": "application/javascript",
+  ".css": "text/css",
+  ".json": "application/json",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
 }
 
 function getContentType(path: string): string {
-    const ext = path.substring(path.lastIndexOf("."))
-    return CONTENT_TYPES[ext] || "application/octet-stream"
+  const ext = path.substring(path.lastIndexOf("."))
+  return CONTENT_TYPES[ext] || "application/octet-stream"
 }
 
 // HMR client script injected into HTML
 function getHmrScript(): string {
-    return `
+  return `
 <script>
 (function() {
     const ws = new WebSocket('ws://${HOST}:${WS_PORT}');
@@ -76,98 +76,98 @@ function getHmrScript(): string {
 
 // WebSocket server for hot reload notifications
 const _wsServer = Bun.serve({
-    port: WS_PORT,
-    hostname: HOST,
-    fetch(req, server) {
-        // Upgrade HTTP to WebSocket
-        if (server.upgrade(req)) {
-            return undefined
-        }
-        return new Response("WebSocket server", { status: 200 })
+  port: WS_PORT,
+  hostname: HOST,
+  fetch(req, server) {
+    // Upgrade HTTP to WebSocket
+    if (server.upgrade(req)) {
+      return undefined
+    }
+    return new Response("WebSocket server", { status: 200 })
+  },
+  websocket: {
+    open(ws) {
+      clients.add(ws as unknown as WebSocket)
+      console.log(`[HMR] Client connected (${clients.size} total)`)
     },
-    websocket: {
-        open(ws) {
-            clients.add(ws as unknown as WebSocket)
-            console.log(`[HMR] Client connected (${clients.size} total)`)
-        },
-        close(ws) {
-            clients.delete(ws as unknown as WebSocket)
-            console.log(`[HMR] Client disconnected (${clients.size} total)`)
-        },
-        message(ws, message) {
-            // Handle keepalive ping
-            if (message === "ping") {
-                ws.send("pong")
-            }
-        },
+    close(ws) {
+      clients.delete(ws as unknown as WebSocket)
+      console.log(`[HMR] Client disconnected (${clients.size} total)`)
     },
+    message(ws, message) {
+      // Handle keepalive ping
+      if (message === "ping") {
+        ws.send("pong")
+      }
+    },
+  },
 })
 
 // Notify all connected clients to reload
 function notifyReload() {
-    console.log(`[HMR] Notifying ${clients.size} client(s) to reload`)
-    for (const client of clients) {
-        try {
-            ;(client as unknown as { send: (msg: string) => void }).send("reload")
-        } catch {
-            // Client may have disconnected
-        }
+  console.log(`[HMR] Notifying ${clients.size} client(s) to reload`)
+  for (const client of clients) {
+    try {
+      ;(client as unknown as { send: (msg: string) => void }).send("reload")
+    } catch {
+      // Client may have disconnected
     }
+  }
 }
 
 // HTTP server for static file serving
 const _httpServer = Bun.serve({
-    port: PORT,
-    hostname: HOST,
-    async fetch(req) {
-        const url = new URL(req.url)
-        let path = url.pathname
+  port: PORT,
+  hostname: HOST,
+  async fetch(req) {
+    const url = new URL(req.url)
+    let path = url.pathname
 
-        // Default to index.html for root
-        if (path === "/" || path === "") {
-            path = "/index.html"
-        }
+    // Default to index.html for root
+    if (path === "/" || path === "") {
+      path = "/index.html"
+    }
 
-        const filePath = join(DIST_DIR, path)
-        const file = Bun.file(filePath)
+    const filePath = join(DIST_DIR, path)
+    const file = Bun.file(filePath)
 
-        // Check if file exists
-        if (!(await file.exists())) {
-            // For SPA routing, fallback to index.html
-            const indexPath = join(DIST_DIR, "index.html")
-            const indexFile = Bun.file(indexPath)
+    // Check if file exists
+    if (!(await file.exists())) {
+      // For SPA routing, fallback to index.html
+      const indexPath = join(DIST_DIR, "index.html")
+      const indexFile = Bun.file(indexPath)
 
-            if (await indexFile.exists()) {
-                let html = await indexFile.text()
-                // Inject HMR script
-                html = html.replace("</body>", `${getHmrScript()}</body>`)
-                return new Response(html, {
-                    headers: { "Content-Type": "text/html" },
-                })
-            }
-
-            return new Response("Not Found", { status: 404 })
-        }
-
-        // Inject HMR script into HTML files
-        if (path.endsWith(".html")) {
-            let html = await file.text()
-            html = html.replace("</body>", `${getHmrScript()}</body>`)
-            return new Response(html, {
-                headers: { "Content-Type": "text/html" },
-            })
-        }
-
-        // Serve static file with correct content type
-        return new Response(file, {
-            headers: { "Content-Type": getContentType(path) },
+      if (await indexFile.exists()) {
+        let html = await indexFile.text()
+        // Inject HMR script
+        html = html.replace("</body>", `${getHmrScript()}</body>`)
+        return new Response(html, {
+          headers: { "Content-Type": "text/html" },
         })
-    },
+      }
+
+      return new Response("Not Found", { status: 404 })
+    }
+
+    // Inject HMR script into HTML files
+    if (path.endsWith(".html")) {
+      let html = await file.text()
+      html = html.replace("</body>", `${getHmrScript()}</body>`)
+      return new Response(html, {
+        headers: { "Content-Type": "text/html" },
+      })
+    }
+
+    // Serve static file with correct content type
+    return new Response(file, {
+      headers: { "Content-Type": getContentType(path) },
+    })
+  },
 })
 
 // Ensure dist-dev directory exists
 if (!existsSync(DIST_DIR)) {
-    mkdirSync(DIST_DIR, { recursive: true })
+  mkdirSync(DIST_DIR, { recursive: true })
 }
 
 console.log(`[Dev Server] HTTP server: http://${HOST}:${PORT}`)
@@ -179,47 +179,47 @@ let rebuildTimeout: ReturnType<typeof setTimeout> | null = null
 let isRebuilding = false
 
 async function rebuild() {
-    if (isRebuilding) return
-    isRebuilding = true
+  if (isRebuilding) return
+  isRebuilding = true
 
-    console.log("[Watch] Rebuilding...")
+  console.log("[Watch] Rebuilding...")
 
-    const proc = spawn(["bun", "run", "build:tauri:dev:live"], {
-        cwd: import.meta.dir,
-        stdout: "inherit",
-        stderr: "inherit",
-    })
+  const proc = spawn(["bun", "run", "build:tauri:dev:live"], {
+    cwd: import.meta.dir,
+    stdout: "inherit",
+    stderr: "inherit",
+  })
 
-    const exitCode = await proc.exited
+  const exitCode = await proc.exited
 
-    if (exitCode === 0) {
-        console.log("[Watch] Build complete")
-        notifyReload()
-    } else {
-        console.error(`[Watch] Build failed with exit code ${exitCode}`)
-    }
+  if (exitCode === 0) {
+    console.log("[Watch] Build complete")
+    notifyReload()
+  } else {
+    console.error(`[Watch] Build failed with exit code ${exitCode}`)
+  }
 
-    isRebuilding = false
+  isRebuilding = false
 }
 
 // Watch src directory for changes
 watch(SRC_DIR, { recursive: true }, (_event, filename) => {
-    if (!filename) return
+  if (!filename) return
 
-    // Ignore non-source files
-    if (filename.endsWith(".d.ts") || filename.includes("node_modules")) {
-        return
-    }
+  // Ignore non-source files
+  if (filename.endsWith(".d.ts") || filename.includes("node_modules")) {
+    return
+  }
 
-    // Debounce rebuilds (wait 100ms for multiple rapid changes)
-    if (rebuildTimeout) {
-        clearTimeout(rebuildTimeout)
-    }
+  // Debounce rebuilds (wait 100ms for multiple rapid changes)
+  if (rebuildTimeout) {
+    clearTimeout(rebuildTimeout)
+  }
 
-    rebuildTimeout = setTimeout(() => {
-        console.log(`[Watch] Change detected: ${filename}`)
-        rebuild()
-    }, 100)
+  rebuildTimeout = setTimeout(() => {
+    console.log(`[Watch] Change detected: ${filename}`)
+    rebuild()
+  }, 100)
 })
 
 console.log(`[Watch] Watching ${SRC_DIR} for changes...`)

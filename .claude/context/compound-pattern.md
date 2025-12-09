@@ -1070,6 +1070,115 @@ export type { FlyOutProps, FlyOutHandle }
 | No keyboard support | Implement Arrow, Escape, Enter handlers |
 | ARIA attributes missing | Coordinate IDs between trigger and content |
 
+## Anti-Patterns to Avoid
+
+### Boolean Checks at Consumer Level
+
+**Anti-pattern:**
+```tsx
+{items.length === 0 ? (
+    <Menu.EmptyState />
+) : (
+    items.map(item => <Menu.Item key={item.id} item={item} />)
+)}
+```
+
+**Why it's bad:** Pollutes consumer with logic that belongs inside the component. Every consumer must duplicate this conditional logic.
+
+**Better pattern:** Components handle their own visibility:
+```tsx
+// EmptyState checks internally and returns null if items exist
+function EmptyState() {
+    const { items } = useMenuContext()
+    if (items.length > 0) return null
+    return <div>No items</div>
+}
+
+// Consumer is clean and declarative
+<Menu.EmptyState />
+```
+
+### Iteration at Consumer Level
+
+**Anti-pattern:**
+```tsx
+<Menu.List>
+    {items.map(item => (
+        <Menu.Item key={item.id} item={item} />
+    ))}
+</Menu.List>
+```
+
+**Why it's bad:** Filtering, sorting, and transformation logic ends up scattered across consumers. Changes to iteration logic require updating every usage site.
+
+**Better pattern:** Create an Items component that handles iteration internally:
+```tsx
+function Items() {
+    const { items } = useMenuContext()
+    if (items.length === 0) return <EmptyState />
+    return (
+        <>
+            {items.map(item => (
+                <Item key={item.id} item={item} />
+            ))}
+        </>
+    )
+}
+
+// Consumer is clean and declarative
+<Menu.Items />
+```
+
+**Principle:** Compound components should encapsulate their logic. Consumers should compose declaratively, not imperatively.
+
+### Wrapper Elements at Consumer Level
+
+**Anti-pattern:**
+```tsx
+<Menu>
+    <div className="menu-header-wrapper">
+        <Menu.Header />
+    </div>
+    <main className="menu-content">
+        <Menu.Items />
+    </main>
+</Menu>
+```
+
+**Why it's bad:** Wrapper elements like `<div>` and `<main>` are implementation details. Placing them at the consumer level:
+- Duplicates markup across every usage site
+- Requires consumers to know internal class names
+- Makes refactoring the component's DOM structure harder
+
+**Better pattern:** Sub-components render their own wrappers:
+```tsx
+function Header() {
+    const ctx = useMenuContext()
+    return (
+        <div className="menu-header-wrapper">
+            {/* header content */}
+        </div>
+    )
+}
+
+function Items() {
+    const { items } = useMenuContext()
+    return (
+        <main className="menu-content">
+            {/* items rendering */}
+        </main>
+    )
+}
+
+// Consumer is clean and declarative
+<Menu>
+    <Menu.Header />
+    <Menu.Items />
+</Menu>
+```
+
+**Principle:** Sub-components own their complete DOM structure, including wrapper elements.
+
 ## References
 
 - [React Patterns: Compound Components](https://www.patterns.dev/react/compound-pattern)

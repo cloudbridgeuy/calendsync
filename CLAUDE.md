@@ -158,7 +158,7 @@ bunx biome check --write --unsafe
 
 Configuration is in `crates/frontend/biome.json`:
 
-- **Indent**: 4 spaces (matches Rust)
+- **Indent**: 2 spaces
 - **Line width**: 100 (matches Rust)
 - **Quotes**: double
 - **Semicolons**: as-needed

@@ -8,20 +8,20 @@
  * Returns a new Date object.
  */
 export function addDays(date: Date, days: number): Date {
-    const result = new Date(date)
-    result.setDate(result.getDate() + days)
-    return result
+  const result = new Date(date)
+  result.setDate(result.getDate() + days)
+  return result
 }
 
 /**
  * Check if two dates are the same day.
  */
 export function isSameDay(d1: Date, d2: Date): boolean {
-    return (
-        d1.getFullYear() === d2.getFullYear() &&
-        d1.getMonth() === d2.getMonth() &&
-        d1.getDate() === d2.getDate()
-    )
+  return (
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate()
+  )
 }
 
 /**
@@ -29,10 +29,10 @@ export function isSameDay(d1: Date, d2: Date): boolean {
  * This is used as a key for the entry cache.
  */
 export function formatDateKey(date: Date): string {
-    const y = date.getFullYear()
-    const m = String(date.getMonth() + 1).padStart(2, "0")
-    const d = String(date.getDate()).padStart(2, "0")
-    return `${y}-${m}-${d}`
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, "0")
+  const d = String(date.getDate()).padStart(2, "0")
+  return `${y}-${m}-${d}`
 }
 
 /**
@@ -40,10 +40,10 @@ export function formatDateKey(date: Date): string {
  * Sets time to midnight local time.
  */
 export function parseDateKey(dateKey: string): Date {
-    const [year, month, day] = dateKey.split("-").map(Number)
-    const date = new Date(year, month - 1, day)
-    date.setHours(0, 0, 0, 0)
-    return date
+  const [year, month, day] = dateKey.split("-").map(Number)
+  const date = new Date(year, month - 1, day)
+  date.setHours(0, 0, 0, 0)
+  return date
 }
 
 /**
@@ -51,44 +51,44 @@ export function parseDateKey(dateKey: string): Date {
  * Returns a new Date object.
  */
 export function startOfDay(date: Date): Date {
-    const result = new Date(date)
-    result.setHours(0, 0, 0, 0)
-    return result
+  const result = new Date(date)
+  result.setHours(0, 0, 0, 0)
+  return result
 }
 
 /**
  * Get the day of week index (0 = Sunday, 6 = Saturday).
  */
 export function getDayOfWeek(date: Date): number {
-    return date.getDay()
+  return date.getDay()
 }
 
 /**
  * Get the day of month (1-31).
  */
 export function getDayOfMonth(date: Date): number {
-    return date.getDate()
+  return date.getDate()
 }
 
 /**
  * Get the month index (0-11).
  */
 export function getMonth(date: Date): number {
-    return date.getMonth()
+  return date.getMonth()
 }
 
 /**
  * Get the full year.
  */
 export function getYear(date: Date): number {
-    return date.getFullYear()
+  return date.getFullYear()
 }
 
 /**
  * Check if a date is today.
  */
 export function isToday(date: Date): boolean {
-    return isSameDay(date, new Date())
+  return isSameDay(date, new Date())
 }
 
 /**
@@ -96,16 +96,16 @@ export function isToday(date: Date): boolean {
  * Includes both start and end dates.
  */
 export function getDateRange(start: Date, end: Date): Date[] {
-    const dates: Date[] = []
-    let current = startOfDay(start)
-    const endDay = startOfDay(end)
+  const dates: Date[] = []
+  let current = startOfDay(start)
+  const endDay = startOfDay(end)
 
-    while (current <= endDay) {
-        dates.push(new Date(current))
-        current = addDays(current, 1)
-    }
+  while (current <= endDay) {
+    dates.push(new Date(current))
+    current = addDays(current, 1)
+  }
 
-    return dates
+  return dates
 }
 
 /**
@@ -113,12 +113,12 @@ export function getDateRange(start: Date, end: Date): Date[] {
  * Returns (before + 1 + after) dates.
  */
 export function getDatesAround(center: Date, before: number, after: number): Date[] {
-    const dates: Date[] = []
-    const start = addDays(center, -before)
+  const dates: Date[] = []
+  const start = addDays(center, -before)
 
-    for (let i = 0; i <= before + after; i++) {
-        dates.push(addDays(start, i))
-    }
+  for (let i = 0; i <= before + after; i++) {
+    dates.push(addDays(start, i))
+  }
 
-    return dates
+  return dates
 }

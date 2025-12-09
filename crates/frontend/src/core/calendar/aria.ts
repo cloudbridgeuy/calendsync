@@ -5,8 +5,8 @@
 
 /** ARIA ID pair for accessible components */
 export interface AriaIds {
-    triggerId: string
-    contentId: string
+  triggerId: string;
+  contentId: string;
 }
 
 /**
@@ -14,8 +14,8 @@ export interface AriaIds {
  * Used for dropdown panels, modals, and other disclosure patterns.
  */
 export function buildAriaIds(baseId: string): AriaIds {
-    return {
-        triggerId: `${baseId}-trigger`,
-        contentId: `${baseId}-content`,
-    }
+  return {
+    triggerId: `${baseId}-trigger`,
+    contentId: `${baseId}-content`,
+  };
 }

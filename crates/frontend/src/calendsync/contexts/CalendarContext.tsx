@@ -4,19 +4,73 @@
  */
 
 import type { ServerEntry } from "@core/calendar/types"
-import { createContext, useContext, useMemo } from "react"
-import type { FlashState } from "../types"
+import { createContext, useContext } from "react"
+import type {
+  AddNotificationFn,
+  NotificationCenterActions,
+  NotificationCenterState,
+} from "../hooks"
+import type { FlashState, ModalState, SseConnectionState } from "../types"
 
 /** Context value shared with calendar sub-components */
 export interface CalendarContextValue {
-    /** Map of entry IDs to their flash animation state */
-    flashStates: Map<string, FlashState>
-    /** Callback when an entry is clicked (opens edit modal) */
-    onEntryClick: (entry: ServerEntry) => void
-    /** Callback when a task entry checkbox is toggled */
-    onEntryToggle: (entry: ServerEntry) => void
-    /** Whether the viewport is mobile-sized */
-    isMobile: boolean
+  // Existing - entry display
+  /** Map of entry IDs to their flash animation state */
+  flashStates: Map<string, FlashState>
+  /** Callback when an entry is clicked (opens edit modal) */
+  onEntryClick: (entry: ServerEntry) => void
+  /** Callback when a task entry checkbox is toggled */
+  onEntryToggle: (entry: ServerEntry) => void
+  /** Whether the viewport is mobile-sized */
+  isMobile: boolean
+
+  // New - calendar state
+  /** The current center/highlighted date */
+  centerDate: Date
+  /** Number of visible days (1 for mobile, 3/5/7 for desktop) */
+  visibleDays: number
+  /** Cache of entries by date key (YYYY-MM-DD) */
+  entryCache: Map<string, ServerEntry[]>
+  /** SSE connection state for real-time updates */
+  sseConnectionState: SseConnectionState
+  /** Error message if data loading failed */
+  error: string | null
+
+  // New - navigation actions
+  /** Navigate by a number of days (positive = forward, negative = back) */
+  navigateDays: (offset: number) => void
+  /** Jump to today */
+  goToToday: () => void
+  /** Get entries for a specific date */
+  getEntriesForDate: (date: Date) => ServerEntry[]
+  /** Refresh calendar data from API */
+  refresh: () => Promise<void>
+
+  // New - modal state
+  /** Open create modal for a specific date */
+  openCreateModal: (date: string) => void
+  /** Open edit modal for a specific entry */
+  openEditModal: (entryId: string) => void
+  /** Close the modal */
+  closeModal: () => void
+  /** Current modal state (null if closed) */
+  modalState: ModalState | null
+  /** Edit entry being displayed in modal (from SSR, cache, or fetched) */
+  editEntry: ServerEntry | undefined
+  /** Handle modal save */
+  handleModalSave: (savedEntry: ServerEntry) => void
+  /** Handle modal delete */
+  handleModalDelete: () => void
+  /** Calendar ID for API calls */
+  calendarId: string
+
+  // New - notification state
+  /** Notification center state */
+  notificationState: NotificationCenterState
+  /** Notification center actions */
+  notificationActions: NotificationCenterActions
+  /** Add a new notification */
+  addNotification: AddNotificationFn
 }
 
 /** CalendarContext - null when not inside provider */
@@ -24,34 +78,15 @@ const CalendarContext = createContext<CalendarContextValue | null>(null)
 
 /** Props for CalendarProvider */
 export interface CalendarProviderProps {
-    children: React.ReactNode
-    flashStates: Map<string, FlashState>
-    onEntryClick: (entry: ServerEntry) => void
-    onEntryToggle: (entry: ServerEntry) => void
-    isMobile: boolean
+  children: React.ReactNode
+  value: CalendarContextValue
 }
 
 /**
  * CalendarProvider - wraps calendar sub-components with shared context.
  */
-export function CalendarProvider({
-    children,
-    flashStates,
-    onEntryClick,
-    onEntryToggle,
-    isMobile,
-}: CalendarProviderProps) {
-    const value = useMemo<CalendarContextValue>(
-        () => ({
-            flashStates,
-            onEntryClick,
-            onEntryToggle,
-            isMobile,
-        }),
-        [flashStates, onEntryClick, onEntryToggle, isMobile],
-    )
-
-    return <CalendarContext.Provider value={value}>{children}</CalendarContext.Provider>
+export function CalendarProvider({ children, value }: CalendarProviderProps) {
+  return <CalendarContext.Provider value={value}>{children}</CalendarContext.Provider>
 }
 
 /**
@@ -59,9 +94,9 @@ export function CalendarProvider({
  * Throws if used outside CalendarProvider.
  */
 export function useCalendarContext(): CalendarContextValue {
-    const ctx = useContext(CalendarContext)
-    if (!ctx) {
-        throw new Error("useCalendarContext must be used within CalendarProvider")
-    }
-    return ctx
+  const ctx = useContext(CalendarContext)
+  if (!ctx) {
+    throw new Error("useCalendarContext must be used within CalendarProvider")
+  }
+  return ctx
 }
