@@ -23,7 +23,7 @@
     "build:tauri:client:dev:live": "bun build ./src/tauri/client.tsx --outdir ./dist-dev --entry-naming calendsync-tauri.js --format esm --target browser --sourcemap=external --define:process.env.NODE_ENV='\"development\"'",
     "build:tauri:css:live": "cp ./src/calendsync/styles.css ./dist-dev/calendsync.css",
     "build:tauri:html:live": "cp ./src/tauri/index.html ./dist-dev/index.html",
-    "dev:tauri": "bun run build:tauri:dev && bun run ./dev-server.ts",
+    "dev:tauri": "bun run build:tauri:dev:live && bun run ./dev-server.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "watch": "bun run build:calendsync:dev --watch"
