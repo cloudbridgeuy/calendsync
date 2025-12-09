@@ -5,8 +5,8 @@
 
 /** ARIA ID pair for accessible components */
 export interface AriaIds {
-  triggerId: string;
-  contentId: string;
+  triggerId: string
+  contentId: string
 }
 
 /**
@@ -17,5 +17,5 @@ export function buildAriaIds(baseId: string): AriaIds {
   return {
     triggerId: `${baseId}-trigger`,
     contentId: `${baseId}-content`,
-  };
+  }
 }

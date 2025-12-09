@@ -19,6 +19,18 @@ interface DayColumnProps {
 }
 
 /**
+ * Render an empty day column.
+ */
+export function EmptyDayColumn() {
+  return (
+    <div className="empty-day">
+      <div className="empty-day-icon">📅</div>
+      <div className="empty-day-text">No events</div>
+    </div>
+  )
+}
+
+/**
  * Render a single day column with its entries.
  */
 export function DayColumn({ dateKey, entries, style, isLastVisible }: DayColumnProps) {
@@ -27,23 +39,31 @@ export function DayColumn({ dateKey, entries, style, isLastVisible }: DayColumnP
 
   const classes = ["day-column", isLastVisible ? "last-visible" : ""].filter(Boolean).join(" ")
 
-  // Empty state - no entries for this day
-  if (sortedEntries.length === 0) {
-    return (
-      <div className={classes} data-date={dateKey} style={style}>
-        <div className="empty-day">
-          <div className="empty-day-icon">📅</div>
-          <div className="empty-day-text">No events</div>
-        </div>
-      </div>
-    )
+  return (
+    <div className={classes} data-date={dateKey} style={style}>
+      <EntryTiles entries={sortedEntries} />
+    </div>
+  )
+}
+
+interface EntryTilesProps {
+  /** Entries for this day */
+  entries: ServerEntry[]
+}
+
+/**
+ * Render the DayColumn entries tiles.
+ */
+export function EntryTiles({ entries }: EntryTilesProps) {
+  if (entries.length === 0) {
+    return <EmptyDayColumn />
   }
 
   return (
-    <div className={classes} data-date={dateKey} style={style}>
-      {sortedEntries.map((entry) => (
+    <>
+      {entries.map((entry) => (
         <EntryTile key={entry.id} entry={entry} />
       ))}
-    </div>
+    </>
   )
 }
