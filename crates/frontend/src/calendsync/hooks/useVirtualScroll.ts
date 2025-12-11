@@ -129,6 +129,9 @@ export function useVirtualScroll(options: UseVirtualScrollOptions): UseVirtualSc
   const isDraggingRef = useRef(false)
   const prevHighlightedRef = useRef<Date>(initialCenterDate)
   const initialPositionSetRef = useRef(false)
+  // Pending scroll adjustments to apply synchronously after DOM update
+  const pendingScrollAdjustmentRef = useRef<number | null>(null)
+  const pendingScrollToRef = useRef<{ position: number; animated: boolean } | null>(null)
 
   // State
   const [windowStartDate, setWindowStartDate] = useState<Date>(() =>
@@ -196,16 +199,11 @@ export function useVirtualScroll(options: UseVirtualScrollOptions): UseVirtualSc
         RECENTER_SHIFT_DAYS,
       )
 
-      // Update window start
-      setWindowStartDate(newWindowStartDate)
+      // Store adjustment to apply after DOM update (not after paint)
+      pendingScrollAdjustmentRef.current = scrollAdjustment
 
-      // Adjust scroll position instantly (no visual change)
-      requestAnimationFrame(() => {
-        if (scrollContainerRef.current) {
-          scrollContainerRef.current.scrollLeft += scrollAdjustment
-        }
-        isRecenteringRef.current = false
-      })
+      // Triggers re-render with new dates
+      setWindowStartDate(newWindowStartDate)
     }
   }, [
     enabled,
@@ -317,25 +315,19 @@ export function useVirtualScroll(options: UseVirtualScrollOptions): UseVirtualSc
       if (daysDiff > config.bufferDays) {
         // Target is outside buffer, need to shift window
         const newWindowStart = calculateWindowStartDate(targetDate, config.bufferDays)
+        const newScrollPosition = calculateScrollPosition(
+          targetDate,
+          newWindowStart,
+          dayWidth,
+          containerWidth,
+        )
+
+        // Store scroll position to apply after DOM update
+        pendingScrollToRef.current = { position: newScrollPosition, animated }
+
         setWindowStartDate(newWindowStart)
         setHighlightedDate(targetDate)
         prevHighlightedRef.current = targetDate
-
-        // After state update, scroll to center
-        requestAnimationFrame(() => {
-          if (scrollContainerRef.current) {
-            const newScrollPosition = calculateScrollPosition(
-              targetDate,
-              newWindowStart,
-              dayWidth,
-              containerWidth,
-            )
-            scrollContainerRef.current.scrollTo({
-              left: newScrollPosition,
-              behavior: animated ? "smooth" : "instant",
-            })
-          }
-        })
       } else {
         // Target is within window, just scroll
         scrollContainerRef.current.scrollTo({
@@ -444,6 +436,30 @@ export function useVirtualScroll(options: UseVirtualScrollOptions): UseVirtualSc
     scrollContainerRef.current.scrollLeft = initialScrollPosition
     initialPositionSetRef.current = true
   }, [containerWidth, dayWidth, highlightedDate, windowStartDate]) // Only depend on size changes, not state
+
+  // Apply pending scroll adjustments synchronously after DOM update, before paint.
+  // This prevents the 1-frame flash where new dates appear at old scroll position.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: windowStartDate triggers the effect when window shifts
+  useLayoutEffect(() => {
+    if (!scrollContainerRef.current) return
+
+    // Handle re-centering adjustment (relative scroll)
+    if (pendingScrollAdjustmentRef.current !== null) {
+      scrollContainerRef.current.scrollLeft += pendingScrollAdjustmentRef.current
+      pendingScrollAdjustmentRef.current = null
+      isRecenteringRef.current = false
+    }
+
+    // Handle scrollToDate navigation (absolute scroll)
+    if (pendingScrollToRef.current !== null) {
+      const { position, animated } = pendingScrollToRef.current
+      scrollContainerRef.current.scrollTo({
+        left: position,
+        behavior: animated ? "smooth" : "instant",
+      })
+      pendingScrollToRef.current = null
+    }
+  }, [windowStartDate])
 
   return {
     scrollContainerRef,
