@@ -304,6 +304,37 @@ Located in `crates/frontend/src/core/calendar/navigation.ts`:
 - `scrollToDate(date, animated?)` - Programmatic navigation
 - `scrollToToday()` - Jump to today
 
+### Scroll Adjustment Timing
+
+When the virtual window shifts (re-centering or far navigation), the scroll position must be adjusted synchronously with the DOM update to prevent visual flashing.
+
+**Pattern**: Use `useLayoutEffect` with pending refs instead of `requestAnimationFrame`:
+
+```typescript
+// Store pending adjustment in ref
+pendingScrollAdjustmentRef.current = scrollAdjustment
+setWindowStartDate(newWindowStartDate)  // Triggers re-render
+
+// Apply in useLayoutEffect (runs before paint)
+useLayoutEffect(() => {
+  if (pendingScrollAdjustmentRef.current !== null) {
+    scrollContainerRef.current.scrollLeft += pendingScrollAdjustmentRef.current
+    pendingScrollAdjustmentRef.current = null
+  }
+}, [windowStartDate])
+```
+
+**Why not `requestAnimationFrame`?**
+- `requestAnimationFrame` runs *after* the browser paints
+- This causes a 1-frame flash showing wrong content
+- `useLayoutEffect` runs *before* paint, preventing the flash
+
+**Timing comparison**:
+| Approach | Sequence |
+|----------|----------|
+| `requestAnimationFrame` | setState → render → commit → **paint (flash!)** → rAF → adjust |
+| `useLayoutEffect` | setState → render → commit → **useLayoutEffect → adjust** → paint (correct) |
+
 ### Single-Day Snap Scrolling
 
 When `visibleDays === 1` (mobile portrait), the calendar snaps to show a complete day after scrolling ends:
