@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use axum::{
     http::{header, Method, StatusCode},
-    routing::{get, patch},
+    routing::{get, patch, post},
     Router,
 };
 use tower_http::{
@@ -54,7 +54,7 @@ pub fn create_app(state: AppState) -> Router {
         .layer(cors);
 
     // Main application router
-    Router::new()
+    let mut router = Router::new()
         .route("/calendar/{calendar_id}", get(calendar_react_ssr))
         .route(
             "/calendar/{calendar_id}/entry",
@@ -64,7 +64,19 @@ pub fn create_app(state: AppState) -> Router {
         // Health check routes (Kubernetes-style)
         .route("/healthz", get(healthz))
         .route("/readyz", get(readyz))
-        .nest("/api", api_routes)
+        .nest("/api", api_routes);
+
+    // Dev-only routes (when DEV_MODE is set and debug build)
+    #[cfg(debug_assertions)]
+    if std::env::var("DEV_MODE").is_ok() {
+        use crate::handlers::dev::{dev_events_sse, reload_ssr};
+        router = router
+            .route("/_dev/reload", post(reload_ssr))
+            .route("/_dev/events", get(dev_events_sse));
+        tracing::info!("Dev mode enabled: /_dev/reload and /_dev/events endpoints available");
+    }
+
+    router
         .layer(TraceLayer::new_for_http())
         .layer(TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,

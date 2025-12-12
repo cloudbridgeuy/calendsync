@@ -24,3 +24,6 @@ aws-config = { workspace = true }
 aws-sdk-dynamodb = { workspace = true }
 calendsync_core = { workspace = true }
 uuid = { workspace = true }
+notify = { workspace = true }
+notify-debouncer-mini = { workspace = true }
+reqwest = { workspace = true }

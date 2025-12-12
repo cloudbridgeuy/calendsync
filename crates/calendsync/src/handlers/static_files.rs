@@ -28,11 +28,18 @@ pub async fn serve_static(Path(filename): Path<String>) -> impl IntoResponse {
                 "application/octet-stream"
             };
 
-            // Set cache headers for hashed files (immutable)
+            // Set cache headers based on file type and dev mode
+            let is_dev_mode = std::env::var("DEV_MODE").is_ok();
             let is_hashed = filename.contains('-') && !filename.ends_with(".map");
-            let cache_control = if is_hashed {
+
+            let cache_control = if is_dev_mode && filename.ends_with(".css") {
+                // Dev mode: disable caching for CSS to enable hot-reload
+                "no-cache, no-store, must-revalidate"
+            } else if is_hashed {
+                // Hashed files: cache forever (immutable)
                 "public, max-age=31536000, immutable"
             } else {
+                // Non-hashed files: short cache
                 "public, max-age=3600"
             };
 

@@ -5,7 +5,6 @@ import {
   calculateHighlightedDay,
   calculateRecenterOffset,
   calculateScrollPosition,
-  calculateSnapScrollPosition,
   calculateTotalWidth,
   calculateVirtualWindow,
   calculateVisibleDays,
@@ -14,7 +13,6 @@ import {
   DEFAULT_VIRTUAL_SCROLL_CONFIG,
   isSameCalendarDay,
   shouldRecenter,
-  shouldSnapToDay,
 } from "../virtualScroll"
 
 describe("calculateVirtualWindow", () => {
@@ -491,56 +489,5 @@ describe("calculateWindowDates", () => {
         virtualWindowDates[i].toISOString().slice(0, 10),
       )
     }
-  })
-})
-
-describe("shouldSnapToDay", () => {
-  test("returns true when visibleDays is 1", () => {
-    expect(shouldSnapToDay(1)).toBe(true)
-  })
-
-  test("returns false when visibleDays is greater than 1", () => {
-    expect(shouldSnapToDay(3)).toBe(false)
-    expect(shouldSnapToDay(5)).toBe(false)
-    expect(shouldSnapToDay(7)).toBe(false)
-  })
-
-  test("returns false for zero or negative visibleDays", () => {
-    expect(shouldSnapToDay(0)).toBe(false)
-    expect(shouldSnapToDay(-1)).toBe(false)
-  })
-})
-
-describe("calculateSnapScrollPosition", () => {
-  const dayWidth = 375 // typical mobile width
-  const containerWidth = 375
-  const windowStart = new Date("2025-01-05")
-
-  test("snaps to current day when scroll is less than half a day", () => {
-    const result = calculateSnapScrollPosition(100, dayWidth, containerWidth, windowStart)
-    expect(result.targetDate.toISOString().slice(0, 10)).toBe("2025-01-05")
-    expect(result.scrollPosition).toBe(0)
-  })
-
-  test("snaps to next day when scroll is more than half a day", () => {
-    const result = calculateSnapScrollPosition(200, dayWidth, containerWidth, windowStart)
-    expect(result.targetDate.toISOString().slice(0, 10)).toBe("2025-01-06")
-  })
-
-  test("snaps to exact day boundary when perfectly aligned", () => {
-    const result = calculateSnapScrollPosition(375, dayWidth, containerWidth, windowStart)
-    expect(result.targetDate.toISOString().slice(0, 10)).toBe("2025-01-06")
-  })
-
-  test("handles scroll position at start", () => {
-    const result = calculateSnapScrollPosition(0, dayWidth, containerWidth, windowStart)
-    expect(result.targetDate.toISOString().slice(0, 10)).toBe("2025-01-05")
-    expect(result.scrollPosition).toBe(0)
-  })
-
-  test("handles scroll several days in", () => {
-    const result = calculateSnapScrollPosition(1500, dayWidth, containerWidth, windowStart)
-    // 1500 / 375 = 4, so should snap to day index 4
-    expect(result.targetDate.toISOString().slice(0, 10)).toBe("2025-01-09")
   })
 })

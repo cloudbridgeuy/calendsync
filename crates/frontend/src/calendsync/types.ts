@@ -47,10 +47,14 @@ export interface InitialData {
   days: import("@core/calendar/types").ServerDay[]
   /** URL to the client bundle (hashed) */
   clientBundleUrl: string
+  /** URL to the CSS bundle (hashed) */
+  cssBundleUrl?: string
   /** Base URL for API calls */
   controlPlaneUrl: string
   /** Modal state from SSR (if modal URL was requested) */
   modal?: ModalState
+  /** Whether dev mode is enabled (for hot-reload auto-refresh) */
+  devMode?: boolean
 }
 
 /**

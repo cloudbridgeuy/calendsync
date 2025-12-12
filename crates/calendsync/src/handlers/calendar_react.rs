@@ -3,6 +3,9 @@
 //! Uses the SSR worker pool from `calendsync_ssr` to render the React calendar.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
+
+use calendsync_ssr::SsrPool;
 
 use axum::{
     extract::{Path, Query, State},
@@ -18,6 +21,12 @@ use calendsync_ssr::{sanitize_error, SsrConfig, SsrError};
 use super::entries::entry_to_server_entry;
 use crate::state::AppState;
 
+/// Check if dev mode with auto-refresh is enabled.
+/// DEV_MODE enables dev features, DEV_NO_AUTO_REFRESH disables browser auto-refresh.
+fn is_dev_mode() -> bool {
+    std::env::var("DEV_MODE").is_ok() && std::env::var("DEV_NO_AUTO_REFRESH").is_err()
+}
+
 /// Query parameters for the entry modal route.
 #[derive(serde::Deserialize, Default)]
 pub struct EntryModalQuery {
@@ -25,18 +34,52 @@ pub struct EntryModalQuery {
     pub entry_id: Option<Uuid>,
 }
 
-/// Get the client bundle URL from the manifest.
-fn get_client_bundle_url() -> String {
-    let manifest_str = include_str!("../../../frontend/manifest.json");
-    let manifest: serde_json::Value =
-        serde_json::from_str(manifest_str).unwrap_or(serde_json::json!({}));
+/// Bundle URLs for client JS and CSS.
+struct BundleUrls {
+    client_js: String,
+    css: String,
+}
+
+/// Get bundle URLs from the manifest.
+///
+/// In dev mode (DEV_MODE env var set), reads manifest from disk to pick up
+/// new hashed filenames after hot-reload. In production, uses compiled-in manifest.
+fn get_bundle_urls() -> BundleUrls {
+    let manifest = get_manifest();
 
     let client_bundle_name = manifest
         .get("calendsync-client.js")
         .and_then(|v| v.as_str())
         .unwrap_or("calendsync-client.js");
 
-    format!("/dist/{client_bundle_name}")
+    let css_bundle_name = manifest
+        .get("calendsync.css")
+        .and_then(|v| v.as_str())
+        .unwrap_or("calendsync.css");
+
+    BundleUrls {
+        client_js: format!("/dist/{client_bundle_name}"),
+        css: format!("/dist/{css_bundle_name}"),
+    }
+}
+
+/// Get the manifest JSON, reading from disk in dev mode or using compiled-in manifest.
+fn get_manifest() -> serde_json::Value {
+    // Dev mode: read manifest from disk (picks up new hashed filename after rebuild)
+    if std::env::var("DEV_MODE").is_ok() {
+        let manifest_path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../frontend/manifest.json");
+        if let Ok(content) = std::fs::read_to_string(&manifest_path) {
+            if let Ok(manifest) = serde_json::from_str::<serde_json::Value>(&content) {
+                return manifest;
+            }
+        }
+        // Fall through to compiled manifest if disk read fails
+    }
+
+    // Production: use compiled-in manifest
+    let manifest_str = include_str!("../../../frontend/manifest.json");
+    serde_json::from_str(manifest_str).unwrap_or(serde_json::json!({}))
 }
 
 /// Group entries by date into ServerDay format for a date range.
@@ -76,14 +119,57 @@ fn entries_to_server_days(
 }
 
 /// Generate error HTML with client-side fallback.
-fn error_html(error: &str, calendar_id: &str, client_bundle_url: &str) -> String {
+/// When dev_mode is true, includes auto-refresh script with retry logic for self-healing.
+fn error_html(
+    error: &str,
+    calendar_id: &str,
+    client_bundle_url: &str,
+    css_bundle_url: &str,
+    dev_mode: bool,
+) -> String {
+    let dev_script = if dev_mode {
+        r#"
+    <!-- Dev mode auto-refresh: connect to SSE and reload on signal -->
+    <script>
+    (function() {
+        var es = new EventSource('/_dev/events');
+        var retryCount = 0;
+        var maxRetries = 10;
+
+        es.addEventListener('reload', function() {
+            console.log('[Dev] Reload signal received, refreshing...');
+            location.reload();
+        });
+
+        es.addEventListener('connected', function() {
+            console.log('[Dev] Auto-refresh connected');
+            retryCount = 0; // Reset on successful connection
+        });
+
+        es.onerror = function() {
+            retryCount++;
+            if (retryCount <= maxRetries) {
+                console.log('[Dev] Connection failed, retry ' + retryCount + '/' + maxRetries);
+                setTimeout(function() {
+                    location.reload();
+                }, 2000);
+            } else {
+                console.log('[Dev] Max retries reached, stopping auto-refresh');
+            }
+        };
+    })();
+    </script>"#
+    } else {
+        ""
+    };
+
     format!(
         r#"<!DOCTYPE html>
 <html>
 <head>
     <title>Calendar</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="/dist/calendsync.css">
+    <link rel="stylesheet" href="{css_bundle_url}">
     <style>
         .error-container {{
             display: flex;
@@ -131,9 +217,10 @@ fn error_html(error: &str, calendar_id: &str, client_bundle_url: &str) -> String
                 document.getElementById('root').style.display = 'block';
             }}
         }});
-    </script>
+    </script>{dev_script}
 </body>
-</html>"#
+</html>"#,
+        dev_script = dev_script
     )
 }
 
@@ -165,23 +252,30 @@ pub async fn calendar_react_ssr(
         }
 
         // No calendars available at all
-        let client_bundle_url = get_client_bundle_url();
+        let urls = get_bundle_urls();
         return Html(error_html(
             "No calendars available",
             &calendar_id.to_string(),
-            &client_bundle_url,
+            &urls.client_js,
+            &urls.css,
+            is_dev_mode(),
         ))
         .into_response();
     }
 
-    // Check if SSR pool is available
-    let Some(ssr_pool) = &state.ssr_pool else {
+    // Get bundle URLs and dev mode (before async operations)
+    let urls = get_bundle_urls();
+    let dev_mode = is_dev_mode();
+
+    // Check if SSR pool is available (async for hot-reload support)
+    let Some(ssr_pool) = state.get_ssr_pool().await else {
         tracing::error!("SSR pool not initialized");
-        let client_bundle_url = get_client_bundle_url();
         return Html(error_html(
             "SSR not available",
             &calendar_id.to_string(),
-            &client_bundle_url,
+            &urls.client_js,
+            &urls.css,
+            dev_mode,
         ))
         .into_response();
     };
@@ -203,16 +297,15 @@ pub async fn calendar_react_ssr(
         entries_to_server_days(&filtered, start, end)
     };
 
-    // Get client bundle URL
-    let client_bundle_url = get_client_bundle_url();
-
     // Build initial data for SSR
     let initial_data = serde_json::json!({
         "calendarId": calendar_id.to_string(),
         "highlightedDay": highlighted_day,
         "days": days,
-        "clientBundleUrl": client_bundle_url,
+        "clientBundleUrl": urls.client_js,
+        "cssBundleUrl": urls.css,
         "controlPlaneUrl": "",
+        "devMode": dev_mode,
     });
 
     // Create SSR config (with payload size validation)
@@ -223,20 +316,16 @@ pub async fn calendar_react_ssr(
             return Html(error_html(
                 &sanitize_error(&SsrError::Core(e)),
                 &calendar_id.to_string(),
-                &client_bundle_url,
+                &urls.client_js,
+                &urls.css,
+                dev_mode,
             ))
             .into_response();
         }
     };
 
     // Render using SSR pool
-    render_with_ssr_pool(
-        ssr_pool,
-        config,
-        &calendar_id.to_string(),
-        &client_bundle_url,
-    )
-    .await
+    render_with_ssr_pool(&ssr_pool, config, &calendar_id.to_string(), &urls, dev_mode).await
 }
 
 /// SSR handler for `/calendar/{calendar_id}/entry`.
@@ -276,23 +365,30 @@ pub async fn calendar_react_ssr_entry(
         }
 
         // No calendars available at all
-        let client_bundle_url = get_client_bundle_url();
+        let urls = get_bundle_urls();
         return Html(error_html(
             "No calendars available",
             &calendar_id.to_string(),
-            &client_bundle_url,
+            &urls.client_js,
+            &urls.css,
+            is_dev_mode(),
         ))
         .into_response();
     }
 
-    // Check if SSR pool is available
-    let Some(ssr_pool) = &state.ssr_pool else {
+    // Get bundle URLs and dev mode (before async operations)
+    let urls = get_bundle_urls();
+    let dev_mode = is_dev_mode();
+
+    // Check if SSR pool is available (async for hot-reload support)
+    let Some(ssr_pool) = state.get_ssr_pool().await else {
         tracing::error!("SSR pool not initialized");
-        let client_bundle_url = get_client_bundle_url();
         return Html(error_html(
             "SSR not available",
             &calendar_id.to_string(),
-            &client_bundle_url,
+            &urls.client_js,
+            &urls.css,
+            dev_mode,
         ))
         .into_response();
     };
@@ -304,9 +400,6 @@ pub async fn calendar_react_ssr_entry(
     // Calculate date range (before=365, after=365)
     let start = today - chrono::Duration::days(365);
     let end = today + chrono::Duration::days(365);
-
-    // Get client bundle URL
-    let client_bundle_url = get_client_bundle_url();
 
     // Fetch entries and optionally the specific entry for edit mode
     let (days, modal) = {
@@ -332,7 +425,9 @@ pub async fn calendar_react_ssr_entry(
                         Html(error_html(
                             "Entry not found",
                             &calendar_id.to_string(),
-                            &client_bundle_url,
+                            &urls.client_js,
+                            &urls.css,
+                            dev_mode,
                         )),
                     )
                         .into_response();
@@ -354,9 +449,11 @@ pub async fn calendar_react_ssr_entry(
         "calendarId": calendar_id.to_string(),
         "highlightedDay": highlighted_day,
         "days": days,
-        "clientBundleUrl": client_bundle_url,
+        "clientBundleUrl": urls.client_js,
+        "cssBundleUrl": urls.css,
         "controlPlaneUrl": "",
         "modal": modal,
+        "devMode": dev_mode,
     });
 
     // Create SSR config (with payload size validation)
@@ -367,28 +464,25 @@ pub async fn calendar_react_ssr_entry(
             return Html(error_html(
                 &sanitize_error(&SsrError::Core(e)),
                 &calendar_id.to_string(),
-                &client_bundle_url,
+                &urls.client_js,
+                &urls.css,
+                dev_mode,
             ))
             .into_response();
         }
     };
 
     // Render using SSR pool
-    render_with_ssr_pool(
-        ssr_pool,
-        config,
-        &calendar_id.to_string(),
-        &client_bundle_url,
-    )
-    .await
+    render_with_ssr_pool(&ssr_pool, config, &calendar_id.to_string(), &urls, dev_mode).await
 }
 
 /// Helper to render with SSR pool and handle errors consistently.
 async fn render_with_ssr_pool(
-    ssr_pool: &calendsync_ssr::SsrPool,
+    ssr_pool: &Arc<SsrPool>,
     config: SsrConfig,
     calendar_id: &str,
-    client_bundle_url: &str,
+    urls: &BundleUrls,
+    dev_mode: bool,
 ) -> Response {
     match ssr_pool.render(config).await {
         Ok(html) => Html(html).into_response(),
@@ -400,7 +494,9 @@ async fn render_with_ssr_pool(
                 Html(error_html(
                     &sanitize_error(&SsrError::Overloaded { retry_after_secs }),
                     calendar_id,
-                    client_bundle_url,
+                    &urls.client_js,
+                    &urls.css,
+                    dev_mode,
                 )),
             )
                 .into_response()
@@ -410,7 +506,9 @@ async fn render_with_ssr_pool(
             Html(error_html(
                 &sanitize_error(&e),
                 calendar_id,
-                client_bundle_url,
+                &urls.client_js,
+                &urls.css,
+                dev_mode,
             ))
             .into_response()
         }

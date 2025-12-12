@@ -71,10 +71,17 @@ fn main() {
                 }
             }
 
-            // Handle CSS files
+            // Handle CSS files (now hashed like JS files)
             if filename.ends_with(".css") && !filename.ends_with(".css.map") {
-                // CSS files are not hashed, use as-is
-                manifest.insert(filename.clone(), json!(filename));
+                // Check if it's a hashed file (contains hash before .css)
+                if let Some(dash_pos) = filename.rfind('-') {
+                    // Hashed file: name-hash.css -> name.css
+                    let original_name = &filename[..dash_pos];
+                    manifest.insert(format!("{original_name}.css"), json!(filename));
+                } else {
+                    // Non-hashed file: name.css -> name.css
+                    manifest.insert(filename.clone(), json!(filename));
+                }
             }
         }
     }

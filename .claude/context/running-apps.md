@@ -35,6 +35,39 @@ cargo run -p calendsync
 
 **Environment variables**:
 - `RUST_LOG` - Logging level (default: info)
+- `DEV_MODE` - Enables dev endpoints and runtime manifest (set by `cargo xtask dev web`)
+- `DEV_NO_AUTO_REFRESH` - Disables browser auto-refresh in dev mode
+
+## Development Workflow
+
+For active development with TypeScript hot-reload, use `cargo xtask dev web` instead of `cargo run`:
+
+```bash
+cargo xtask dev web                  # Default port 3000
+cargo xtask dev web --port 8080      # Custom port
+cargo xtask dev web --no-hot-reload  # Disable hot-reload
+cargo xtask dev web --no-auto-refresh # Hot-reload without browser refresh
+```
+
+**What happens**:
+1. Server starts with `DEV_MODE=1`
+2. Waits for server health check (up to 30s)
+3. File watcher monitors `crates/frontend/src/` for changes
+4. On change: `bun run build:dev` → POST `/_dev/reload` → Browser refreshes
+
+**Visual indicators**:
+- Red "DEV" badge in top-right corner of page
+- Console logs: `[Dev] Auto-refresh connected`
+
+**When to expect refresh**:
+- TypeScript changes: ~500ms debounce + build + page refresh
+- CSS changes: Same (full refresh, not CSS-only hot-swap yet)
+
+**Error handling**:
+- Build failures: Logged to terminal, browser keeps old version
+- Server startup fails after 30s: Warning printed, continues anyway
+
+For full details, see [hot-reload.md](./hot-reload.md).
 
 ## Web Client
 

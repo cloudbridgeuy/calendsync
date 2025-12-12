@@ -8,7 +8,7 @@
     "build:dev": "bun run build:calendsync:dev",
     "build:calendsync": "bun run build:calendsync:server && bun run build:calendsync:client && bun run build:calendsync:css",
     "build:calendsync:dev": "bun run build:calendsync:server:dev && bun run build:calendsync:client:dev && bun run build:calendsync:css",
-    "build:calendsync:css": "cp ./src/calendsync/styles.css ./dist/calendsync.css",
+    "build:calendsync:css": "bun run ./scripts/build-css.ts",
     "build:calendsync:server": "bun build ./src/calendsync/server.tsx --outdir ./dist --entry-naming calendsync-server.js --format esm --target browser --minify",
     "build:calendsync:server:dev": "bun build ./src/calendsync/server.tsx --outdir ./dist --entry-naming calendsync-server.js --format esm --target browser --sourcemap=external",
     "build:calendsync:client": "bun build ./src/calendsync/client.tsx --outdir ./dist --entry-naming calendsync-client-[hash].js --format esm --target browser --minify --define:process.env.NODE_ENV='\"production\"'",

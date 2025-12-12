@@ -442,6 +442,18 @@ async fn test_endpoint() {
 - Add rustdoc comments for public APIs
 - Use `#[allow(clippy::large_enum_variant)]` sparingly and with justification
 
+## Unnegotiables
+
+These principles are non-negotiable when working on this codebase:
+
+1. **No Dead Code**: Remove unused code immediately. This applies to both Rust and TypeScript. If code is not called, delete it.
+
+2. **Functional Core - Imperative Shell**: Follow this pattern strictly. Pure business logic in core modules, I/O operations in shell. See the dedicated section above for details.
+
+3. **Progressive Disclosure**: Keep documentation layered. High-level overview in CLAUDE.md, detailed docs in `.claude/context/` files. Don't duplicate information.
+
+4. **Follow Existing Patterns**: When implementing features, use patterns already established in the codebase. Don't invent new approaches when existing ones work. Consistency trumps novelty.
+
 ## Issue Tracking with Beads
 
 This project uses [beads](https://github.com/cloudbridgeuy/beads) for issue tracking. Beads stores issues in `.beads/issues.jsonl` and syncs via git.
@@ -642,6 +654,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | Running Applications | `.claude/context/running-apps.md`      |
 | Compound Pattern     | `.claude/context/compound-pattern.md`  |
 | React Contexts       | `.claude/context/react-contexts.md`    |
+| Hot-Reload (Web)     | `.claude/context/hot-reload.md`        |
 
 ### Local Working Directories (gitignored)
 

@@ -16,7 +16,6 @@ import {
   calculateHighlightedDay,
   calculateRecenterOffset,
   calculateScrollPosition,
-  calculateSnapScrollPosition,
   calculateTotalWidth,
   calculateVisibleDays,
   calculateWindowDates,
@@ -24,7 +23,6 @@ import {
   DEFAULT_VIRTUAL_SCROLL_CONFIG,
   isSameCalendarDay,
   shouldRecenter,
-  shouldSnapToDay,
   type VirtualScrollConfig,
 } from "@core/calendar/virtualScroll"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
@@ -73,9 +71,6 @@ const RECENTER_SHIFT_DAYS = 6
 /** Debounce time for scroll events in ms (60fps = ~16ms) */
 const SCROLL_DEBOUNCE_MS = 16
 
-/** Debounce time for scroll-end detection in ms (used for snap behavior) */
-const SCROLL_END_DEBOUNCE_MS = 50
-
 /**
  * Hook for managing virtual scroll behavior for calendar days.
  *
@@ -123,10 +118,7 @@ export function useVirtualScroll(options: UseVirtualScrollOptions): UseVirtualSc
   // Refs
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const scrollEndTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isRecenteringRef = useRef(false)
-  const isSnappingRef = useRef(false)
-  const isDraggingRef = useRef(false)
   const prevHighlightedRef = useRef<Date>(initialCenterDate)
   const initialPositionSetRef = useRef(false)
   // Pending scroll adjustments to apply synchronously after DOM update
@@ -217,65 +209,6 @@ export function useVirtualScroll(options: UseVirtualScrollOptions): UseVirtualSc
   ])
 
   /**
-   * Handle scroll end - snap to nearest day when in single-day view.
-   */
-  const handleScrollEnd = useCallback(() => {
-    if (
-      !enabled ||
-      !scrollContainerRef.current ||
-      isRecenteringRef.current ||
-      isSnappingRef.current
-    )
-      return
-    if (isDraggingRef.current) return // Don't snap while user is still dragging
-    if (!shouldSnapToDay(visibleDays)) return
-
-    const { scrollLeft } = scrollContainerRef.current
-
-    // Calculate snap target
-    const { targetDate, scrollPosition } = calculateSnapScrollPosition(
-      scrollLeft,
-      dayWidth,
-      containerWidth,
-      windowStartDate,
-    )
-
-    // Only snap if not already at target position (with small tolerance)
-    const tolerance = 2 // pixels
-    if (Math.abs(scrollLeft - scrollPosition) > tolerance) {
-      isSnappingRef.current = true
-
-      // Use instant snap for faster response
-      scrollContainerRef.current.scrollTo({
-        left: scrollPosition,
-        behavior: "instant",
-      })
-
-      // Update highlighted date
-      if (!isSameCalendarDay(targetDate, highlightedDate)) {
-        setHighlightedDate(targetDate)
-        prevHighlightedRef.current = targetDate
-        onNavigationFeedback?.()
-        onHighlightedDayChange?.(targetDate)
-      }
-
-      // Reset snapping flag after animation completes
-      setTimeout(() => {
-        isSnappingRef.current = false
-      }, 150)
-    }
-  }, [
-    enabled,
-    visibleDays,
-    dayWidth,
-    containerWidth,
-    windowStartDate,
-    highlightedDate,
-    onNavigationFeedback,
-    onHighlightedDayChange,
-  ])
-
-  /**
    * Debounced scroll handler to avoid excessive updates.
    */
   const debouncedScrollHandler = useCallback(() => {
@@ -283,13 +216,7 @@ export function useVirtualScroll(options: UseVirtualScrollOptions): UseVirtualSc
       clearTimeout(scrollTimeoutRef.current)
     }
     scrollTimeoutRef.current = setTimeout(handleScroll, SCROLL_DEBOUNCE_MS)
-
-    // Also set up scroll-end detection for snap behavior
-    if (scrollEndTimeoutRef.current) {
-      clearTimeout(scrollEndTimeoutRef.current)
-    }
-    scrollEndTimeoutRef.current = setTimeout(handleScrollEnd, SCROLL_END_DEBOUNCE_MS)
-  }, [handleScroll, handleScrollEnd])
+  }, [handleScroll])
 
   /**
    * Scroll to a specific date.
@@ -374,47 +301,8 @@ export function useVirtualScroll(options: UseVirtualScrollOptions): UseVirtualSc
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current)
       }
-      if (scrollEndTimeoutRef.current) {
-        clearTimeout(scrollEndTimeoutRef.current)
-      }
     }
   }, [debouncedScrollHandler, enabled])
-
-  // Track touch/mouse drag state to prevent snapping during active drag
-  useEffect(() => {
-    const container = scrollContainerRef.current
-    if (!container || !enabled) return
-
-    const handleDragStart = () => {
-      isDraggingRef.current = true
-    }
-
-    const handleDragEnd = () => {
-      isDraggingRef.current = false
-      // Trigger snap check after drag ends
-      if (scrollEndTimeoutRef.current) {
-        clearTimeout(scrollEndTimeoutRef.current)
-      }
-      scrollEndTimeoutRef.current = setTimeout(handleScrollEnd, SCROLL_END_DEBOUNCE_MS)
-    }
-
-    // Touch events
-    container.addEventListener("touchstart", handleDragStart, { passive: true })
-    container.addEventListener("touchend", handleDragEnd, { passive: true })
-    container.addEventListener("touchcancel", handleDragEnd, { passive: true })
-
-    // Mouse events (for desktop drag scrolling)
-    container.addEventListener("mousedown", handleDragStart, { passive: true })
-    window.addEventListener("mouseup", handleDragEnd, { passive: true })
-
-    return () => {
-      container.removeEventListener("touchstart", handleDragStart)
-      container.removeEventListener("touchend", handleDragEnd)
-      container.removeEventListener("touchcancel", handleDragEnd)
-      container.removeEventListener("mousedown", handleDragStart)
-      window.removeEventListener("mouseup", handleDragEnd)
-    }
-  }, [enabled, handleScrollEnd])
 
   // Initialize scroll position on mount (only once)
   useLayoutEffect(() => {

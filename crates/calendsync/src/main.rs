@@ -81,19 +81,17 @@ async fn main() -> Result<()> {
 ///
 /// Reads the server bundle path from the manifest and creates a pool
 /// with workers based on available parallelism.
+///
+/// In dev mode (DEV_MODE env var set), reads manifest from disk to support
+/// hot-reload. In production, uses compiled-in manifest.
 fn init_ssr_pool() -> Result<SsrPool> {
-    // Parse manifest to find server bundle name
-    let manifest_str = include_str!("../../frontend/manifest.json");
-    let manifest: serde_json::Value = serde_json::from_str(manifest_str)?;
-
-    let server_bundle_name = manifest
-        .get("calendsync.js")
-        .and_then(|v| v.as_str())
-        .unwrap_or("calendsync-server.js");
-
-    let bundle_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../frontend/dist")
-        .join(server_bundle_name);
+    let bundle_path = if std::env::var("DEV_MODE").is_ok() {
+        // Dev mode: read manifest from disk (hot-reloadable)
+        resolve_bundle_path_runtime()?
+    } else {
+        // Production: use compiled-in manifest
+        resolve_bundle_path_compiled()
+    };
 
     // Determine worker count based on available parallelism
     let worker_count = std::thread::available_parallelism()
@@ -106,12 +104,45 @@ fn init_ssr_pool() -> Result<SsrPool> {
     tracing::info!(
         workers = worker_count,
         bundle = %bundle_path.display(),
+        dev_mode = std::env::var("DEV_MODE").is_ok(),
         "Initializing SSR pool"
     );
 
     let pool = SsrPool::new(pool_config, &bundle_path)?;
 
     Ok(pool)
+}
+
+/// Resolve bundle path from disk manifest (dev mode).
+fn resolve_bundle_path_runtime() -> Result<std::path::PathBuf> {
+    let frontend_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../frontend");
+    let manifest_path = frontend_dir.join("manifest.json");
+
+    let manifest_str = std::fs::read_to_string(&manifest_path)?;
+    let manifest: serde_json::Value = serde_json::from_str(&manifest_str)?;
+
+    let server_bundle_name = manifest
+        .get("calendsync.js")
+        .and_then(|v| v.as_str())
+        .unwrap_or("calendsync-server.js");
+
+    Ok(frontend_dir.join("dist").join(server_bundle_name))
+}
+
+/// Resolve bundle path from compiled-in manifest (production).
+fn resolve_bundle_path_compiled() -> std::path::PathBuf {
+    let manifest_str = include_str!("../../frontend/manifest.json");
+    let manifest: serde_json::Value =
+        serde_json::from_str(manifest_str).unwrap_or(serde_json::json!({}));
+
+    let server_bundle_name = manifest
+        .get("calendsync.js")
+        .and_then(|v| v.as_str())
+        .unwrap_or("calendsync-server.js");
+
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../frontend/dist")
+        .join(server_bundle_name)
 }
 
 /// Wait for shutdown signals (Ctrl+C or SIGTERM) and notify SSE handlers.

@@ -53,6 +53,10 @@ uuid = { version = "1.0", features = ["v4", "serde"] }
 # Test dependencies
 http-body-util = "0.1"
 
+# File watching dependencies (for hot-reload)
+notify = "7.0"
+notify-debouncer-mini = "0.5"
+
 # Deno runtime dependencies (for examples)
 # Using only deno_core to avoid transitive dependency conflicts with deno_web
 deno_core = "0.371"

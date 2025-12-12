@@ -104,7 +104,6 @@ export {
   calculateHighlightedDay,
   calculateRecenterOffset,
   calculateScrollPosition,
-  calculateSnapScrollPosition,
   calculateTotalWidth,
   calculateVirtualWindow,
   calculateVisibleDays,
@@ -113,5 +112,4 @@ export {
   DEFAULT_VIRTUAL_SCROLL_CONFIG,
   isSameCalendarDay,
   shouldRecenter,
-  shouldSnapToDay,
 } from "./virtualScroll"

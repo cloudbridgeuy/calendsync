@@ -20,7 +20,7 @@ use crate::state::AppState;
 /// Fast endpoint suitable for frequent liveness checks.
 #[axum::debug_handler]
 pub async fn healthz(State(state): State<AppState>) -> Response {
-    let Some(ssr_pool) = &state.ssr_pool else {
+    let Some(ssr_pool) = state.get_ssr_pool().await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
             Json(serde_json::json!({
@@ -39,7 +39,7 @@ pub async fn healthz(State(state): State<AppState>) -> Response {
 /// Returns 200 with health status if healthy, 503 if unhealthy.
 #[axum::debug_handler]
 pub async fn readyz(State(state): State<AppState>) -> Response {
-    let Some(ssr_pool) = &state.ssr_pool else {
+    let Some(ssr_pool) = state.get_ssr_pool().await else {
         return (
             StatusCode::SERVICE_UNAVAILABLE,
             Json(serde_json::json!({

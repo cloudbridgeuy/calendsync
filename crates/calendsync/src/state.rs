@@ -5,7 +5,7 @@ use std::{
         Arc, RwLock,
     },
 };
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, RwLock as TokioRwLock};
 use uuid::Uuid;
 
 use calendsync_ssr::SsrPool;
@@ -40,20 +40,26 @@ pub struct AppState {
     /// Shutdown signal sender for SSE connections.
     pub shutdown_tx: broadcast::Sender<()>,
     /// SSR worker pool for React server-side rendering.
+    /// Wrapped in RwLock for hot-reload support (dev mode pool swapping).
     /// None when SSR is not initialized (e.g., in tests).
-    pub ssr_pool: Option<Arc<SsrPool>>,
+    pub ssr_pool: Arc<TokioRwLock<Option<Arc<SsrPool>>>>,
+    /// Dev mode reload signal sender (for browser auto-refresh).
+    /// Only used when DEV_MODE is set.
+    pub dev_reload_tx: broadcast::Sender<()>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
         let (shutdown_tx, _) = broadcast::channel(1);
+        let (dev_reload_tx, _) = broadcast::channel(1);
         Self {
             calendars: Arc::new(RwLock::new(HashMap::new())),
             entries: Arc::new(RwLock::new(HashMap::new())),
             event_counter: Arc::new(AtomicU64::new(1)),
             event_history: Arc::new(RwLock::new(VecDeque::new())),
             shutdown_tx,
-            ssr_pool: None,
+            ssr_pool: Arc::new(TokioRwLock::new(None)),
+            dev_reload_tx,
         }
     }
 }
@@ -65,9 +71,39 @@ impl AppState {
     }
 
     /// Set the SSR pool.
-    pub fn with_ssr_pool(mut self, pool: SsrPool) -> Self {
-        self.ssr_pool = Some(Arc::new(pool));
+    ///
+    /// This is called during initialization before any handlers run,
+    /// so there's no contention - use try_write which doesn't block.
+    pub fn with_ssr_pool(self, pool: SsrPool) -> Self {
+        // At initialization, no contention exists - try_write always succeeds
+        let mut guard = self
+            .ssr_pool
+            .try_write()
+            .expect("SSR pool lock should be available during initialization");
+        *guard = Some(Arc::new(pool));
+        drop(guard);
         self
+    }
+
+    /// Get the SSR pool for rendering.
+    ///
+    /// Returns a clone of the Arc, allowing callers to hold a reference
+    /// even if the pool is swapped (hot-reload).
+    pub async fn get_ssr_pool(&self) -> Option<Arc<SsrPool>> {
+        self.ssr_pool.read().await.clone()
+    }
+
+    /// Swap the SSR pool with a new one (dev mode hot-reload).
+    ///
+    /// The old pool will be dropped, causing workers to terminate.
+    pub async fn swap_ssr_pool(&self, new_pool: SsrPool) {
+        let mut guard = self.ssr_pool.write().await;
+        let old = guard.replace(Arc::new(new_pool));
+        drop(guard);
+
+        if old.is_some() {
+            tracing::info!("SSR pool swapped (old pool workers will terminate)");
+        }
     }
 
     /// Fixed demo calendar ID for predictable development URLs.
@@ -172,5 +208,16 @@ impl AppState {
     /// Signal all SSE connections to shut down.
     pub fn signal_shutdown(&self) {
         let _ = self.shutdown_tx.send(());
+    }
+
+    /// Subscribe to dev reload signal (for browser auto-refresh).
+    pub fn subscribe_dev_reload(&self) -> broadcast::Receiver<()> {
+        self.dev_reload_tx.subscribe()
+    }
+
+    /// Signal all connected browsers to reload (dev mode only).
+    pub fn signal_dev_reload(&self) {
+        let _ = self.dev_reload_tx.send(());
+        tracing::debug!("Dev reload signal sent");
     }
 }
