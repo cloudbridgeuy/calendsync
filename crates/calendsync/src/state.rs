@@ -12,6 +12,18 @@ use calendsync_ssr::SsrPool;
 
 use crate::mock_data::generate_mock_entries;
 
+/// Build error message for dev mode error overlay.
+#[derive(Clone, Debug)]
+pub struct BuildError {
+    pub error: String,
+}
+
+/// CSS reload message for dev mode CSS hot-swap.
+#[derive(Clone, Debug)]
+pub struct CssReload {
+    pub filename: String,
+}
+
 // Re-export core types for use in handlers
 pub use calendsync_core::calendar::{Calendar, CalendarEntry, CalendarEvent};
 
@@ -46,12 +58,20 @@ pub struct AppState {
     /// Dev mode reload signal sender (for browser auto-refresh).
     /// Only used when DEV_MODE is set.
     pub dev_reload_tx: broadcast::Sender<()>,
+    /// Dev mode build error sender (for browser error overlay).
+    /// Only used when DEV_MODE is set.
+    pub dev_error_tx: broadcast::Sender<BuildError>,
+    /// Dev mode CSS reload sender (for CSS hot-swap without full reload).
+    /// Only used when DEV_MODE is set.
+    pub dev_css_reload_tx: broadcast::Sender<CssReload>,
 }
 
 impl Default for AppState {
     fn default() -> Self {
         let (shutdown_tx, _) = broadcast::channel(1);
         let (dev_reload_tx, _) = broadcast::channel(1);
+        let (dev_error_tx, _) = broadcast::channel(1);
+        let (dev_css_reload_tx, _) = broadcast::channel(1);
         Self {
             calendars: Arc::new(RwLock::new(HashMap::new())),
             entries: Arc::new(RwLock::new(HashMap::new())),
@@ -60,6 +80,8 @@ impl Default for AppState {
             shutdown_tx,
             ssr_pool: Arc::new(TokioRwLock::new(None)),
             dev_reload_tx,
+            dev_error_tx,
+            dev_css_reload_tx,
         }
     }
 }
@@ -219,5 +241,27 @@ impl AppState {
     pub fn signal_dev_reload(&self) {
         let _ = self.dev_reload_tx.send(());
         tracing::debug!("Dev reload signal sent");
+    }
+
+    /// Subscribe to dev build error signal (for browser error overlay).
+    pub fn subscribe_dev_error(&self) -> broadcast::Receiver<BuildError> {
+        self.dev_error_tx.subscribe()
+    }
+
+    /// Signal all connected browsers to show a build error (dev mode only).
+    pub fn signal_dev_error(&self, error: String) {
+        let _ = self.dev_error_tx.send(BuildError { error });
+        tracing::debug!("Dev error signal sent");
+    }
+
+    /// Subscribe to dev CSS reload signal (for CSS hot-swap).
+    pub fn subscribe_dev_css_reload(&self) -> broadcast::Receiver<CssReload> {
+        self.dev_css_reload_tx.subscribe()
+    }
+
+    /// Signal all connected browsers to hot-swap CSS (dev mode only).
+    pub fn signal_dev_css_reload(&self, filename: String) {
+        let _ = self.dev_css_reload_tx.send(CssReload { filename });
+        tracing::debug!("Dev CSS reload signal sent");
     }
 }

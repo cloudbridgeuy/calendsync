@@ -5,8 +5,8 @@ pub enum DevError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
-    #[error("Frontend build failed")]
-    BuildFailed,
+    #[error("Frontend build failed:\n{0}")]
+    BuildFailedWithOutput(String),
 
     #[error("Reload request failed: {0}")]
     ReloadFailed(String),

@@ -69,11 +69,14 @@ pub fn create_app(state: AppState) -> Router {
     // Dev-only routes (when DEV_MODE is set and debug build)
     #[cfg(debug_assertions)]
     if std::env::var("DEV_MODE").is_ok() {
-        use crate::handlers::dev::{dev_events_sse, reload_ssr};
+        use crate::handlers::dev::{dev_events_sse, reload_ssr, report_build_error};
         router = router
             .route("/_dev/reload", post(reload_ssr))
-            .route("/_dev/events", get(dev_events_sse));
-        tracing::info!("Dev mode enabled: /_dev/reload and /_dev/events endpoints available");
+            .route("/_dev/events", get(dev_events_sse))
+            .route("/_dev/error", post(report_build_error));
+        tracing::info!(
+            "Dev mode enabled: /_dev/reload, /_dev/events, /_dev/error endpoints available"
+        );
     }
 
     router
