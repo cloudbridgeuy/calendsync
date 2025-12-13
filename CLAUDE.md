@@ -655,6 +655,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | Compound Pattern     | `.claude/context/compound-pattern.md`  |
 | React Contexts       | `.claude/context/react-contexts.md`    |
 | Hot-Reload (Web)     | `.claude/context/hot-reload.md`        |
+| systemfd Integration | `.claude/context/systemfd.md`          |
 
 ### Local Working Directories (gitignored)
 
