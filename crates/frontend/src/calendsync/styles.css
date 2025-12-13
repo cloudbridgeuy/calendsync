@@ -345,11 +345,7 @@ body {
 }
 
 .entry-tile.multi-day {
-  background: linear-gradient(
-    135deg,
-    var(--bg-secondary) 0%,
-    var(--bg-tertiary) 100%
-  );
+  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
 }
 
 .entry-tile.all-day {

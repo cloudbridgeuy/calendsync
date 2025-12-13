@@ -40,10 +40,13 @@ async function main() {
     const manifestContent = await readFile(MANIFEST_PATH, "utf-8")
     const manifest = JSON.parse(manifestContent)
     manifest["calendsync.css"] = outputFilename
-    await writeFile(MANIFEST_PATH, JSON.stringify(manifest, null, 2) + "\n")
-  } catch (err) {
+    await writeFile(MANIFEST_PATH, `${JSON.stringify(manifest, null, 2)}\n`)
+  } catch (_err) {
     // If manifest doesn't exist, create one with just CSS entry
-    await writeFile(MANIFEST_PATH, JSON.stringify({ "calendsync.css": outputFilename }, null, 2) + "\n")
+    await writeFile(
+      MANIFEST_PATH,
+      `${JSON.stringify({ "calendsync.css": outputFilename }, null, 2)}\n`,
+    )
   }
 
   console.log(`CSS built: ${outputFilename}`)
