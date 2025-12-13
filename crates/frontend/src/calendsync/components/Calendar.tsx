@@ -87,6 +87,7 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
     // Sound (short click/tick)
     if (isAudioSupported()) {
       if (!audioContextRef.current) {
+        // biome-ignore lint/suspicious/noExplicitAny: webkitAudioContext is a Safari-specific API not in standard typings
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
       }
       const ctx = audioContextRef.current

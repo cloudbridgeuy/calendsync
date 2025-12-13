@@ -28,17 +28,25 @@ pub struct BuildErrorRequest {
 /// Request body for reload endpoint with optional manifest comparison.
 #[derive(serde::Deserialize, Default)]
 pub struct ReloadRequest {
-    /// Previous CSS filename for CSS-only change detection.
-    /// If provided and only CSS changed, triggers CSS hot-swap instead of full reload.
+    /// Previous CSS filename for change detection.
     #[serde(default)]
     pub prev_css: Option<String>,
+    /// Previous server JS filename for change detection.
+    #[serde(default)]
+    pub prev_server_js: Option<String>,
+    /// Previous client JS filename for change detection.
+    #[serde(default)]
+    pub prev_client_js: Option<String>,
 }
 
 /// POST /_dev/reload - Reload SSR bundle (dev mode only).
 ///
-/// Reads the new manifest, loads the new bundle, and swaps the SSR pool.
-/// If only CSS changed (detected via prev_css param), sends CSS hot-swap signal
-/// instead of full page reload.
+/// Reads the new manifest, detects what changed, and takes minimal action:
+/// - "none": No changes, skip reload entirely
+/// - "css_only": Only CSS changed, hot-swap without pool swap or page reload
+/// - "client_only": Only client JS changed, page reload without pool swap
+/// - "full": Server JS changed, swap pool and reload page
+///
 /// This endpoint is only available when DEV_MODE environment variable is set.
 #[axum::debug_handler]
 pub async fn reload_ssr(
@@ -76,68 +84,117 @@ pub async fn reload_ssr(
         }
     };
 
-    // Get bundle names from manifest
-    let server_bundle_name = manifest
+    // Get all bundle names from manifest
+    let new_server_js = manifest
         .get("calendsync.js")
         .and_then(|v| v.as_str())
         .unwrap_or("calendsync-server.js");
+
+    let new_client_js = manifest
+        .get("calendsync-client.js")
+        .and_then(|v| v.as_str())
+        .unwrap_or("calendsync-client.js");
 
     let new_css = manifest
         .get("calendsync.css")
         .and_then(|v| v.as_str())
         .unwrap_or("calendsync.css");
 
-    // Check if only CSS changed (JS bundle name didn't change)
-    let css_only_change = if let Some(prev_css) = &body.prev_css {
-        prev_css != new_css
+    // Handle first request (no prev values) - log and treat as full reload
+    let is_first_request =
+        body.prev_css.is_none() && body.prev_server_js.is_none() && body.prev_client_js.is_none();
+
+    if is_first_request {
+        tracing::info!("First reload request - no previous state, performing full reload");
+    }
+
+    // Determine what changed
+    let css_changed = body.prev_css.as_ref().is_some_and(|prev| prev != new_css);
+    let server_js_changed = body
+        .prev_server_js
+        .as_ref()
+        .is_some_and(|prev| prev != new_server_js);
+    let client_js_changed = body
+        .prev_client_js
+        .as_ref()
+        .is_some_and(|prev| prev != new_client_js);
+
+    // Determine action based on change matrix
+    let change_type = if is_first_request {
+        "full"
     } else {
-        false
-    };
-
-    let bundle_path = frontend_dir.join("dist").join(server_bundle_name);
-
-    // Create pool config
-    let worker_count = std::thread::available_parallelism()
-        .map(|p| p.get())
-        .unwrap_or(4);
-
-    let pool_config = match SsrPoolConfig::with_defaults(worker_count) {
-        Ok(c) => c,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "success": false,
-                    "error": format!("Invalid pool config: {}", e)
-                })),
-            );
+        match (server_js_changed, client_js_changed, css_changed) {
+            (false, false, false) => "none",
+            (false, false, true) => "css_only",
+            (false, true, _) => "client_only",
+            (true, _, _) => "full",
         }
     };
 
-    // Create new pool
-    let new_pool = match SsrPool::new(pool_config, &bundle_path) {
-        Ok(p) => p,
-        Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "success": false,
-                    "error": format!("Failed to create SSR pool: {}", e)
-                })),
+    let bundle_path = frontend_dir.join("dist").join(new_server_js);
+
+    // Only swap pool if server JS changed (or first request)
+    if change_type == "full" {
+        // Create pool config
+        let worker_count = std::thread::available_parallelism()
+            .map(|p| p.get())
+            .unwrap_or(4);
+
+        let pool_config = match SsrPoolConfig::with_defaults(worker_count) {
+            Ok(c) => c,
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({
+                        "success": false,
+                        "error": format!("Invalid pool config: {}", e)
+                    })),
+                );
+            }
+        };
+
+        // Create new pool
+        let new_pool = match SsrPool::new(pool_config, &bundle_path) {
+            Ok(p) => p,
+            Err(e) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({
+                        "success": false,
+                        "error": format!("Failed to create SSR pool: {}", e)
+                    })),
+                );
+            }
+        };
+
+        // Swap the pool
+        state.swap_ssr_pool(new_pool).await;
+    }
+
+    // Signal browsers based on change type
+    match change_type {
+        "none" => {
+            tracing::info!("No changes detected, skipping reload");
+        }
+        "css_only" => {
+            state.signal_dev_css_reload(new_css.to_string());
+            tracing::info!(css = new_css, "CSS hot-swapped (no pool swap)");
+        }
+        "client_only" => {
+            state.signal_dev_reload();
+            tracing::info!(
+                client_js = new_client_js,
+                "Client JS changed (no pool swap)"
             );
         }
-    };
-
-    // Swap the pool
-    state.swap_ssr_pool(new_pool).await;
-
-    // Signal browsers - CSS hot-swap if only CSS changed, full reload otherwise
-    if css_only_change {
-        state.signal_dev_css_reload(new_css.to_string());
-        tracing::info!(css = new_css, "CSS hot-swapped");
-    } else {
-        state.signal_dev_reload();
-        tracing::info!(bundle = %bundle_path.display(), "SSR pool reloaded");
+        _ => {
+            // "full"
+            state.signal_dev_reload();
+            tracing::info!(
+                server_js = new_server_js,
+                "Server JS changed, SSR pool swapped"
+            );
+        }
     }
 
     (
@@ -146,7 +203,9 @@ pub async fn reload_ssr(
             "success": true,
             "bundle": bundle_path.display().to_string(),
             "css": new_css,
-            "css_only": css_only_change
+            "server_js": new_server_js,
+            "client_js": new_client_js,
+            "change_type": change_type
         })),
     )
 }

@@ -34,8 +34,9 @@ pub dev_reload_tx: broadcast::Sender<()>  // For browser auto-refresh
 ```
 
 **`handlers/dev.rs`**: Dev-only endpoints (debug builds only)
-- `POST /_dev/reload`: Swaps SSR pool and broadcasts reload signal
-- `GET /_dev/events`: SSE endpoint for browser auto-refresh
+- `POST /_dev/reload`: Detects change type (none/css_only/client_only/full), conditionally swaps SSR pool
+- `POST /_dev/error`: Receives build errors from xtask, broadcasts to browsers
+- `GET /_dev/events`: SSE endpoint with events: `reload`, `css-reload`, `build-error`
 
 **`main.rs`**: Runtime manifest reading when `DEV_MODE` is set
 - Dev mode: reads manifest from `crates/frontend/manifest.json`
@@ -53,7 +54,9 @@ pub dev_reload_tx: broadcast::Sender<()>  // For browser auto-refresh
 
 **`App.tsx`**: Conditionally injects auto-refresh script
 - When `initialData.devMode` is true, adds SSE listener
-- On "reload" event, calls `location.reload()`
+- Handles `reload` event: full page refresh
+- Handles `css-reload` event: hot-swaps stylesheet without reload
+- Handles `build-error` event: displays error overlay with dismiss button
 
 ### xtask (`xtask/src/dev/web.rs`)
 
@@ -91,7 +94,11 @@ cargo xtask dev web --release
 
 | Scenario | Behavior |
 |----------|----------|
-| Build fails | Log error, keep old bundle, server continues |
+| Build fails | Shows error overlay in browser, keeps old bundle |
+| CSS-only change | Hot-swap CSS without full reload or pool swap |
+| Client JS change | Page reload without pool swap |
+| Server JS change | Pool swap + page reload |
+| No changes (same hashes) | Skip reload entirely |
 | Reload endpoint fails | Log error, keep old bundle, server continues |
 | Server crashes | xtask detects exit and terminates |
 | Rapid changes | Debouncer coalesces (500ms window) |
@@ -139,8 +146,32 @@ The hot-reload system is **completely isolated from Tauri apps**:
 3. The auto-refresh script is only injected when `devMode: true` in SSR data
 4. Tauri apps use client-side rendering, not SSR
 
+## SSE Event Types
+
+| Event | Data | Browser Action |
+|-------|------|----------------|
+| `connected` | `{}` | Log connection |
+| `reload` | `{}` | Full page refresh |
+| `css-reload` | `{"filename": "calendsync-xxx.css"}` | Hot-swap stylesheet |
+| `build-error` | `{"error": "..."}` | Show error overlay |
+
+## Change Detection Matrix
+
+The reload endpoint tracks three assets and determines the minimal action:
+
+| Server JS | Client JS | CSS | SSR Pool Swap | Browser Action |
+|-----------|-----------|-----|---------------|----------------|
+| No | No | No | No | Skip entirely |
+| No | No | Yes | No | CSS hot-swap |
+| No | Yes | * | No | Full reload |
+| Yes | * | * | Yes | Full reload |
+
+**Optimization**: SSR pool swap is expensive (~100ms). Only server JS changes require it since:
+- CSS has no effect on SSR output
+- Client JS is not used during SSR (hydration-only)
+
 ## Limitations
 
-- **Not true HMR**: Full page refresh (state is lost)
+- **Not true HMR**: Full page refresh (state is lost), except CSS hot-swap
 - **Debug builds only**: Dev endpoints not available in release builds
 - **Web only**: Desktop/iOS apps use Tauri's Vite-based HMR instead

@@ -58,8 +58,10 @@ pub async fn run(opts: WebOptions, global: crate::Global) -> Result<()> {
     // Wait for server to be ready before starting watcher
     wait_for_server_ready(opts.port, global.is_silent()).await;
 
-    // Track current CSS filename for CSS-only hot-swap detection
+    // Track current asset filenames for change detection
     let mut current_css = get_current_css_filename();
+    let mut current_server_js = get_current_server_js_filename();
+    let mut current_client_js = get_current_client_js_filename();
 
     // Set up file watcher with debouncing using tokio channel
     let (sync_tx, sync_rx) = std::sync::mpsc::channel::<
@@ -118,8 +120,16 @@ pub async fn run(opts: WebOptions, global: crate::Global) -> Result<()> {
 
             // File change detected via async channel
             Some(()) = async_rx.recv() => {
-                if let Some(new_css) = handle_file_change(&opts, &global, current_css.as_deref()).await {
-                    current_css = Some(new_css);
+                if let Some(assets) = handle_file_change(
+                    &opts,
+                    &global,
+                    current_css.as_deref(),
+                    current_server_js.as_deref(),
+                    current_client_js.as_deref(),
+                ).await {
+                    current_css = Some(assets.css);
+                    current_server_js = Some(assets.server_js);
+                    current_client_js = Some(assets.client_js);
                 }
             }
         }
@@ -180,13 +190,22 @@ async fn wait_for_server_ready(port: u16, silent: bool) -> bool {
     false
 }
 
+/// Tracked asset filenames for change detection.
+struct AssetFilenames {
+    css: String,
+    server_js: String,
+    client_js: String,
+}
+
 /// Handle a file change event.
-/// Returns the new CSS filename if the reload was successful.
+/// Returns the new asset filenames if the reload was successful.
 async fn handle_file_change(
     opts: &WebOptions,
     global: &crate::Global,
     prev_css: Option<&str>,
-) -> Option<String> {
+    prev_server_js: Option<&str>,
+    prev_client_js: Option<&str>,
+) -> Option<AssetFilenames> {
     if !global.is_silent() {
         aprintln!("{} Change detected, rebuilding...", p_y("🔄"));
     }
@@ -195,17 +214,30 @@ async fn handle_file_change(
     match run_frontend_build().await {
         Ok(()) => {
             // Build succeeded - trigger reload
-            match trigger_reload(opts.port, prev_css).await {
+            match trigger_reload(opts.port, prev_css, prev_server_js, prev_client_js).await {
                 Ok(response) => {
-                    let css_only = response.css_only;
                     if !global.is_silent() {
-                        if css_only {
-                            aprintln!("{} CSS hot-swapped!", p_g("✓"));
-                        } else {
-                            aprintln!("{} Reloaded!", p_g("✓"));
+                        match response.change_type.as_str() {
+                            "none" => {
+                                aprintln!("{} No changes detected", p_y("○"));
+                            }
+                            "css_only" => {
+                                aprintln!("{} CSS hot-swapped!", p_g("✓"));
+                            }
+                            "client_only" => {
+                                aprintln!("{} Client JS reloaded!", p_g("✓"));
+                            }
+                            _ => {
+                                // "full"
+                                aprintln!("{} SSR pool swapped, reloaded!", p_g("✓"));
+                            }
                         }
                     }
-                    return Some(response.css);
+                    return Some(AssetFilenames {
+                        css: response.css,
+                        server_js: response.server_js,
+                        client_js: response.client_js,
+                    });
                 }
                 Err(e) => {
                     if !global.is_silent() {
@@ -271,27 +303,51 @@ struct ReloadResponse {
     #[allow(dead_code)]
     bundle: String,
     css: String,
-    css_only: bool,
+    server_js: String,
+    client_js: String,
+    change_type: String,
 }
 
-/// Get current CSS filename from manifest.
-fn get_current_css_filename() -> Option<String> {
+/// Get a filename from the manifest by key.
+fn get_manifest_entry(key: &str) -> Option<String> {
     let manifest_path = Path::new("crates/frontend/manifest.json");
     let content = std::fs::read_to_string(manifest_path).ok()?;
     let manifest: serde_json::Value = serde_json::from_str(&content).ok()?;
     manifest
-        .get("calendsync.css")
+        .get(key)
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
 }
 
+/// Get current CSS filename from manifest.
+fn get_current_css_filename() -> Option<String> {
+    get_manifest_entry("calendsync.css")
+}
+
+/// Get current server JS filename from manifest.
+fn get_current_server_js_filename() -> Option<String> {
+    get_manifest_entry("calendsync.js")
+}
+
+/// Get current client JS filename from manifest.
+fn get_current_client_js_filename() -> Option<String> {
+    get_manifest_entry("calendsync-client.js")
+}
+
 /// Trigger SSR pool reload via HTTP.
-async fn trigger_reload(port: u16, prev_css: Option<&str>) -> Result<ReloadResponse> {
+async fn trigger_reload(
+    port: u16,
+    prev_css: Option<&str>,
+    prev_server_js: Option<&str>,
+    prev_client_js: Option<&str>,
+) -> Result<ReloadResponse> {
     let client = reqwest::Client::new();
     let url = format!("http://localhost:{}/_dev/reload", port);
 
     let body = serde_json::json!({
-        "prev_css": prev_css
+        "prev_css": prev_css,
+        "prev_server_js": prev_server_js,
+        "prev_client_js": prev_client_js
     });
 
     let response = client.post(&url).json(&body).send().await?;

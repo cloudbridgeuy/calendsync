@@ -51,6 +51,7 @@ function Header() {
   }
 
   return (
+    // biome-ignore lint/a11y/useSemanticElements: Using div with role="button" to preserve existing styling; button element would need CSS reset
     <div
       className={`day-container-header${isHighlighted ? " highlighted" : ""}`}
       onClick={onHeaderClick}
