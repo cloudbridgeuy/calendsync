@@ -4,6 +4,8 @@
 
 export type { UseApiConfig } from "./useApi"
 export { fetchEntries, getControlPlaneUrl } from "./useApi"
+export type { UseAriaAnnouncerReturn } from "./useAriaAnnouncer"
+export { useAriaAnnouncer } from "./useAriaAnnouncer"
 export type { UseCalendarStateConfig } from "./useCalendarState"
 export { isOnToday, useCalendarState } from "./useCalendarState"
 export type { UseEntryApiConfig, UseEntryApiResult } from "./useEntryApi"
@@ -21,6 +23,8 @@ export type {
   UseNotificationCenterConfig,
 } from "./useNotificationCenter"
 export { useNotificationCenter } from "./useNotificationCenter"
+export type { UseScrollAnimationOptions, UseScrollAnimationReturn } from "./useScrollAnimation"
+export { useScrollAnimation } from "./useScrollAnimation"
 export type {
   EntryAddedEvent,
   EntryDeletedEvent,
