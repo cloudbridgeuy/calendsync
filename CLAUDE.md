@@ -590,6 +590,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | React Calendar       | `.claude/context/react-calendar.md`    |
 | Entry Modal          | `.claude/context/entry-modal.md`       |
 | Wheel Navigation     | `.claude/context/wheel-navigation.md`  |
+| Scroll Animation     | `.claude/context/scroll-animation.md`  |
 | SSE Event Publishing | `.claude/context/sse-events.md`        |
 | Task Entries         | `.claude/context/task-entries.md`      |
 | SSR Worker Pool      | `.claude/context/ssr-worker-pool.md`   |
