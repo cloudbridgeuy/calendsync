@@ -3,6 +3,14 @@
  * This is the Functional Core of the calendar application.
  */
 
+// Re-export accessibility functions
+export {
+  buildDayColumnSelector,
+  buildDayHeaderSelector,
+  buildFirstEntrySelector,
+  focusDayElement,
+  generateNavigationAnnouncement,
+} from "./accessibility"
 // Re-export ARIA functions
 export type { AriaIds } from "./aria"
 export { buildAriaIds } from "./aria"
@@ -39,8 +47,6 @@ export {
   serverDaysToMap,
   sortDayEntries,
 } from "./entries"
-// Re-export feedback functions
-export { isAudioSupported, isVibrationSupported } from "./feedback"
 // Re-export layout functions
 export {
   calculateAnimationDuration,
@@ -93,6 +99,22 @@ export {
   removeNotification,
   serializeNotifications,
 } from "./notifications"
+// Re-export scroll animation functions
+export type {
+  EasingFunction,
+  ScrollAnimationConfig,
+  ScrollAnimationState,
+} from "./scrollAnimation"
+export {
+  calculateAnimationProgress,
+  calculateCurrentScrollPosition,
+  calculateScaledDuration,
+  calculateScrollDistance,
+  createAnimationState,
+  DEFAULT_SCROLL_ANIMATION_CONFIG,
+  easeOutCubic,
+  isAnimationComplete,
+} from "./scrollAnimation"
 // Re-export all types
 export type { LayoutConstants, ServerDay, ServerEntry } from "./types"
 export { DAY_NAMES, DAY_NAMES_FULL, DEFAULT_LAYOUT_CONSTANTS, MONTH_NAMES } from "./types"
