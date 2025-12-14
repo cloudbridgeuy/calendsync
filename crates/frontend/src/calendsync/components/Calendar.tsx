@@ -4,7 +4,6 @@
  */
 
 import { addDays, formatDateKey, isSameCalendarDay } from "@core/calendar"
-import { isAudioSupported, isVibrationSupported } from "@core/calendar/feedback"
 import type { ServerEntry } from "@core/calendar/types"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import type { CalendarContextValue } from "../contexts"
@@ -75,33 +74,6 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
     return () => window.removeEventListener("resize", measure)
   }, [])
 
-  // Audio context for navigation feedback
-  const audioContextRef = useRef<AudioContext | null>(null)
-
-  // Navigation feedback (haptic/audio)
-  const triggerFeedback = useCallback(() => {
-    // Vibration
-    if (isVibrationSupported()) {
-      navigator.vibrate(10)
-    }
-    // Sound (short click/tick)
-    if (isAudioSupported()) {
-      if (!audioContextRef.current) {
-        // biome-ignore lint/suspicious/noExplicitAny: webkitAudioContext is a Safari-specific API not in standard typings
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
-      }
-      const ctx = audioContextRef.current
-      const oscillator = ctx.createOscillator()
-      const gain = ctx.createGain()
-      oscillator.connect(gain)
-      gain.connect(ctx.destination)
-      oscillator.frequency.value = 1000 // 1kHz tick
-      gain.gain.value = 0.1 // Low volume
-      oscillator.start()
-      oscillator.stop(ctx.currentTime + 0.01) // 10ms duration
-    }
-  }, [])
-
   // Virtual scroll hook for native scroll-based navigation
   const {
     scrollContainerRef,
@@ -118,7 +90,6 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
     onHighlightedDayChange: () => {
       actions.navigateDays(0) // Trigger any necessary data prefetch
     },
-    onNavigationFeedback: triggerFeedback,
   })
 
   // Navigate by days using scrollToDate
