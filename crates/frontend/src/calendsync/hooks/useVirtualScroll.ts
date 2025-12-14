@@ -10,6 +10,7 @@
  * - Programmatic scrolling to specific dates
  */
 
+import { focusDayElement, formatDateKey, generateNavigationAnnouncement } from "@core/calendar"
 import { isScrollable } from "@core/calendar/navigation"
 import {
   calculateDayWidth,
@@ -26,6 +27,8 @@ import {
   type VirtualScrollConfig,
 } from "@core/calendar/virtualScroll"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useAriaAnnouncer } from "./useAriaAnnouncer"
+import { useScrollAnimation } from "./useScrollAnimation"
 
 /**
  * Options for the useVirtualScroll hook.
@@ -39,8 +42,6 @@ export interface UseVirtualScrollOptions {
   enabled?: boolean
   /** Callback when highlighted day changes */
   onHighlightedDayChange?: (date: Date) => void
-  /** Callback to trigger navigation feedback (haptic/audio) */
-  onNavigationFeedback?: () => void
   /** Configuration overrides */
   config?: Partial<VirtualScrollConfig>
 }
@@ -86,7 +87,6 @@ const SCROLL_DEBOUNCE_MS = 16
  *   initialCenterDate: new Date(),
  *   containerWidth: 800,
  *   onHighlightedDayChange: (date) => console.log('New day:', date),
- *   onNavigationFeedback: () => navigator.vibrate?.(10),
  * })
  */
 export function useVirtualScroll(options: UseVirtualScrollOptions): UseVirtualScrollReturn {
@@ -95,7 +95,6 @@ export function useVirtualScroll(options: UseVirtualScrollOptions): UseVirtualSc
     containerWidth,
     enabled = true,
     onHighlightedDayChange,
-    onNavigationFeedback,
     config: configOverrides,
   } = options
 
@@ -124,6 +123,24 @@ export function useVirtualScroll(options: UseVirtualScrollOptions): UseVirtualSc
   // Pending scroll adjustments to apply synchronously after DOM update
   const pendingScrollAdjustmentRef = useRef<number | null>(null)
   const pendingScrollToRef = useRef<{ position: number; animated: boolean } | null>(null)
+  // Track the target date for focus after animation completes
+  const pendingFocusDateRef = useRef<string | null>(null)
+
+  // ARIA announcer for screen reader notifications
+  const { announce } = useAriaAnnouncer()
+
+  // Scroll animation hook for fast, controlled scrolling
+  const { animateScrollTo, cancelAnimation, isAnimating } = useScrollAnimation({
+    scrollContainerRef,
+    dayWidth,
+    onComplete: () => {
+      // Focus the target day element after animation completes
+      if (pendingFocusDateRef.current) {
+        focusDayElement(pendingFocusDateRef.current)
+        pendingFocusDateRef.current = null
+      }
+    },
+  })
 
   // State
   const [windowStartDate, setWindowStartDate] = useState<Date>(() =>
@@ -165,14 +182,11 @@ export function useVirtualScroll(options: UseVirtualScrollOptions): UseVirtualSc
       setHighlightedDate(newHighlighted)
       prevHighlightedRef.current = newHighlighted
 
-      // Trigger feedback
-      onNavigationFeedback?.()
-
       // Notify parent
       onHighlightedDayChange?.(newHighlighted)
     }
 
-    // Check if we need to re-center
+    // Check if we need to re-center (skip during animation to prevent conflicts)
     const recenterDirection = shouldRecenter(
       scrollLeft,
       totalWidth,
@@ -181,7 +195,7 @@ export function useVirtualScroll(options: UseVirtualScrollOptions): UseVirtualSc
       config.recenterThreshold,
     )
 
-    if (recenterDirection) {
+    if (recenterDirection && !isAnimating()) {
       isRecenteringRef.current = true
 
       const { newWindowStartDate, scrollAdjustment } = calculateRecenterOffset(
@@ -205,7 +219,7 @@ export function useVirtualScroll(options: UseVirtualScrollOptions): UseVirtualSc
     totalWidth,
     config.recenterThreshold,
     onHighlightedDayChange,
-    onNavigationFeedback,
+    isAnimating,
   ])
 
   /**
@@ -241,6 +255,7 @@ export function useVirtualScroll(options: UseVirtualScrollOptions): UseVirtualSc
 
       if (daysDiff > config.bufferDays) {
         // Target is outside buffer, need to shift window
+        // Use native scroll for far-away dates (they aren't clickable anyway)
         const newWindowStart = calculateWindowStartDate(targetDate, config.bufferDays)
         const newScrollPosition = calculateScrollPosition(
           targetDate,
@@ -256,16 +271,29 @@ export function useVirtualScroll(options: UseVirtualScrollOptions): UseVirtualSc
         setHighlightedDate(targetDate)
         prevHighlightedRef.current = targetDate
       } else {
-        // Target is within window, just scroll
-        scrollContainerRef.current.scrollTo({
-          left: targetScrollPosition,
-          behavior: animated ? "smooth" : "instant",
-        })
+        // Target is within window - use custom animation for fast, reliable scrolling
+        if (animated) {
+          // Cancel any ongoing animation/momentum
+          cancelAnimation()
+
+          // Store target date for focus after animation completes
+          pendingFocusDateRef.current = formatDateKey(targetDate)
+
+          // Announce navigation to screen readers
+          announce(generateNavigationAnnouncement(targetDate))
+
+          // Start the custom scroll animation
+          animateScrollTo(targetScrollPosition)
+        } else {
+          scrollContainerRef.current.scrollTo({
+            left: targetScrollPosition,
+            behavior: "instant",
+          })
+        }
       }
 
-      // Trigger feedback and notify
+      // Notify parent
       if (!isSameCalendarDay(targetDate, highlightedDate)) {
-        onNavigationFeedback?.()
         onHighlightedDayChange?.(targetDate)
       }
     },
@@ -275,8 +303,10 @@ export function useVirtualScroll(options: UseVirtualScrollOptions): UseVirtualSc
       containerWidth,
       highlightedDate,
       config.bufferDays,
-      onNavigationFeedback,
       onHighlightedDayChange,
+      cancelAnimation,
+      animateScrollTo,
+      announce,
     ],
   )
 
