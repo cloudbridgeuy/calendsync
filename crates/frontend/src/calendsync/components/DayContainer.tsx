@@ -3,7 +3,7 @@
  * Uses context to share date and highlight state between Header and Content sub-components.
  */
 
-import { getDayDisplayInfo } from "@core/calendar"
+import { formatDateKey, getDayDisplayInfo } from "@core/calendar"
 import { createContext, useContext, useMemo } from "react"
 
 /** Context value shared with DayContainer sub-components */
@@ -54,6 +54,7 @@ function Header() {
     // biome-ignore lint/a11y/useSemanticElements: Using div with role="button" to preserve existing styling; button element would need CSS reset
     <div
       className={`day-container-header${isHighlighted ? " highlighted" : ""}`}
+      data-date={formatDateKey(date)}
       onClick={onHeaderClick}
       onKeyDown={handleKeyDown}
       role="button"
