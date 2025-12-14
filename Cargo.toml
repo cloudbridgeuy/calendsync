@@ -59,7 +59,7 @@ notify-debouncer-mini = "0.5"
 
 # Deno runtime dependencies (for examples)
 # Using only deno_core to avoid transitive dependency conflicts with deno_web
-deno_core = "0.371"
+deno_core = "0.373"
 deno_error = "0.7"
 reqwest = { version = "0.12", features = ["json", "stream"] }
 
