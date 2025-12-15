@@ -3,10 +3,12 @@
  * This eliminates props drilling through DayColumn to EntryTile.
  */
 
+import type { ViewMode } from "@core/calendar/settings"
 import type { ServerEntry } from "@core/calendar/types"
 import { createContext, useContext } from "react"
 import type {
   AddNotificationFn,
+  CalendarSettingsState,
   NotificationCenterActions,
   NotificationCenterState,
 } from "../hooks"
@@ -81,6 +83,16 @@ export interface CalendarContextValue {
   notificationActions: NotificationCenterActions
   /** Add a new notification */
   addNotification: AddNotificationFn
+
+  // Settings state
+  /** Calendar settings (view mode, task visibility) */
+  settings: CalendarSettingsState
+  /** Set the view mode */
+  setViewMode: (mode: ViewMode) => void
+  /** Set the showTasks setting */
+  setShowTasks: (show: boolean) => void
+  /** Toggle the showTasks setting */
+  toggleShowTasks: () => void
 }
 
 /** CalendarContext - null when not inside provider */

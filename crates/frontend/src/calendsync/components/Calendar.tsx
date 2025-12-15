@@ -3,12 +3,20 @@
  * Refactored as a compound component with unified horizontal navigation.
  */
 
-import { addDays, formatDateKey, isSameCalendarDay } from "@core/calendar"
+import {
+  addDays,
+  calculateScrollToHour,
+  DEFAULT_SCROLL_HOUR,
+  filterByTaskVisibility,
+  formatDateKey,
+  isSameCalendarDay,
+} from "@core/calendar"
 import type { ServerEntry } from "@core/calendar/types"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import type { CalendarContextValue } from "../contexts"
 import { CalendarProvider, useCalendarContext } from "../contexts"
 import {
+  useCalendarSettings,
   useCalendarState,
   useEntryApi,
   useModalUrl,
@@ -16,11 +24,14 @@ import {
   useVirtualScroll,
 } from "../hooks"
 import type { InitialData } from "../types"
+import { AllDaySection } from "./AllDaySection"
 import { CalendarHeader } from "./CalendarHeader"
 import { DayColumn } from "./DayColumn"
 import { DayContainer } from "./DayContainer"
 import { EntryModal } from "./EntryModal"
+import { HourColumnFixed } from "./HourColumnFixed"
 import { NotificationCenter } from "./NotificationCenter"
+import { SettingsMenu } from "./SettingsMenu"
 import { TodayButton } from "./TodayButton"
 
 interface CalendarProps {
@@ -33,6 +44,11 @@ interface CalendarProps {
  * This is the root of the compound component that manages all state and provides context.
  */
 function CalendarRoot({ initialData, children }: CalendarProps) {
+  // Settings hook
+  const [settingsState, settingsActions] = useCalendarSettings({
+    calendarId: initialData.calendarId,
+  })
+
   // Notification center hook
   const [notificationState, notificationActions, addNotification] = useNotificationCenter({
     calendarId: initialData.calendarId,
@@ -133,13 +149,15 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
 
   /**
    * Get entries for a specific date from the cache.
+   * Applies task visibility filtering based on settings.
    */
   const getEntriesForDate = useCallback(
     (date: Date): ServerEntry[] => {
       const key = formatDateKey(date)
-      return entryCache.get(key) || []
+      const entries = entryCache.get(key) || []
+      return filterByTaskVisibility(entries, settingsState.showTasks)
     },
-    [entryCache],
+    [entryCache, settingsState.showTasks],
   )
 
   /**
@@ -252,6 +270,11 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
       notificationState,
       notificationActions,
       addNotification,
+      // Settings state
+      settings: settingsState,
+      setViewMode: settingsActions.setViewMode,
+      setShowTasks: settingsActions.setShowTasks,
+      toggleShowTasks: settingsActions.toggleShowTasks,
     }),
     [
       flashStates,
@@ -282,15 +305,42 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
       notificationState,
       notificationActions,
       addNotification,
+      settingsState,
+      settingsActions,
     ],
   )
 
   return (
     <CalendarProvider value={contextValue}>
-      <div ref={containerMeasureRef} className="calendar-container">
+      <div
+        ref={containerMeasureRef}
+        className={`calendar-container ${settingsState.viewMode}-mode`}
+      >
         {children}
       </div>
     </CalendarProvider>
+  )
+}
+
+/**
+ * SettingsMenu wrapper sub-component
+ */
+function SettingsMenuWrapper() {
+  const { settings, setViewMode, toggleShowTasks } = useCalendarContext()
+
+  return (
+    <SettingsMenu
+      viewMode={settings.viewMode}
+      showTasks={settings.showTasks}
+      onViewModeChange={setViewMode}
+      onToggleShowTasks={toggleShowTasks}
+    >
+      <SettingsMenu.Trigger />
+      <SettingsMenu.Panel>
+        <SettingsMenu.ViewToggle />
+        <SettingsMenu.TaskToggle />
+      </SettingsMenu.Panel>
+    </SettingsMenu>
   )
 }
 
@@ -299,7 +349,7 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
  */
 function Header() {
   const { highlightedDate } = useCalendarContext()
-  return <CalendarHeader highlightedDate={highlightedDate} />
+  return <CalendarHeader highlightedDate={highlightedDate} settingsSlot={<SettingsMenuWrapper />} />
 }
 
 /**
@@ -324,7 +374,7 @@ function NotificationCenterWrapper() {
  * Uses native browser scroll for navigation.
  */
 function VirtualDaysContent() {
-  const { renderedDates, dayWidth, getEntriesForDate, highlightedDate, scrollToDate } =
+  const { renderedDates, dayWidth, getEntriesForDate, highlightedDate, scrollToDate, settings } =
     useCalendarContext()
 
   return (
@@ -344,7 +394,12 @@ function VirtualDaysContent() {
           >
             <DayContainer.Header />
             <DayContainer.Content>
-              <DayColumn dateKey={dateKey} entries={entries} />
+              <DayColumn
+                dateKey={dateKey}
+                entries={entries}
+                viewMode={settings.viewMode}
+                dayWidth={dayWidth}
+              />
             </DayContainer.Content>
           </DayContainer>
         )
@@ -358,7 +413,17 @@ function VirtualDaysContent() {
  * Uses native browser scroll with hidden scrollbar.
  */
 function Days() {
-  const { sseConnectionState, error, refresh, scrollContainerRef } = useCalendarContext()
+  const { sseConnectionState, error, refresh, scrollContainerRef, settings } = useCalendarContext()
+  const prevViewModeRef = useRef(settings.viewMode)
+
+  // Scroll to 8 AM when switching to schedule mode
+  useEffect(() => {
+    if (settings.viewMode === "schedule" && prevViewModeRef.current !== "schedule") {
+      const scrollTop = calculateScrollToHour(DEFAULT_SCROLL_HOUR)
+      scrollContainerRef.current?.scrollTo({ top: scrollTop })
+    }
+    prevViewModeRef.current = settings.viewMode
+  }, [settings.viewMode, scrollContainerRef])
 
   return (
     <>
@@ -392,6 +457,36 @@ function Days() {
           <VirtualDaysContent />
         </div>
       </main>
+    </>
+  )
+}
+
+/**
+ * View sub-component - renders the main calendar content.
+ * In schedule mode, includes HourColumnFixed and AllDaySection.
+ */
+function View() {
+  const { settings, renderedDates, dayWidth, getEntriesForDate } = useCalendarContext()
+  const isScheduleMode = settings.viewMode === "schedule"
+
+  return (
+    <>
+      {/* All-day section (schedule mode only) */}
+      {isScheduleMode && (
+        <AllDaySection
+          renderedDates={renderedDates}
+          dayWidth={dayWidth}
+          getEntriesForDate={getEntriesForDate}
+        />
+      )}
+
+      <div className={`calendar-main-area${isScheduleMode ? " schedule-mode" : ""}`}>
+        {/* Hour column (schedule mode only, sticky left) */}
+        {isScheduleMode && <HourColumnFixed />}
+
+        {/* Main days content */}
+        <Days />
+      </div>
     </>
   )
 }
@@ -468,6 +563,7 @@ export const Calendar = Object.assign(CalendarRoot, {
   Header,
   NotificationCenter: NotificationCenterWrapper,
   Days,
+  View,
   TodayButton: TodayButtonWrapper,
   Fab,
   Modal,

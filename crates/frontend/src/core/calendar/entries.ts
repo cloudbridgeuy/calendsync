@@ -164,3 +164,14 @@ export function getUniqueCalendarIds(entries: ServerEntry[]): string[] {
   }
   return Array.from(ids)
 }
+
+/**
+ * Filter entries by task visibility setting.
+ * When showTasks is false, removes all task entries.
+ */
+export function filterByTaskVisibility(entries: ServerEntry[], showTasks: boolean): ServerEntry[] {
+  if (showTasks) {
+    return entries
+  }
+  return entries.filter((entry) => !entry.isTask)
+}

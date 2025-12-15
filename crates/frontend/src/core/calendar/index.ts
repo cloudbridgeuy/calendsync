@@ -36,6 +36,7 @@ export { getDayDisplayInfo, isDayToday } from "./dayContainer"
 export {
   filterByCalendar,
   filterByCompletion,
+  filterByTaskVisibility,
   getEntriesForDate,
   getMissingDateKeys,
   getRequiredDateRange,
@@ -99,6 +100,25 @@ export {
   removeNotification,
   serializeNotifications,
 } from "./notifications"
+// Re-export schedule layout functions
+export type { OverlapColumn, SeparatedEntries, TimePosition } from "./scheduleLayout"
+export {
+  calculateDuration,
+  calculateEntryWidth,
+  calculateGridHeight,
+  calculateScrollToHour,
+  calculateTimePosition,
+  DEFAULT_SCROLL_HOUR,
+  detectOverlappingEntries,
+  formatHourLabel,
+  generateHourLabels,
+  getOverlappingEntries,
+  HOUR_HEIGHT_PX,
+  HOURS_IN_DAY,
+  MINUTES_IN_DAY,
+  parseTimeToMinutes,
+  separateEntriesByType,
+} from "./scheduleLayout"
 // Re-export scroll animation functions
 export type {
   EasingFunction,
@@ -115,6 +135,18 @@ export {
   easeOutCubic,
   isAnimationComplete,
 } from "./scrollAnimation"
+// Re-export settings functions
+export type { CalendarSettings, ViewMode } from "./settings"
+export {
+  DEFAULT_SETTINGS,
+  getSettingsStorageKey,
+  parseSettingsJson,
+  SETTINGS_STORAGE_PREFIX,
+  serializeSettings,
+  toggleShowTasks,
+  updateShowTasks,
+  updateViewMode,
+} from "./settings"
 // Re-export all types
 export type { LayoutConstants, ServerDay, ServerEntry } from "./types"
 export { DAY_NAMES, DAY_NAMES_FULL, DEFAULT_LAYOUT_CONSTANTS, MONTH_NAMES } from "./types"
