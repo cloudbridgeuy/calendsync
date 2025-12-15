@@ -19,6 +19,10 @@ cargo xtask dev web
 ├── Watches crates/frontend/src/ for changes
 └── On change (debounced 500ms):
     ├── Runs bun run build:dev
+    │   ├── Builds server JS (calendsync-server.js)
+    │   ├── Builds client JS (calendsync-client-[hash].js)
+    │   ├── Builds CSS (calendsync-[hash].css)
+    │   └── Updates manifest.json with new filenames
     └── POST /_dev/reload → Server swaps SSR pool → Broadcasts reload event
 ```
 
@@ -63,6 +67,21 @@ pub dev_reload_tx: broadcast::Sender<()>  // For browser auto-refresh
 - Spawns server with `DEV_MODE=1`
 - File watcher using `notify-debouncer-mini`
 - Triggers rebuild and reload on changes
+
+### Build Scripts (`crates/frontend/scripts`)
+
+**`build-css.ts`**: Builds CSS with content hashing
+- Computes SHA256 hash of CSS content
+- Outputs `calendsync-[hash].css`
+- Removes old CSS files
+- Updates `manifest.json` with CSS entry
+
+**`update-manifest.ts`**: Updates manifest with JS filenames
+- Scans dist directory for latest assets
+- Removes old hashed files (cleanup)
+- Updates `manifest.json` with all entries (server JS, client JS, CSS)
+
+**Why both scripts?** During `cargo build`, `build.rs` handles manifest generation. But hot-reload runs `bun run build:dev` directly, which bypasses `build.rs`. The `update-manifest.ts` script ensures the manifest stays current during development.
 
 ## Usage
 
@@ -121,6 +140,7 @@ cargo xtask dev web --release
 | `crates/calendsync/src/handlers/dev.rs` | Reload endpoint + SSE events endpoint |
 | `crates/calendsync/src/handlers/calendar_react.rs` | Runtime bundle URLs (JS + CSS) + devMode |
 | `crates/frontend/scripts/build-css.ts` | CSS content hashing during build |
+| `crates/frontend/scripts/update-manifest.ts` | Updates manifest.json with latest asset filenames |
 | `crates/calendsync/src/handlers/static_files.rs` | CSS cache-busting |
 | `crates/calendsync/src/app.rs` | Conditional dev routes |
 | `crates/calendsync/src/main.rs` | Runtime manifest |
