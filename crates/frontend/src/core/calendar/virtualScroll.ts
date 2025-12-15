@@ -73,31 +73,56 @@ export function calculateVirtualWindow(
 }
 
 /**
- * Calculate the scrollLeft value needed to center a specific date in the viewport.
+ * Calculate the scrollLeft value needed to center a group of visible days in the viewport.
  *
- * @param targetDate - The date to center
+ * This function positions the scroll container so that the target date appears in the center
+ * of the visible day columns. For odd numbers (1, 3, 5, 7), the target is exactly centered.
+ * For even numbers (2), the target appears slightly right of center.
+ *
+ * Special case: When dayWidth doesn't fill the viewport (e.g., 75% width for 500-749px range),
+ * the day is centered in the viewport with partial buffer columns visible on both sides.
+ *
+ * @param targetDate - The date to center among visible days
  * @param windowStartDate - The first date in the virtual window
  * @param dayWidth - Width of each day column in pixels
  * @param containerWidth - Width of the scroll container viewport
+ * @param visibleDays - Number of days that should be visible in the viewport
  * @returns scrollLeft value in pixels
  *
  * @example
- * // Window starts Jan 5, target is Jan 15, dayWidth 100px, container 700px
- * const scrollLeft = calculateScrollPosition(targetDate, windowStart, 100, 700)
- * // Returns 650 (10 days * 100px - 350px half container)
+ * // Window starts Jan 1, target is Jan 10, 3 visible days, 300px each
+ * const scrollLeft = calculateScrollPosition(targetDate, windowStart, 300, 900, 3)
+ * // Returns 2400 (days 8, 9, 10 fill viewport, day 10 is right-of-center for 3 days)
  */
 export function calculateScrollPosition(
   targetDate: Date,
   windowStartDate: Date,
   dayWidth: number,
   containerWidth: number,
+  visibleDays: number,
 ): number {
   const dayIndex = Math.round(
     (targetDate.getTime() - windowStartDate.getTime()) / (24 * 60 * 60 * 1000),
   )
-  const targetLeft = dayIndex * dayWidth
-  const centerOffset = containerWidth / 2 - dayWidth / 2
-  return Math.max(0, targetLeft - centerOffset)
+
+  // Calculate how many days appear before the centered day
+  const daysBeforeCenter = Math.floor(visibleDays / 2)
+
+  // First visible day index
+  const firstVisibleDayIndex = dayIndex - daysBeforeCenter
+
+  // Calculate expected total width of visible days
+  const expectedVisibleWidth = dayWidth * visibleDays
+
+  // If visible days don't fill the viewport (e.g., 75% width special case),
+  // center the day(s) in the viewport
+  if (expectedVisibleWidth < containerWidth) {
+    const centerOffset = (containerWidth - expectedVisibleWidth) / 2
+    return Math.max(0, firstVisibleDayIndex * dayWidth - centerOffset)
+  }
+
+  // Normal case: align first visible day with left edge
+  return Math.max(0, firstVisibleDayIndex * dayWidth)
 }
 
 /**
@@ -247,34 +272,39 @@ export function calculateDayIndex(date: Date, windowStartDate: Date): number {
 /**
  * Calculate the number of visible days based on container width.
  *
- * Uses responsive breakpoints to determine how many days should be visible:
- * - Mobile portrait (< 480px): 1 day
- * - Mobile landscape / small tablet (< 768px): 3 days
- * - Tablet (< 1024px): 5 days
- * - Desktop (< 1440px): 5 days
- * - Large desktop (>= 1440px): 7 days
+ * Breakpoints:
+ * - < 500px: 1 day (full width)
+ * - 500px - 749px: 1 day (75% width - special case for better visual appearance)
+ * - 750px - 1249px: 3 days (third width each)
+ * - 1250px - 1749px: 5 days (fifth width each)
+ * - >= 1750px: 7 days (seventh width each)
  *
  * @param containerWidth - Width of the scroll container viewport in pixels
  * @returns Number of days that should be visible
  *
  * @example
- * calculateVisibleDays(375) // Returns 1 (mobile portrait)
- * calculateVisibleDays(768) // Returns 5 (tablet)
- * calculateVisibleDays(1920) // Returns 7 (large desktop)
+ * calculateVisibleDays(400) // Returns 1 (single day, full width)
+ * calculateVisibleDays(600) // Returns 1 (single day, 75% width)
+ * calculateVisibleDays(900) // Returns 3 (three days)
+ * calculateVisibleDays(1500) // Returns 5 (five days)
+ * calculateVisibleDays(1920) // Returns 7 (seven days)
  */
 export function calculateVisibleDays(containerWidth: number): number {
-  if (containerWidth <= 0) return 3
-  if (containerWidth < 480) return 1
-  if (containerWidth < 768) return 3
-  if (containerWidth < 1024) return 5
-  if (containerWidth < 1440) return 5
+  if (containerWidth <= 0) return 1
+  if (containerWidth < 500) return 1
+  if (containerWidth < 750) return 1 // Special case: 1 day at 75% width
+  if (containerWidth < 1250) return 3
+  if (containerWidth < 1750) return 5
   return 7
 }
 
 /**
  * Calculate the width of each day column in pixels.
  *
- * Divides the container width evenly among the visible days.
+ * Divides the container width evenly among the visible days, with a special
+ * case for the 500-749px range where the day width is 75% of the container
+ * (for better visual appearance with partial buffer columns visible).
+ *
  * Returns a fallback value if inputs are invalid.
  *
  * @param containerWidth - Width of the scroll container viewport in pixels
@@ -284,10 +314,17 @@ export function calculateVisibleDays(containerWidth: number): number {
  * @example
  * calculateDayWidth(700, 7) // Returns 100 (100px per day)
  * calculateDayWidth(375, 1) // Returns 375 (full width for single day)
+ * calculateDayWidth(600, 1) // Returns 450 (75% width for 500-749px range)
  * calculateDayWidth(0, 5) // Returns 100 (fallback for invalid input)
  */
 export function calculateDayWidth(containerWidth: number, visibleDays: number): number {
   if (containerWidth <= 0 || visibleDays <= 0) return 100
+
+  // Special case: 500-749px viewport with 1 visible day uses 75% width
+  if (containerWidth >= 500 && containerWidth < 750 && visibleDays === 1) {
+    return containerWidth * 0.75
+  }
+
   return containerWidth / visibleDays
 }
 

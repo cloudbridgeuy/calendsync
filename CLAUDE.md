@@ -605,6 +605,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | React Contexts       | `.claude/context/react-contexts.md`    |
 | Hot-Reload (Web)     | `.claude/context/hot-reload.md`        |
 | systemfd Integration | `.claude/context/systemfd.md`          |
+| Responsive Layout    | `.claude/context/responsive-layout.md` |
 
 ### Local Working Directories (gitignored)
 

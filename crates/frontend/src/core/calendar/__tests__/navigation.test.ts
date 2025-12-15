@@ -45,105 +45,114 @@ describe("isScrollable", () => {
 describe("calculateCenteredScrollPosition", () => {
   test("returns null when content is not scrollable (totalContentWidth <= containerWidth)", () => {
     // Total content width equals container width
-    expect(calculateCenteredScrollPosition(5, 100, 700, 700)).toBeNull()
+    expect(calculateCenteredScrollPosition(5, 100, 700, 700, 7)).toBeNull()
 
     // Total content width less than container width
-    expect(calculateCenteredScrollPosition(5, 100, 700, 500)).toBeNull()
+    expect(calculateCenteredScrollPosition(5, 100, 700, 500, 7)).toBeNull()
   })
 
-  test("centers target day in viewport", () => {
-    // Day 10 with dayWidth=100, containerWidth=700, totalWidth=2100
-    // Target left edge: 10 * 100 = 1000px
-    // Center offset: (700 - 100) / 2 = 300px
-    // Expected scroll: 1000 - 300 = 700px
-    const result = calculateCenteredScrollPosition(10, 100, 700, 2100)
-    expect(result).toBe(700)
+  test("centers group of 2 days", () => {
+    // targetDayIndex=10, dayWidth=300, container=600, total=6300, visible=2
+    // floor(2/2) = 1 day before, first visible = 9
+    const result = calculateCenteredScrollPosition(10, 300, 600, 6300, 2)
+    expect(result).toBe(2700) // 9 * 300
+  })
+
+  test("centers group of 3 days", () => {
+    // targetDayIndex=10, dayWidth=300, container=900, total=6300, visible=3
+    // floor(3/2) = 1 day before, first visible = 9
+    const result = calculateCenteredScrollPosition(10, 300, 900, 6300, 3)
+    expect(result).toBe(2700) // 9 * 300
+  })
+
+  test("centers group of 5 days", () => {
+    // targetDayIndex=10, dayWidth=250, container=1250, total=5250, visible=5
+    // floor(5/2) = 2 days before, first visible = 8
+    const result = calculateCenteredScrollPosition(10, 250, 1250, 5250, 5)
+    expect(result).toBe(2000) // 8 * 250
+  })
+
+  test("centers group of 7 days", () => {
+    // targetDayIndex=10, dayWidth=250, container=1750, total=5250, visible=7
+    // floor(7/2) = 3 days before, first visible = 7
+    const result = calculateCenteredScrollPosition(10, 250, 1750, 5250, 7)
+    expect(result).toBe(1750) // 7 * 250
   })
 
   test("clamps to 0 when centering would scroll before start", () => {
-    // Day 1 with large container
-    // Target left: 1 * 100 = 100px
-    // Center offset: (700 - 100) / 2 = 300px
-    // Desired scroll: 100 - 300 = -200px
-    // Clamped to: 0
-    const result = calculateCenteredScrollPosition(1, 100, 700, 2100)
-    expect(result).toBe(0)
+    // Day 1 with 3 visible days
+    // floor(3/2) = 1 day before, first visible = 0
+    const result = calculateCenteredScrollPosition(1, 300, 900, 6300, 3)
+    expect(result).toBe(0) // 0 * 300 = 0
   })
 
   test("clamps to maxScroll when centering would scroll past end", () => {
-    // Day 20 with dayWidth=100, containerWidth=700, totalWidth=2100
-    // Target left: 20 * 100 = 2000px
-    // Center offset: (700 - 100) / 2 = 300px
-    // Desired scroll: 2000 - 300 = 1700px
-    // maxScroll: 2100 - 700 = 1400px
-    // Clamped to: 1400px
-    const result = calculateCenteredScrollPosition(20, 100, 700, 2100)
-    expect(result).toBe(1400)
+    // Day 18 in 21-day window, 3 visible days
+    // floor(3/2) = 1, first visible = 17
+    // Scroll = 17 * 300 = 5100
+    // maxScroll = 6300 - 900 = 5400
+    const result = calculateCenteredScrollPosition(18, 300, 900, 6300, 3)
+    expect(result).toBe(5100) // Within bounds
+
+    // Day 20, would give scroll = 19 * 300 = 5700 > 5400
+    const result2 = calculateCenteredScrollPosition(20, 300, 900, 6300, 3)
+    expect(result2).toBe(5400) // Clamped to maxScroll
   })
 
   test("handles day 0 (first day)", () => {
-    // Day 0 should result in scroll position 0 (after clamping)
-    const result = calculateCenteredScrollPosition(0, 100, 700, 2100)
+    // Day 0 with 3 visible days
+    // floor(3/2) = 1 day before, first visible = -1 -> clamped to 0
+    const result = calculateCenteredScrollPosition(0, 300, 900, 6300, 3)
     expect(result).toBe(0)
   })
 
-  test("handles middle of scroll range", () => {
-    // Day 7 with dayWidth=100, containerWidth=700, totalWidth=2100
-    // Target left: 7 * 100 = 700px
-    // Center offset: (700 - 100) / 2 = 300px
-    // Expected scroll: 700 - 300 = 400px
-    const result = calculateCenteredScrollPosition(7, 100, 700, 2100)
-    expect(result).toBe(400)
-  })
-
-  test("works with different dayWidth values", () => {
-    // Day 5 with dayWidth=200, containerWidth=800, totalWidth=3000
-    // Target left: 5 * 200 = 1000px
-    // Center offset: (800 - 200) / 2 = 300px
-    // Expected scroll: 1000 - 300 = 700px
-    const result = calculateCenteredScrollPosition(5, 200, 800, 3000)
-    expect(result).toBe(700)
-  })
-
-  test("works with single day visible (containerWidth = dayWidth)", () => {
-    // Day 5 with dayWidth=200, containerWidth=200, totalWidth=2100
-    // Target left: 5 * 200 = 1000px
-    // Center offset: (200 - 200) / 2 = 0px
-    // Expected scroll: 1000 - 0 = 1000px
-    const result = calculateCenteredScrollPosition(5, 200, 200, 2100)
-    expect(result).toBe(1000)
-  })
-
-  test("returns exact maxScroll at last position", () => {
-    // Day 20 in 21-day window (indexes 0-20)
-    // dayWidth=100, containerWidth=700, totalWidth=2100
-    // maxScroll = 2100 - 700 = 1400
-    const result = calculateCenteredScrollPosition(20, 100, 700, 2100)
-    expect(result).toBe(1400)
-  })
-
-  test("handles fractional pixel values", () => {
-    // Day 5 with dayWidth=150, containerWidth=500, totalWidth=2250
-    // Target left: 5 * 150 = 750px
-    // Center offset: (500 - 150) / 2 = 175px
-    // Expected scroll: 750 - 175 = 575px
-    const result = calculateCenteredScrollPosition(5, 150, 500, 2250)
-    expect(result).toBe(575)
+  test("works with single day visible (visibleDays=1)", () => {
+    // Day 5 with visibleDays=1
+    // floor(1/2) = 0 days before, first visible = 5
+    const result = calculateCenteredScrollPosition(5, 400, 400, 8400, 1)
+    expect(result).toBe(2000) // 5 * 400
   })
 
   test("ensures returned position is within valid range [0, maxScroll]", () => {
-    const dayWidth = 100
-    const containerWidth = 700
-    const totalWidth = 2100
-    const maxScroll = totalWidth - containerWidth // 1400
+    const dayWidth = 300
+    const containerWidth = 900
+    const totalWidth = 6300
+    const visibleDays = 3
+    const maxScroll = totalWidth - containerWidth // 5400
 
     // Test various day indexes
     for (let dayIndex = 0; dayIndex <= 20; dayIndex++) {
-      const result = calculateCenteredScrollPosition(dayIndex, dayWidth, containerWidth, totalWidth)
+      const result = calculateCenteredScrollPosition(
+        dayIndex,
+        dayWidth,
+        containerWidth,
+        totalWidth,
+        visibleDays,
+      )
       expect(result).not.toBeNull()
       expect(result).toBeGreaterThanOrEqual(0)
       expect(result).toBeLessThanOrEqual(maxScroll)
     }
+  })
+
+  test("centers day when dayWidth is 75% of container (500-749px special case)", () => {
+    const containerWidth = 600
+    const dayWidth = 450 // 75% of 600
+    const totalWidth = 9450 // 21 days * 450
+    const visibleDays = 1
+    const targetDayIndex = 10
+
+    const result = calculateCenteredScrollPosition(
+      targetDayIndex,
+      dayWidth,
+      containerWidth,
+      totalWidth,
+      visibleDays,
+    )
+
+    // centerOffset = (600 - 450) / 2 = 75
+    // scrollPosition = 10 * 450 - 75 = 4425
+    expect(result).toBe(4425)
   })
 })
 

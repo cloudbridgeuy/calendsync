@@ -245,6 +245,7 @@ export function useVirtualScroll(options: UseVirtualScrollOptions): UseVirtualSc
         windowStartDate,
         dayWidth,
         containerWidth,
+        visibleDays,
       )
 
       // If target is far outside current window, re-center window first
@@ -262,6 +263,7 @@ export function useVirtualScroll(options: UseVirtualScrollOptions): UseVirtualSc
           newWindowStart,
           dayWidth,
           containerWidth,
+          visibleDays,
         )
 
         // Store scroll position to apply after DOM update
@@ -301,6 +303,7 @@ export function useVirtualScroll(options: UseVirtualScrollOptions): UseVirtualSc
       windowStartDate,
       dayWidth,
       containerWidth,
+      visibleDays,
       highlightedDate,
       config.bufferDays,
       onHighlightedDayChange,
@@ -349,11 +352,12 @@ export function useVirtualScroll(options: UseVirtualScrollOptions): UseVirtualSc
       windowStartDate,
       dayWidth,
       containerWidth,
+      visibleDays,
     )
 
     scrollContainerRef.current.scrollLeft = initialScrollPosition
     initialPositionSetRef.current = true
-  }, [containerWidth, dayWidth, highlightedDate, windowStartDate]) // Only depend on size changes, not state
+  }, [containerWidth, dayWidth, highlightedDate, windowStartDate, visibleDays]) // Only depend on size changes, not state
 
   // Apply pending scroll adjustments synchronously after DOM update, before paint.
   // This prevents the 1-frame flash where new dates appear at old scroll position.

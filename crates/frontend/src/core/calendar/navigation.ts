@@ -11,12 +11,21 @@ export function isScrollable(scrollWidth: number, clientWidth: number): boolean 
 }
 
 /**
- * Calculate scroll position to center a target date.
+ * Calculate scroll position to center a group of visible days.
  * Returns null if not scrollable.
+ *
+ * This function calculates the scroll position needed to show a group of visible days
+ * with the target day in the center position. For odd numbers (1, 3, 5, 7), the target
+ * is exactly centered. For even numbers (2), the target appears slightly right of center.
+ *
+ * Special case: When dayWidth doesn't fill the viewport (e.g., 75% width for 500-749px range),
+ * the day is centered in the viewport with partial buffer columns visible on both sides.
+ *
  * @param targetDayIndex - The index of the day to center (0-based)
  * @param dayWidth - The width of each day column in pixels
  * @param containerWidth - The visible width of the container
  * @param totalContentWidth - The total width of all content
+ * @param visibleDays - Number of days that should be visible in the viewport
  * @returns The scroll position in pixels, or null if not scrollable
  */
 export function calculateCenteredScrollPosition(
@@ -24,12 +33,31 @@ export function calculateCenteredScrollPosition(
   dayWidth: number,
   containerWidth: number,
   totalContentWidth: number,
+  visibleDays: number,
 ): number | null {
   if (totalContentWidth <= containerWidth) return null
 
-  const targetLeft = targetDayIndex * dayWidth
-  const centerOffset = (containerWidth - dayWidth) / 2
-  const scrollPosition = targetLeft - centerOffset
+  // Calculate how many days appear before the centered day
+  const daysBeforeCenter = Math.floor(visibleDays / 2)
+
+  // First visible day index
+  const firstVisibleDayIndex = targetDayIndex - daysBeforeCenter
+
+  // Calculate expected total width of visible days
+  const expectedVisibleWidth = dayWidth * visibleDays
+
+  // Calculate scroll position
+  let scrollPosition: number
+
+  // If visible days don't fill the viewport (e.g., 75% width special case),
+  // center the day(s) in the viewport
+  if (expectedVisibleWidth < containerWidth) {
+    const centerOffset = (containerWidth - expectedVisibleWidth) / 2
+    scrollPosition = firstVisibleDayIndex * dayWidth - centerOffset
+  } else {
+    // Normal case: align first visible day with left edge
+    scrollPosition = firstVisibleDayIndex * dayWidth
+  }
 
   // Clamp to valid scroll range
   const maxScroll = totalContentWidth - containerWidth

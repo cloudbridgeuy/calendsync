@@ -72,50 +72,95 @@ describe("calculateVirtualWindow", () => {
 })
 
 describe("calculateScrollPosition", () => {
-  test("returns 0 when target is at window start with small container", () => {
-    const windowStart = new Date("2025-01-05")
-    const target = new Date("2025-01-05")
-    const result = calculateScrollPosition(target, windowStart, 100, 100)
+  const windowStart = new Date("2025-01-01")
 
+  test("centers single day (visibleDays=1)", () => {
+    const target = new Date("2025-01-10") // Day index 9
+    const result = calculateScrollPosition(target, windowStart, 400, 400, 1)
+    // floor(1/2) = 0 days before, first visible = 9
+    expect(result).toBe(3600) // 9 * 400
+  })
+
+  test("centers group of 2 days", () => {
+    const target = new Date("2025-01-10") // Day index 9
+    const result = calculateScrollPosition(target, windowStart, 300, 600, 2)
+    // floor(2/2) = 1 day before, first visible = 8
+    expect(result).toBe(2400) // 8 * 300
+  })
+
+  test("centers group of 3 days", () => {
+    const target = new Date("2025-01-10") // Day index 9
+    const result = calculateScrollPosition(target, windowStart, 300, 900, 3)
+    // floor(3/2) = 1 day before, first visible = 8
+    expect(result).toBe(2400) // 8 * 300
+  })
+
+  test("centers group of 5 days", () => {
+    const target = new Date("2025-01-10") // Day index 9
+    const result = calculateScrollPosition(target, windowStart, 250, 1250, 5)
+    // floor(5/2) = 2 days before, first visible = 7
+    expect(result).toBe(1750) // 7 * 250
+  })
+
+  test("centers group of 7 days", () => {
+    const target = new Date("2025-01-10") // Day index 9
+    const result = calculateScrollPosition(target, windowStart, 250, 1750, 7)
+    // floor(7/2) = 3 days before, first visible = 6
+    expect(result).toBe(1500) // 6 * 250
+  })
+
+  test("clamps to 0 for early dates", () => {
+    const target = new Date("2025-01-01") // Day index 0
+    const result = calculateScrollPosition(target, windowStart, 300, 900, 3)
+    // Would be -1 * 300 = -300, clamped to 0
     expect(result).toBe(0)
   })
 
-  test("centers the target date in viewport", () => {
-    const windowStart = new Date("2025-01-05")
-    const target = new Date("2025-01-15") // 10 days after start
-    const dayWidth = 100
-    const containerWidth = 700
-
-    const result = calculateScrollPosition(target, windowStart, dayWidth, containerWidth)
-
-    // Target is at 1000px (10 * 100)
-    // Center offset is 350px - 50px = 300px (half container - half day)
-    // Expected: 1000 - 300 = 700px
-    expect(result).toBe(700)
-  })
-
   test("does not return negative values", () => {
-    const windowStart = new Date("2025-01-05")
-    const target = new Date("2025-01-05") // At start
-    const dayWidth = 100
-    const containerWidth = 700
-
-    const result = calculateScrollPosition(target, windowStart, dayWidth, containerWidth)
-
+    const target = new Date("2025-01-02") // Day index 1
+    const result = calculateScrollPosition(target, windowStart, 300, 900, 3)
+    // floor(3/2) = 1 day before, first visible = 0
     expect(result).toBeGreaterThanOrEqual(0)
+    expect(result).toBe(0) // 0 * 300
   })
 
-  test("handles single day width viewport", () => {
-    const windowStart = new Date("2025-01-05")
-    const target = new Date("2025-01-10") // 5 days after start
-    const dayWidth = 200
-    const containerWidth = 200
+  test("centers day when dayWidth is 75% of container (500-749px special case)", () => {
+    const target = new Date("2025-01-10") // Day index 9
+    const containerWidth = 600
+    const dayWidth = 450 // 75% of 600
+    const visibleDays = 1
+    const result = calculateScrollPosition(
+      target,
+      windowStart,
+      dayWidth,
+      containerWidth,
+      visibleDays,
+    )
 
-    const result = calculateScrollPosition(target, windowStart, dayWidth, containerWidth)
+    // For 75% width:
+    // - dayWidth = 450, containerWidth = 600
+    // - expectedVisibleWidth = 450 (< 600)
+    // - centerOffset = (600 - 450) / 2 = 75
+    // - scrollLeft = 9 * 450 - 75 = 4050 - 75 = 3975
+    expect(result).toBe(3975)
+  })
 
-    // Target at 1000px, center offset = 100 - 100 = 0
-    // Expected: 1000 - 0 = 1000px
-    expect(result).toBe(1000)
+  test("centers day for any partial-viewport case", () => {
+    const target = new Date("2025-01-10") // Day index 9
+    const containerWidth = 1000
+    const dayWidth = 800 // 80% of container
+    const visibleDays = 1
+    const result = calculateScrollPosition(
+      target,
+      windowStart,
+      dayWidth,
+      containerWidth,
+      visibleDays,
+    )
+
+    // centerOffset = (1000 - 800) / 2 = 100
+    // scrollLeft = 9 * 800 - 100 = 7100
+    expect(result).toBe(7100)
   })
 })
 
@@ -323,52 +368,55 @@ describe("calculateDayIndex", () => {
 })
 
 describe("calculateVisibleDays", () => {
-  test("returns 3 for containerWidth <= 0", () => {
-    expect(calculateVisibleDays(0)).toBe(3)
-    expect(calculateVisibleDays(-100)).toBe(3)
+  test("returns 1 for containerWidth <= 0", () => {
+    expect(calculateVisibleDays(0)).toBe(1)
+    expect(calculateVisibleDays(-100)).toBe(1)
   })
 
-  test("returns 1 for mobile portrait (< 480px)", () => {
+  test("returns 1 for viewport < 500px (full width)", () => {
     expect(calculateVisibleDays(320)).toBe(1)
     expect(calculateVisibleDays(375)).toBe(1)
     expect(calculateVisibleDays(400)).toBe(1)
-    expect(calculateVisibleDays(479)).toBe(1)
+    expect(calculateVisibleDays(499)).toBe(1)
   })
 
-  test("returns 3 for mobile landscape (480-767px)", () => {
-    expect(calculateVisibleDays(480)).toBe(3)
-    expect(calculateVisibleDays(640)).toBe(3)
-    expect(calculateVisibleDays(767)).toBe(3)
+  test("returns 1 for viewport 500px - 749px (75% width special case)", () => {
+    expect(calculateVisibleDays(500)).toBe(1)
+    expect(calculateVisibleDays(600)).toBe(1)
+    expect(calculateVisibleDays(700)).toBe(1)
+    expect(calculateVisibleDays(749)).toBe(1)
   })
 
-  test("returns 5 for tablet (768-1023px)", () => {
-    expect(calculateVisibleDays(768)).toBe(5)
-    expect(calculateVisibleDays(800)).toBe(5)
-    expect(calculateVisibleDays(1023)).toBe(5)
+  test("returns 3 for viewport 750px - 1249px", () => {
+    expect(calculateVisibleDays(750)).toBe(3)
+    expect(calculateVisibleDays(900)).toBe(3)
+    expect(calculateVisibleDays(1000)).toBe(3)
+    expect(calculateVisibleDays(1249)).toBe(3)
   })
 
-  test("returns 5 for desktop (1024-1439px)", () => {
-    expect(calculateVisibleDays(1024)).toBe(5)
-    expect(calculateVisibleDays(1200)).toBe(5)
-    expect(calculateVisibleDays(1439)).toBe(5)
+  test("returns 5 for viewport 1250px - 1749px", () => {
+    expect(calculateVisibleDays(1250)).toBe(5)
+    expect(calculateVisibleDays(1400)).toBe(5)
+    expect(calculateVisibleDays(1500)).toBe(5)
+    expect(calculateVisibleDays(1749)).toBe(5)
   })
 
-  test("returns 7 for large desktop (>= 1440px)", () => {
-    expect(calculateVisibleDays(1440)).toBe(7)
+  test("returns 7 for viewport >= 1750px", () => {
+    expect(calculateVisibleDays(1750)).toBe(7)
     expect(calculateVisibleDays(1920)).toBe(7)
     expect(calculateVisibleDays(2560)).toBe(7)
   })
 
-  test("test boundary values", () => {
-    // Test exact boundary values
-    expect(calculateVisibleDays(479)).toBe(1) // Just under 480
-    expect(calculateVisibleDays(480)).toBe(3) // At 480
-    expect(calculateVisibleDays(767)).toBe(3) // Just under 768
-    expect(calculateVisibleDays(768)).toBe(5) // At 768
-    expect(calculateVisibleDays(1023)).toBe(5) // Just under 1024
-    expect(calculateVisibleDays(1024)).toBe(5) // At 1024
-    expect(calculateVisibleDays(1439)).toBe(5) // Just under 1440
-    expect(calculateVisibleDays(1440)).toBe(7) // At 1440
+  test("boundary values", () => {
+    // At breakpoint boundaries
+    expect(calculateVisibleDays(499)).toBe(1)
+    expect(calculateVisibleDays(500)).toBe(1) // 75% width special case
+    expect(calculateVisibleDays(749)).toBe(1) // 75% width special case
+    expect(calculateVisibleDays(750)).toBe(3)
+    expect(calculateVisibleDays(1249)).toBe(3)
+    expect(calculateVisibleDays(1250)).toBe(5)
+    expect(calculateVisibleDays(1749)).toBe(5)
+    expect(calculateVisibleDays(1750)).toBe(7)
   })
 })
 
@@ -391,7 +439,27 @@ describe("calculateDayWidth", () => {
   test("returns containerWidth / visibleDays for valid inputs", () => {
     expect(calculateDayWidth(700, 7)).toBe(100)
     expect(calculateDayWidth(1500, 5)).toBe(300)
-    expect(calculateDayWidth(375, 1)).toBe(375)
+    expect(calculateDayWidth(375, 1)).toBe(375) // < 500px: full width
+  })
+
+  test("returns 75% width for 500-749px viewport with 1 visible day", () => {
+    // Special case: 500-749px viewport uses 75% width for better appearance
+    expect(calculateDayWidth(500, 1)).toBe(375) // 500 * 0.75
+    expect(calculateDayWidth(600, 1)).toBe(450) // 600 * 0.75
+    expect(calculateDayWidth(700, 1)).toBe(525) // 700 * 0.75
+    expect(calculateDayWidth(749, 1)).toBe(561.75) // 749 * 0.75
+  })
+
+  test("returns full width for < 500px viewport with 1 visible day", () => {
+    // Below 500px uses full width, not 75%
+    expect(calculateDayWidth(400, 1)).toBe(400)
+    expect(calculateDayWidth(499, 1)).toBe(499)
+  })
+
+  test("returns normal division for >= 750px viewport", () => {
+    // At 750px and above, normal division applies
+    expect(calculateDayWidth(750, 3)).toBe(250)
+    expect(calculateDayWidth(900, 3)).toBe(300)
   })
 
   test("example: calculateDayWidth(1440, 5) = 288", () => {
