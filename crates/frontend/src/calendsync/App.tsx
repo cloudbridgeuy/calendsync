@@ -48,7 +48,7 @@ export function App({ initialData }: AppProps) {
         <Calendar initialData={initialData}>
           <Calendar.Header />
           <Calendar.NotificationCenter />
-          <Calendar.Days />
+          <Calendar.View />
           <Calendar.TodayButton />
           <Calendar.Fab />
           <Calendar.Modal />

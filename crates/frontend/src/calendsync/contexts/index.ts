@@ -6,3 +6,10 @@ export type {
   NotificationContextValue,
 } from "./NotificationContext"
 export { NotificationCenterProvider, useNotificationContext } from "./NotificationContext"
+export type {
+  SettingsMenuActions,
+  SettingsMenuContextValue,
+  SettingsMenuProviderProps,
+  SettingsMenuState,
+} from "./SettingsMenuContext"
+export { SettingsMenuProvider, useSettingsMenuContext } from "./SettingsMenuContext"

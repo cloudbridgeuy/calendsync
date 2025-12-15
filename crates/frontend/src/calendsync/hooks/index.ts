@@ -6,6 +6,12 @@ export type { UseApiConfig } from "./useApi"
 export { fetchEntries, getControlPlaneUrl } from "./useApi"
 export type { UseAriaAnnouncerReturn } from "./useAriaAnnouncer"
 export { useAriaAnnouncer } from "./useAriaAnnouncer"
+export type {
+  CalendarSettingsActions,
+  CalendarSettingsState,
+  UseCalendarSettingsConfig,
+} from "./useCalendarSettings"
+export { useCalendarSettings } from "./useCalendarSettings"
 export type { UseCalendarStateConfig } from "./useCalendarState"
 export { isOnToday, useCalendarState } from "./useCalendarState"
 export type { UseEntryApiConfig, UseEntryApiResult } from "./useEntryApi"
