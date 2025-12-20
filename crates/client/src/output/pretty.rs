@@ -84,27 +84,34 @@ pub fn format_entries(entries: &[CalendarEntry]) -> String {
 mod tests {
     use super::*;
     use calendsync_core::calendar::{Calendar, CalendarEntry, EntryKind};
-    use chrono::NaiveDate;
+    use chrono::{NaiveDate, Utc};
     use uuid::Uuid;
 
     fn make_user(name: &str, email: &str) -> User {
+        let now = Utc::now();
         User {
             id: Uuid::new_v4(),
             name: name.to_string(),
             email: email.to_string(),
+            created_at: now,
+            updated_at: now,
         }
     }
 
     fn make_calendar(name: &str, color: &str) -> Calendar {
+        let now = Utc::now();
         Calendar {
             id: Uuid::new_v4(),
             name: name.to_string(),
             color: color.to_string(),
             description: None,
+            created_at: now,
+            updated_at: now,
         }
     }
 
     fn make_entry(title: &str, date: NaiveDate) -> CalendarEntry {
+        let now = Utc::now();
         CalendarEntry {
             id: Uuid::new_v4(),
             calendar_id: Uuid::new_v4(),
@@ -114,6 +121,8 @@ mod tests {
             date,
             color: None,
             kind: EntryKind::AllDay,
+            created_at: now,
+            updated_at: now,
         }
     }
 

@@ -8,15 +8,20 @@ pub struct User {
     pub id: Uuid,
     pub name: String,
     pub email: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 impl User {
-    /// Creates a new user with a generated UUID.
+    /// Creates a new user with a generated UUID and current timestamps.
     pub fn new(name: impl Into<String>, email: impl Into<String>) -> Self {
+        let now = Utc::now();
         Self {
             id: Uuid::new_v4(),
             name: name.into(),
             email: email.into(),
+            created_at: now,
+            updated_at: now,
         }
     }
 
@@ -24,6 +29,23 @@ impl User {
     pub fn with_id(mut self, id: Uuid) -> Self {
         self.id = id;
         self
+    }
+
+    /// Sets a specific created_at timestamp (useful for testing).
+    pub fn with_created_at(mut self, created_at: DateTime<Utc>) -> Self {
+        self.created_at = created_at;
+        self
+    }
+
+    /// Sets a specific updated_at timestamp (useful for testing).
+    pub fn with_updated_at(mut self, updated_at: DateTime<Utc>) -> Self {
+        self.updated_at = updated_at;
+        self
+    }
+
+    /// Updates the updated_at timestamp to now.
+    pub fn touch(&mut self) {
+        self.updated_at = Utc::now();
     }
 }
 
@@ -57,17 +79,20 @@ pub struct CalendarMembership {
     pub calendar_id: Uuid,
     pub user_id: Uuid,
     pub role: CalendarRole,
-    pub joined_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 impl CalendarMembership {
     /// Creates a new membership with the current timestamp.
     pub fn new(calendar_id: Uuid, user_id: Uuid, role: CalendarRole) -> Self {
+        let now = Utc::now();
         Self {
             calendar_id,
             user_id,
             role,
-            joined_at: Utc::now(),
+            created_at: now,
+            updated_at: now,
         }
     }
 
@@ -86,10 +111,21 @@ impl CalendarMembership {
         Self::new(calendar_id, user_id, CalendarRole::Reader)
     }
 
-    /// Sets a specific joined_at timestamp (useful for testing).
-    pub fn with_joined_at(mut self, joined_at: DateTime<Utc>) -> Self {
-        self.joined_at = joined_at;
+    /// Sets a specific created_at timestamp (useful for testing).
+    pub fn with_created_at(mut self, created_at: DateTime<Utc>) -> Self {
+        self.created_at = created_at;
         self
+    }
+
+    /// Sets a specific updated_at timestamp (useful for testing).
+    pub fn with_updated_at(mut self, updated_at: DateTime<Utc>) -> Self {
+        self.updated_at = updated_at;
+        self
+    }
+
+    /// Updates the updated_at timestamp to now.
+    pub fn touch(&mut self) {
+        self.updated_at = Utc::now();
     }
 }
 
@@ -101,16 +137,21 @@ pub struct Calendar {
     /// Default color for entries in this calendar (CSS color value).
     pub color: String,
     pub description: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 impl Calendar {
     /// Creates a new calendar with the given name and color.
     pub fn new(name: impl Into<String>, color: impl Into<String>) -> Self {
+        let now = Utc::now();
         Self {
             id: Uuid::new_v4(),
             name: name.into(),
             color: color.into(),
             description: None,
+            created_at: now,
+            updated_at: now,
         }
     }
 
@@ -124,6 +165,23 @@ impl Calendar {
     pub fn with_id(mut self, id: Uuid) -> Self {
         self.id = id;
         self
+    }
+
+    /// Sets a specific created_at timestamp (useful for testing).
+    pub fn with_created_at(mut self, created_at: DateTime<Utc>) -> Self {
+        self.created_at = created_at;
+        self
+    }
+
+    /// Sets a specific updated_at timestamp (useful for testing).
+    pub fn with_updated_at(mut self, updated_at: DateTime<Utc>) -> Self {
+        self.updated_at = updated_at;
+        self
+    }
+
+    /// Updates the updated_at timestamp to now.
+    pub fn touch(&mut self) {
+        self.updated_at = Utc::now();
     }
 }
 
@@ -235,6 +293,8 @@ pub struct CalendarEntry {
     pub date: NaiveDate,
     /// Optional accent color for the entry tile (CSS color value).
     pub color: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 impl CalendarEntry {
@@ -246,6 +306,7 @@ impl CalendarEntry {
         end: NaiveDate,
         display_date: NaiveDate,
     ) -> Self {
+        let now = Utc::now();
         Self {
             id: Uuid::new_v4(),
             calendar_id,
@@ -255,11 +316,14 @@ impl CalendarEntry {
             kind: EntryKind::MultiDay { start, end },
             date: display_date,
             color: None,
+            created_at: now,
+            updated_at: now,
         }
     }
 
     /// Creates a new all-day event.
     pub fn all_day(calendar_id: Uuid, title: impl Into<String>, date: NaiveDate) -> Self {
+        let now = Utc::now();
         Self {
             id: Uuid::new_v4(),
             calendar_id,
@@ -269,6 +333,8 @@ impl CalendarEntry {
             kind: EntryKind::AllDay,
             date,
             color: None,
+            created_at: now,
+            updated_at: now,
         }
     }
 
@@ -280,6 +346,7 @@ impl CalendarEntry {
         start: NaiveTime,
         end: NaiveTime,
     ) -> Self {
+        let now = Utc::now();
         Self {
             id: Uuid::new_v4(),
             calendar_id,
@@ -289,6 +356,8 @@ impl CalendarEntry {
             kind: EntryKind::Timed { start, end },
             date,
             color: None,
+            created_at: now,
+            updated_at: now,
         }
     }
 
@@ -299,6 +368,7 @@ impl CalendarEntry {
         date: NaiveDate,
         completed: bool,
     ) -> Self {
+        let now = Utc::now();
         Self {
             id: Uuid::new_v4(),
             calendar_id,
@@ -308,6 +378,8 @@ impl CalendarEntry {
             kind: EntryKind::Task { completed },
             date,
             color: None,
+            created_at: now,
+            updated_at: now,
         }
     }
 
@@ -339,6 +411,23 @@ impl CalendarEntry {
     pub fn with_id(mut self, id: Uuid) -> Self {
         self.id = id;
         self
+    }
+
+    /// Sets a specific created_at timestamp (useful for testing).
+    pub fn with_created_at(mut self, created_at: DateTime<Utc>) -> Self {
+        self.created_at = created_at;
+        self
+    }
+
+    /// Sets a specific updated_at timestamp (useful for testing).
+    pub fn with_updated_at(mut self, updated_at: DateTime<Utc>) -> Self {
+        self.updated_at = updated_at;
+        self
+    }
+
+    /// Updates the updated_at timestamp to now.
+    pub fn touch(&mut self) {
+        self.updated_at = Utc::now();
     }
 }
 

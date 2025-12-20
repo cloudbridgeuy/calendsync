@@ -3,7 +3,7 @@
 //! These types are shared between the server and client for type-safe API communication.
 //! Following the Functional Core pattern, these are pure data types with no I/O.
 
-use chrono::{NaiveDate, NaiveTime};
+use chrono::{NaiveDate, NaiveTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -258,6 +258,7 @@ impl CreateEntryRequest {
             }
         };
 
+        let now = Utc::now();
         Some(CalendarEntry {
             id: Uuid::new_v4(),
             calendar_id: self.calendar_id,
@@ -267,6 +268,8 @@ impl CreateEntryRequest {
             kind,
             date: self.date,
             color: self.color,
+            created_at: now,
+            updated_at: now,
         })
     }
 }

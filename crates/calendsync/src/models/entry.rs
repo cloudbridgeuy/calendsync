@@ -1,4 +1,4 @@
-use chrono::{NaiveDate, NaiveTime};
+use chrono::{NaiveDate, NaiveTime, Utc};
 use serde::{Deserialize, Deserializer};
 use uuid::Uuid;
 
@@ -111,6 +111,7 @@ impl CreateEntry {
             }
         };
 
+        let now = Utc::now();
         let mut entry = CalendarEntry {
             id: Uuid::new_v4(),
             calendar_id: self.calendar_id,
@@ -120,6 +121,8 @@ impl CreateEntry {
             kind,
             date: self.date,
             color: self.color,
+            created_at: now,
+            updated_at: now,
         };
 
         // If no custom color, entry will use calendar's default
@@ -162,6 +165,9 @@ pub struct UpdateEntry {
 impl UpdateEntry {
     /// Applies the update to an existing entry.
     pub fn apply_to(self, entry: &mut CalendarEntry) {
+        // Update the updated_at timestamp
+        entry.updated_at = Utc::now();
+
         if let Some(title) = self.title {
             entry.title = title;
         }
