@@ -12,10 +12,9 @@ This is a technical exploration of the **"Rust full-stack" pattern**: server-sid
 
 - REST API for calendar entries
 - React SSR calendar with real-time SSE updates
-- Storage backend abstractions (SQLite default, DynamoDB optional)
+- Storage backends: SQLite (default) or DynamoDB, with memory or Redis caching
+- Repository pattern with cached decorators for cache-aside + event publishing
 - Graceful shutdown support
-
-**Note**: Storage implementations exist but are not yet wired into handlers (Phase 4 pending). Handlers currently use in-memory state.
 
 ## Build Commands
 
@@ -49,6 +48,15 @@ cargo test -p calendsync_core
 
 # Run the React SSR example
 cargo run --example react-ssr -p calendsync
+
+# Build with memory cache (default)
+cargo build -p calendsync
+
+# Build with Redis cache
+cargo build -p calendsync --no-default-features --features sqlite,redis
+
+# Build for production (DynamoDB + Redis)
+cargo build -p calendsync --release --no-default-features --features dynamodb,redis
 
 # Unified dev command (web, desktop, iOS)
 cargo xtask dev web                       # Run web server on port 3000
@@ -87,18 +95,25 @@ cargo tauri ios build                     # Build iOS app
 src/
 ├── main.rs          # Entry point, server setup, graceful shutdown
 ├── app.rs           # Router configuration, middleware (CORS, tracing, timeout)
-├── state.rs         # AppState with in-memory data stores, SSE support
+├── config.rs        # Environment-based configuration (cache TTL, paths, URLs)
+├── state.rs         # AppState with repository trait objects, SSE support
 ├── mock_data.rs     # Demo data generation
 ├── handlers/        # HTTP request handlers
-│   ├── entries.rs   # Entry CRUD endpoints + calendar entries list
+│   ├── entries.rs   # Entry CRUD endpoints (uses repositories)
 │   ├── calendar_react.rs # React SSR calendar handler (uses SsrPool)
 │   ├── events.rs    # SSE events handler for real-time updates
+│   ├── error.rs     # AppError type for HTTP error responses
 │   └── health.rs    # Health check endpoints (/healthz, /readyz)
 ├── models/          # Data models
 │   └── entry.rs     # CreateEntry, UpdateEntry request types
+├── cache/           # Cache backend implementations (feature-gated)
+│   ├── memory/      # In-memory LRU cache (default)
+│   └── redis_impl/  # Redis cache + pub/sub
 └── storage/         # Storage backend implementations (feature-gated)
     ├── sqlite/      # SQLite implementation (default)
-    └── dynamodb/    # AWS DynamoDB implementation
+    ├── dynamodb/    # AWS DynamoDB implementation
+    ├── inmemory/    # In-memory for testing (feature: inmemory)
+    └── cached/      # Cache-aside decorators (wraps repositories)
 ```
 
 ### xtask Commands
@@ -115,9 +130,12 @@ The project uses the [cargo-xtask](https://github.com/matklad/cargo-xtask/) patt
 - `cargo xtask release create <version>` - Create a new release
 - `cargo xtask dynamodb deploy` - Deploy DynamoDB table infrastructure
 - `cargo xtask dynamodb seed` - Seed calendar with mock entries
-- `cargo xtask integration` - Run integration tests (SQLite and DynamoDB)
+- `cargo xtask integration` - Run integration tests (SQLite + memory cache by default)
 - `cargo xtask integration --sqlite` - Run only SQLite integration tests
 - `cargo xtask integration --dynamodb` - Run only DynamoDB integration tests
+- `cargo xtask integration --redis` - Run with Redis cache (starts Docker container)
+- `cargo xtask integration --dynamodb --redis` - Run DynamoDB with Redis cache
+- `cargo xtask integration --sqlite --memory` - Explicitly run SQLite with memory cache
 
 ### Tech Stack
 
@@ -417,6 +435,18 @@ When working with this codebase:
    - Add corresponding storage in `AppState`
 
 ## Testing Strategy
+
+### Cache Tests
+
+```bash
+# Memory cache tests
+cargo test -p calendsync memory::
+
+# Redis cache tests (requires Redis running)
+cargo xtask integration --sqlite --redis
+```
+
+### Integration Tests
 
 Integration tests using `tower::ServiceExt`:
 

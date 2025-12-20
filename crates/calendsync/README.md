@@ -50,6 +50,37 @@ AWS_ENDPOINT_URL=http://localhost:8000 \
 cargo run -p calendsync --no-default-features --features dynamodb
 ```
 
+## Cache Backends
+
+The application supports two cache backends, selected at compile time:
+
+| Feature | Backend | Default | Use Case |
+|---------|---------|---------|----------|
+| `memory` | In-Memory | Yes | Single-instance, local development |
+| `redis` | Redis | No | Multi-instance, production |
+
+### Feature Combinations
+
+```bash
+# Local development (default: sqlite + memory)
+cargo build -p calendsync
+
+# SQLite with Redis cache
+cargo build -p calendsync --no-default-features --features sqlite,redis
+
+# DynamoDB with memory cache
+cargo build -p calendsync --no-default-features --features dynamodb,memory
+
+# Production (DynamoDB + Redis)
+cargo build -p calendsync --release --no-default-features --features dynamodb,redis
+```
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `REDIS_URL` | Redis connection URL | `redis://localhost:6379` |
+
 ## Running the Server
 
 ```bash
@@ -78,16 +109,17 @@ Server runs at `http://localhost:3000`
 
 ## Architecture
 
-The server uses React SSR via deno_core:
+The server uses React SSR via deno_core with a repository-based storage layer:
 
 1. Request comes in for `/calendar/{id}`
-2. Server fetches calendar data from in-memory store
+2. Server fetches calendar data from repository (SQLite/DynamoDB with cache)
 3. `SsrPool` renders React to HTML using deno_core workers
 4. HTML returned with embedded initial data
 5. Client-side React hydrates for interactivity
-6. SSE connection provides real-time updates
+6. SSE connection provides real-time updates via CachePubSub
 
 See `crates/ssr/` and `crates/ssr_core/` for SSR implementation details.
+See `.claude/context/storage-layer.md` for storage architecture details.
 
 ## Project Structure
 
@@ -95,32 +127,39 @@ See `crates/ssr/` and `crates/ssr_core/` for SSR implementation details.
 src/
 ├── main.rs         # Entry point, graceful shutdown
 ├── app.rs          # Router, middleware
-├── state.rs        # AppState, SSE support
+├── config.rs       # Environment-based configuration
+├── state.rs        # AppState with repository trait objects
 ├── mock_data.rs    # Demo data generation
 ├── handlers/
-│   ├── entries.rs      # Entry CRUD
+│   ├── entries.rs      # Entry CRUD (uses repositories)
 │   ├── calendar_react.rs  # React SSR handler
 │   ├── events.rs       # SSE handler
+│   ├── error.rs        # AppError type
 │   └── health.rs       # Health endpoints
 ├── models/
 │   └── entry.rs    # Request types
+├── cache/          # Cache backend implementations
+│   ├── mod.rs          # Feature-gated exports
+│   ├── memory/         # In-memory LRU cache
+│   └── redis_impl/     # Redis cache + pub/sub
 └── storage/        # Storage backend implementations
     ├── mod.rs          # Feature-gated module exports
     ├── sqlite/         # SQLite implementation
-    │   ├── schema.rs       # SQL DDL and queries
-    │   ├── conversions.rs  # Row to domain type conversions
-    │   ├── error.rs        # Error mapping
-    │   └── repository.rs   # Repository trait implementations
-    └── dynamodb/       # DynamoDB implementation
-        ├── keys.rs         # Key generation (PK, SK, GSI keys)
-        ├── conversions.rs  # Item to domain type conversions
-        ├── error.rs        # Error mapping
-        └── repository.rs   # Repository trait implementations
+    ├── dynamodb/       # DynamoDB implementation
+    ├── inmemory/       # In-memory for testing
+    └── cached/         # Cache-aside decorators
 ```
 
 ## Environment Variables
 
-- `RUST_LOG` - Logging level (default: info)
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `RUST_LOG` | Logging level | `info` |
+| `CACHE_TTL_SECONDS` | Cache TTL | `300` |
+| `CACHE_MAX_ENTRIES` | Max cache entries | `10000` |
+| `EVENT_HISTORY_MAX_SIZE` | SSE event history | `1000` |
+| `SQLITE_PATH` | SQLite database path | `calendsync.db` |
+| `REDIS_URL` | Redis connection URL | `redis://localhost:6379` |
 
 ```bash
 RUST_LOG=debug cargo run -p calendsync

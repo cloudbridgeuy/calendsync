@@ -253,3 +253,111 @@ cargo xtask integration --dynamodb
 5. Add integration tests
 
 Follow the SQLite implementation as a reference for structure and error handling patterns.
+
+## Cache Implementations
+
+Cache backends are defined in `crates/calendsync/src/cache/`:
+
+```
+crates/calendsync/src/cache/
+├── mod.rs                    # Feature-gated exports
+├── memory/                   # In-memory backend (default)
+│   ├── mod.rs
+│   ├── cache.rs              # MemoryCache implementation
+│   └── pubsub.rs             # MemoryPubSub implementation
+└── redis_impl/               # Redis backend
+    ├── mod.rs
+    ├── cache.rs              # RedisCache implementation
+    ├── pubsub.rs             # RedisPubSub implementation
+    └── error.rs              # Redis error mapping
+```
+
+### Cache Traits
+
+Defined in `calendsync_core::cache`:
+
+```rust
+#[async_trait]
+pub trait Cache: Send + Sync {
+    async fn get(&self, key: &str) -> Result<Option<Vec<u8>>>;
+    async fn set(&self, key: &str, value: &[u8], ttl: Option<Duration>) -> Result<()>;
+    async fn delete(&self, key: &str) -> Result<()>;
+    async fn delete_pattern(&self, pattern: &str) -> Result<()>;
+}
+
+#[async_trait]
+pub trait CachePubSub: Send + Sync {
+    async fn publish(&self, calendar_id: Uuid, event: &CalendarEvent) -> Result<()>;
+    async fn subscribe(&self, calendar_id: Uuid) -> Result<broadcast::Receiver<CalendarEvent>>;
+}
+```
+
+### In-Memory Cache
+
+- Uses `tokio::sync::RwLock<HashMap>` for thread-safe storage
+- TTL checked on read (lazy expiration)
+- Pub/sub via `tokio::sync::broadcast` channels (capacity: 100 messages)
+- Pattern matching via pure functions in `calendsync_core::cache::patterns`
+- Calendar entry keys tracked per calendar for efficient cleanup
+
+### Redis Cache
+
+- Uses `redis::aio::ConnectionManager` for connection pooling
+- TTL via Redis `SETEX` command
+- Pattern deletion via set-based tracking (see below)
+- Pub/sub via Redis pub/sub with background subscription tasks
+
+### Set-Based Key Tracking
+
+Both cache implementations use set-based tracking for efficient pattern deletion
+without scanning the entire keyspace. Calendar entry keys (e.g., 
+`calendar:{id}:entries:2024-01-01:2024-01-31`) are tracked in a set per calendar.
+
+**Key tracking behavior:**
+
+| Operation | Tracking Action |
+|-----------|-----------------|
+| `set(calendar:{id}:entries:...)` | Add key to tracking set |
+| `delete(calendar:{id}:entries:...)` | Remove key from tracking set |
+| `delete(calendar:{id})` | Delete all tracked keys + tracking set |
+| `delete_pattern(calendar:{id}:entries:*)` | Filter tracked keys, delete matches |
+
+**Redis implementation:**
+- Tracking set key: `calendar:{id}:_keys` (Redis Set)
+- Uses `SADD` on set, `SMEMBERS` + local filter + `DEL` + `SREM` on delete_pattern
+- Avoids O(n) `SCAN`/`KEYS` operations on the full Redis keyspace
+
+**Memory implementation:**
+- Tracking via `HashMap<Uuid, HashSet<String>>`
+- Same behavioral guarantees as Redis
+
+**Pure helper functions** (in `calendsync_core::cache::keys`):
+- `calendar_tracking_key(calendar_id)` - Returns `calendar:{id}:_keys`
+- `extract_calendar_id_from_key(key)` - Extracts UUID from cache key
+- `extract_calendar_id_from_pattern(pattern)` - Extracts UUID from pattern
+- `is_calendar_metadata_key(key)` - Checks if key is `calendar:{id}` format
+- `is_calendar_entry_key(key)` - Checks if key is `calendar:{id}:entries:...` format
+
+### Cache Feature Flags
+
+Cache backends are mutually exclusive:
+
+```toml
+[features]
+default = ["sqlite", "memory"]
+memory = []
+redis = ["dep:redis"]
+```
+
+### Cache Testing
+
+```bash
+# Memory cache tests (no Docker needed)
+cargo test -p calendsync --features sqlite,memory --no-default-features
+
+# Redis cache tests (requires Docker)
+cargo xtask integration --sqlite --redis
+
+# Full integration (all combinations)
+cargo xtask integration --redis
+```
