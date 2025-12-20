@@ -8,6 +8,7 @@
 //!
 //! - `sqlite` (default): SQLite storage backend using `rusqlite` and `tokio-rusqlite`
 //! - `dynamodb`: AWS DynamoDB storage backend using `aws-sdk-dynamodb`
+//! - `inmemory`: In-memory storage backend for testing
 //!
 //! These features are mutually exclusive - only one storage backend can be
 //! enabled at a time.
@@ -21,7 +22,12 @@
 //!
 //! Build with DynamoDB:
 //! ```bash
-//! cargo build -p calendsync --no-default-features --features dynamodb
+//! cargo build -p calendsync --no-default-features --features dynamodb,memory
+//! ```
+//!
+//! Build with in-memory storage (for testing):
+//! ```bash
+//! cargo build -p calendsync --no-default-features --features inmemory,memory
 //! ```
 
 // Compile-time checks for mutual exclusivity
@@ -31,9 +37,21 @@ compile_error!(
     Enable only one storage backend at a time."
 );
 
-#[cfg(not(any(feature = "sqlite", feature = "dynamodb")))]
+#[cfg(all(feature = "sqlite", feature = "inmemory"))]
 compile_error!(
-    "No storage backend selected. Enable 'sqlite' or 'dynamodb' feature. \
+    "Features 'sqlite' and 'inmemory' are mutually exclusive. \
+    Enable only one storage backend at a time."
+);
+
+#[cfg(all(feature = "dynamodb", feature = "inmemory"))]
+compile_error!(
+    "Features 'dynamodb' and 'inmemory' are mutually exclusive. \
+    Enable only one storage backend at a time."
+);
+
+#[cfg(not(any(feature = "sqlite", feature = "dynamodb", feature = "inmemory")))]
+compile_error!(
+    "No storage backend selected. Enable 'sqlite', 'dynamodb', or 'inmemory' feature. \
     Example: cargo build -p calendsync --features sqlite"
 );
 
@@ -42,6 +60,11 @@ pub mod sqlite;
 
 #[cfg(feature = "dynamodb")]
 pub mod dynamodb;
+
+#[cfg(feature = "inmemory")]
+pub mod inmemory;
+
+pub mod cached;
 
 // Re-export the active repository implementation for convenience
 // Note: These are currently unused but will be used when handlers are updated
@@ -53,3 +76,11 @@ pub use sqlite::SqliteRepository;
 #[cfg(feature = "dynamodb")]
 #[allow(unused_imports)]
 pub use dynamodb::DynamoDbRepository;
+
+#[cfg(feature = "inmemory")]
+#[allow(unused_imports)]
+pub use inmemory::InMemoryRepository;
+
+// Re-export cached repository decorators
+#[allow(unused_imports)]
+pub use cached::{CachedCalendarRepository, CachedEntryRepository};
