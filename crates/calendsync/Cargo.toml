@@ -14,6 +14,13 @@ license.workspace = true
 name = "calendsync"
 path = "src/main.rs"
 
+[features]
+default = ["sqlite"]
+
+# Storage backends (mutually exclusive)
+sqlite = ["dep:rusqlite", "dep:tokio-rusqlite"]
+dynamodb = ["dep:aws-sdk-dynamodb", "dep:aws-config"]
+
 [dependencies]
 # Internal dependencies
 calendsync_core = { workspace = true }
@@ -22,6 +29,7 @@ calendsync_ssr = { workspace = true }
 
 # External dependencies
 anyhow = { workspace = true }
+async-trait = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true }
@@ -37,6 +45,14 @@ uuid = { workspace = true }
 tokio-stream = { workspace = true }
 async-stream = { workspace = true }
 rand = { workspace = true }
+
+# SQLite (optional)
+rusqlite = { workspace = true, optional = true }
+tokio-rusqlite = { workspace = true, optional = true }
+
+# DynamoDB (optional)
+aws-sdk-dynamodb = { workspace = true, optional = true }
+aws-config = { workspace = true, optional = true }
 
 [dev-dependencies]
 http-body-util = { workspace = true }

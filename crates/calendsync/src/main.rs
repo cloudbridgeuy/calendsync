@@ -3,6 +3,7 @@ mod handlers;
 mod mock_data;
 mod models;
 mod state;
+mod storage;
 
 use std::path::Path;
 
