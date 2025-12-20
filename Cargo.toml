@@ -59,7 +59,7 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 tokio-rusqlite = "0.6"
 
 # File watching dependencies (for hot-reload)
-notify = "7.0"
+notify = "8.2"
 notify-debouncer-mini = "0.5"
 
 # Deno runtime dependencies (for examples)
