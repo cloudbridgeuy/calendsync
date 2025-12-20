@@ -1,4 +1,6 @@
 mod app;
+mod cache;
+mod config;
 mod handlers;
 mod mock_data;
 mod models;
@@ -14,7 +16,7 @@ use listenfd::ListenFd;
 use tokio::{net::TcpListener, signal};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::{app::create_app, state::AppState};
+use crate::{app::create_app, config::Config, state::AppState};
 
 /// CalendSync - Create calendars to sync with your friends
 #[derive(Parser, Debug)]
@@ -46,8 +48,13 @@ async fn main() -> Result<()> {
     // Initialize SSR pool
     let ssr_pool = init_ssr_pool()?;
 
+    // Load configuration from environment
+    let config = Config::from_env();
+
     // Create application state with demo data and SSR pool
-    let state = AppState::with_demo_data().with_ssr_pool(ssr_pool);
+    let state = AppState::with_demo_data(&config)
+        .await?
+        .with_ssr_pool(ssr_pool);
 
     // Build the application router
     let app = create_app(state.clone());

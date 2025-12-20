@@ -1,5 +1,11 @@
+//! Application state with repository-based storage.
+//!
+//! This module defines the shared application state that is passed to all
+//! request handlers. It uses repository trait objects for storage abstraction
+//! and supports different backend combinations via feature flags.
+
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{HashSet, VecDeque},
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc, RwLock,
@@ -8,9 +14,11 @@ use std::{
 use tokio::sync::{broadcast, RwLock as TokioRwLock};
 use uuid::Uuid;
 
+use calendsync_core::cache::CachePubSub;
+use calendsync_core::storage::{CalendarRepository, EntryRepository};
 use calendsync_ssr::SsrPool;
 
-use crate::mock_data::generate_mock_entries;
+use crate::config::Config;
 
 /// Build error message for dev mode error overlay.
 #[derive(Clone, Debug)]
@@ -25,7 +33,7 @@ pub struct CssReload {
 }
 
 // Re-export core types for use in handlers
-pub use calendsync_core::calendar::{Calendar, CalendarEntry, CalendarEvent};
+pub use calendsync_core::calendar::CalendarEvent;
 
 /// A stored event with its ID for replay on reconnection.
 #[derive(Clone, Debug)]
@@ -38,17 +46,25 @@ pub struct StoredEvent {
 /// Shared application state.
 ///
 /// This is cloned for each request handler and contains shared resources
-/// like calendars and entries.
+/// including repository trait objects for database access.
 #[derive(Clone)]
 pub struct AppState {
-    /// In-memory calendar storage.
-    pub calendars: Arc<RwLock<HashMap<Uuid, Calendar>>>,
-    /// In-memory entry storage.
-    pub entries: Arc<RwLock<HashMap<Uuid, CalendarEntry>>>,
+    /// Entry repository (cached, wraps underlying storage).
+    pub entry_repo: Arc<dyn EntryRepository>,
+    /// Calendar repository (cached, wraps underlying storage).
+    pub calendar_repo: Arc<dyn CalendarRepository>,
+    /// Cache pub/sub for cross-instance event propagation.
+    pub cache_pubsub: Arc<dyn CachePubSub>,
+
     /// Event counter for generating unique event IDs.
     pub event_counter: Arc<AtomicU64>,
     /// Event history for SSE reconnection catch-up.
     pub event_history: Arc<RwLock<VecDeque<StoredEvent>>>,
+    /// Maximum events to keep in history.
+    event_history_max_size: usize,
+    /// Calendars with active event listeners.
+    active_listeners: Arc<RwLock<HashSet<Uuid>>>,
+
     /// Shutdown signal sender for SSE connections.
     pub shutdown_tx: broadcast::Sender<()>,
     /// SSR worker pool for React server-side rendering.
@@ -66,30 +82,37 @@ pub struct AppState {
     pub dev_css_reload_tx: broadcast::Sender<CssReload>,
 }
 
-impl Default for AppState {
-    fn default() -> Self {
+impl AppState {
+    /// Fixed demo calendar ID for predictable development URLs.
+    /// Use: `/calendar/00000000-0000-0000-0000-000000000001`
+    pub const DEMO_CALENDAR_ID: &'static str = "00000000-0000-0000-0000-000000000001";
+
+    /// Creates a new AppState with the given repositories and configuration.
+    fn build(
+        entry_repo: Arc<dyn EntryRepository>,
+        calendar_repo: Arc<dyn CalendarRepository>,
+        cache_pubsub: Arc<dyn CachePubSub>,
+        config: &Config,
+    ) -> Self {
         let (shutdown_tx, _) = broadcast::channel(1);
         let (dev_reload_tx, _) = broadcast::channel(1);
         let (dev_error_tx, _) = broadcast::channel(1);
         let (dev_css_reload_tx, _) = broadcast::channel(1);
+
         Self {
-            calendars: Arc::new(RwLock::new(HashMap::new())),
-            entries: Arc::new(RwLock::new(HashMap::new())),
+            entry_repo,
+            calendar_repo,
+            cache_pubsub,
             event_counter: Arc::new(AtomicU64::new(1)),
             event_history: Arc::new(RwLock::new(VecDeque::new())),
+            event_history_max_size: config.event_history_max_size,
+            active_listeners: Arc::new(RwLock::new(HashSet::new())),
             shutdown_tx,
             ssr_pool: Arc::new(TokioRwLock::new(None)),
             dev_reload_tx,
             dev_error_tx,
             dev_css_reload_tx,
         }
-    }
-}
-
-impl AppState {
-    /// Create a new application state.
-    pub fn new() -> Self {
-        Self::default()
     }
 
     /// Set the SSR pool.
@@ -128,54 +151,15 @@ impl AppState {
         }
     }
 
-    /// Fixed demo calendar ID for predictable development URLs.
-    /// Use: `/calendar/00000000-0000-0000-0000-000000000001`
-    pub const DEMO_CALENDAR_ID: &'static str = "00000000-0000-0000-0000-000000000001";
-
-    /// Create a new application state with demo data.
-    pub fn with_demo_data() -> Self {
-        let state = Self::new();
-
-        // Use fixed UUID for predictable demo URLs
-        let calendar_id =
-            Uuid::parse_str(Self::DEMO_CALENDAR_ID).expect("Invalid demo calendar UUID constant");
-
-        // Create default "Personal" calendar with fixed ID
-        let default_calendar = Calendar::new("Personal", "#3B82F6")
-            .with_id(calendar_id)
-            .with_description("My personal calendar");
-
-        // Store the calendar
-        state
-            .calendars
-            .write()
-            .expect("Failed to acquire calendars write lock")
-            .insert(default_calendar.id, default_calendar);
-
-        // Generate and store demo entries
-        let today = chrono::Local::now().date_naive();
-        let entries = generate_mock_entries(calendar_id, today);
-
-        {
-            let mut entries_store = state
-                .entries
-                .write()
-                .expect("Failed to acquire entries write lock");
-
-            for entry in entries {
-                entries_store.insert(entry.id, entry);
-            }
-        }
-
-        state
-    }
-
-    /// Get the default calendar ID (first calendar, or None if empty).
-    pub fn default_calendar_id(&self) -> Option<Uuid> {
-        self.calendars
+    /// Get the oldest event ID in the history.
+    ///
+    /// Returns 0 if history is empty.
+    pub fn oldest_event_id(&self) -> u64 {
+        self.event_history
             .read()
             .ok()
-            .and_then(|calendars| calendars.keys().next().copied())
+            .and_then(|h| h.front().map(|e| e.id))
+            .unwrap_or(0)
     }
 
     /// Get events since a given event ID for a specific calendar.
@@ -193,14 +177,11 @@ impl AppState {
             .unwrap_or_default()
     }
 
-    /// Maximum events to keep in history (for reconnection catch-up).
-    const MAX_EVENT_HISTORY: usize = 1000;
-
-    /// Publish a calendar event to the event history.
+    /// Store an event in the local event history.
     ///
-    /// This stores the event for SSE clients to receive. Events are stored
-    /// with a unique incrementing ID for reconnection catch-up support.
-    pub fn publish_event(&self, calendar_id: Uuid, event: CalendarEvent) {
+    /// This is called by the event listener background task when it receives
+    /// events from CachePubSub.
+    pub fn store_event(&self, calendar_id: Uuid, event: CalendarEvent) {
         let id = self.event_counter.fetch_add(1, Ordering::SeqCst);
         let stored = StoredEvent {
             id,
@@ -208,18 +189,91 @@ impl AppState {
             event,
         };
 
-        tracing::debug!(event_id = id, %calendar_id, "Publishing calendar event");
+        tracing::trace!(event_id = id, %calendar_id, "Storing event in history");
 
-        let mut history = self
-            .event_history
-            .write()
-            .expect("Failed to acquire event history write lock");
-        history.push_back(stored);
+        if let Ok(mut history) = self.event_history.write() {
+            history.push_back(stored);
 
-        // Trim old events if history is too large
-        while history.len() > Self::MAX_EVENT_HISTORY {
-            history.pop_front();
+            // Trim old events if history is too large
+            while history.len() > self.event_history_max_size {
+                history.pop_front();
+            }
         }
+    }
+
+    /// Ensures an event listener is running for the given calendar.
+    ///
+    /// If a listener is already running, this is a no-op.
+    /// Otherwise, spawns a background task that subscribes to CachePubSub
+    /// and populates the local event_history.
+    pub fn ensure_event_listener(&self, calendar_id: Uuid) {
+        // Check if listener already exists
+        {
+            let listeners = self.active_listeners.read().expect("Lock poisoned");
+            if listeners.contains(&calendar_id) {
+                return;
+            }
+        }
+
+        // Register this listener
+        {
+            let mut listeners = self.active_listeners.write().expect("Lock poisoned");
+            // Double-check after acquiring write lock
+            if listeners.contains(&calendar_id) {
+                return;
+            }
+            listeners.insert(calendar_id);
+        }
+
+        // Spawn the listener task
+        let state = self.clone();
+        let cache_pubsub = self.cache_pubsub.clone();
+        let mut shutdown_rx = self.shutdown_tx.subscribe();
+
+        tokio::spawn(async move {
+            let receiver_result = cache_pubsub.subscribe(calendar_id).await;
+            let mut receiver = match receiver_result {
+                Ok(r) => r,
+                Err(err) => {
+                    tracing::error!(%calendar_id, error = %err, "Failed to subscribe to calendar events");
+                    // Remove from active listeners
+                    if let Ok(mut listeners) = state.active_listeners.write() {
+                        listeners.remove(&calendar_id);
+                    }
+                    return;
+                }
+            };
+
+            tracing::debug!(%calendar_id, "Event listener started");
+
+            loop {
+                tokio::select! {
+                    result = receiver.recv() => {
+                        match result {
+                            Ok(event) => {
+                                state.store_event(calendar_id, event);
+                            }
+                            Err(broadcast::error::RecvError::Lagged(n)) => {
+                                tracing::warn!(%calendar_id, lagged = n, "Event listener lagged");
+                            }
+                            Err(broadcast::error::RecvError::Closed) => {
+                                tracing::info!(%calendar_id, "Event channel closed");
+                                break;
+                            }
+                        }
+                    }
+                    _ = shutdown_rx.recv() => {
+                        tracing::debug!(%calendar_id, "Event listener shutting down");
+                        break;
+                    }
+                }
+            }
+
+            // Remove from active listeners
+            if let Ok(mut listeners) = state.active_listeners.write() {
+                listeners.remove(&calendar_id);
+            }
+        });
     }
 
     /// Subscribe to shutdown signal.
@@ -263,5 +317,529 @@ impl AppState {
     pub fn signal_dev_css_reload(&self, filename: String) {
         let _ = self.dev_css_reload_tx.send(CssReload { filename });
         tracing::debug!("Dev CSS reload signal sent");
+    }
+}
+
+// ============================================================================
+// Factory functions for different backend combinations
+// ============================================================================
+
+#[cfg(all(feature = "sqlite", feature = "memory"))]
+mod sqlite_memory {
+    use super::*;
+    use crate::cache::memory::{MemoryCache, MemoryPubSub};
+    use crate::mock_data::generate_mock_entries;
+    use crate::storage::cached::{CachedCalendarRepository, CachedEntryRepository};
+    use crate::storage::SqliteRepository;
+    use calendsync_core::calendar::Calendar;
+
+    impl AppState {
+        /// Creates AppState with SQLite storage and in-memory cache.
+        pub async fn new_sqlite_memory(config: &Config) -> Result<Self, anyhow::Error> {
+            let sqlite_repo = Arc::new(SqliteRepository::new(&config.sqlite_path).await?);
+            let memory_cache = Arc::new(MemoryCache::new(config.cache_max_entries));
+            let memory_pubsub = Arc::new(MemoryPubSub::new());
+
+            let cached_entry_repo = Arc::new(CachedEntryRepository::new(
+                sqlite_repo.clone(),
+                memory_cache.clone(),
+                memory_pubsub.clone(),
+                config.cache_ttl(),
+            ));
+
+            let cached_calendar_repo = Arc::new(CachedCalendarRepository::new(
+                sqlite_repo,
+                memory_cache,
+                config.cache_ttl(),
+            ));
+
+            Ok(Self::build(
+                cached_entry_repo,
+                cached_calendar_repo,
+                memory_pubsub,
+                config,
+            ))
+        }
+
+        /// Creates AppState with SQLite + memory cache and demo data seeded.
+        pub async fn with_demo_data(config: &Config) -> Result<Self, anyhow::Error> {
+            let state = Self::new_sqlite_memory(config).await?;
+
+            let calendar_id = Uuid::parse_str(Self::DEMO_CALENDAR_ID)?;
+
+            // Create demo calendar
+            let calendar = Calendar::new("Personal", "#3B82F6")
+                .with_id(calendar_id)
+                .with_description("My personal calendar");
+
+            state
+                .calendar_repo
+                .create_calendar(&calendar)
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to create demo calendar: {}", e))?;
+
+            // Create demo entries
+            let today = chrono::Local::now().date_naive();
+            let entries = generate_mock_entries(calendar_id, today);
+
+            for entry in entries {
+                state
+                    .entry_repo
+                    .create_entry(&entry)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Failed to create demo entry: {}", e))?;
+            }
+
+            // Start event listener for demo calendar
+            state.ensure_event_listener(calendar_id);
+
+            tracing::info!(
+                calendar_id = %calendar_id,
+                "Demo data seeded successfully"
+            );
+
+            Ok(state)
+        }
+    }
+}
+
+#[cfg(all(feature = "sqlite", feature = "redis"))]
+mod sqlite_redis {
+    use super::*;
+    use crate::cache::redis_impl::{RedisCache, RedisPubSub};
+    use crate::mock_data::generate_mock_entries;
+    use crate::storage::cached::{CachedCalendarRepository, CachedEntryRepository};
+    use crate::storage::SqliteRepository;
+    use calendsync_core::calendar::Calendar;
+
+    impl AppState {
+        /// Creates AppState with SQLite storage and Redis cache.
+        pub async fn new_sqlite_redis(config: &Config) -> Result<Self, anyhow::Error> {
+            let sqlite_repo = Arc::new(SqliteRepository::new(&config.sqlite_path).await?);
+            let redis_cache = Arc::new(RedisCache::new(&config.redis_url).await?);
+            let redis_pubsub = Arc::new(RedisPubSub::new(&config.redis_url).await?);
+
+            let cached_entry_repo = Arc::new(CachedEntryRepository::new(
+                sqlite_repo.clone(),
+                redis_cache.clone(),
+                redis_pubsub.clone(),
+                config.cache_ttl(),
+            ));
+
+            let cached_calendar_repo = Arc::new(CachedCalendarRepository::new(
+                sqlite_repo,
+                redis_cache,
+                config.cache_ttl(),
+            ));
+
+            Ok(Self::build(
+                cached_entry_repo,
+                cached_calendar_repo,
+                redis_pubsub,
+                config,
+            ))
+        }
+
+        /// Creates AppState with SQLite + Redis cache and demo data seeded.
+        #[cfg(all(feature = "sqlite", feature = "redis"))]
+        pub async fn with_demo_data(config: &Config) -> Result<Self, anyhow::Error> {
+            let state = Self::new_sqlite_redis(config).await?;
+
+            let calendar_id = Uuid::parse_str(Self::DEMO_CALENDAR_ID)?;
+
+            // Create demo calendar
+            let calendar = Calendar::new("Personal", "#3B82F6")
+                .with_id(calendar_id)
+                .with_description("My personal calendar");
+
+            state
+                .calendar_repo
+                .create_calendar(&calendar)
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to create demo calendar: {}", e))?;
+
+            // Create demo entries
+            let today = chrono::Local::now().date_naive();
+            let entries = generate_mock_entries(calendar_id, today);
+
+            for entry in entries {
+                state
+                    .entry_repo
+                    .create_entry(&entry)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Failed to create demo entry: {}", e))?;
+            }
+
+            // Start event listener for demo calendar
+            state.ensure_event_listener(calendar_id);
+
+            tracing::info!(
+                calendar_id = %calendar_id,
+                "Demo data seeded successfully"
+            );
+
+            Ok(state)
+        }
+    }
+}
+
+#[cfg(all(feature = "inmemory", feature = "memory"))]
+mod inmemory_memory {
+    use super::*;
+    use crate::cache::memory::{MemoryCache, MemoryPubSub};
+    use crate::mock_data::generate_mock_entries;
+    use crate::storage::cached::{CachedCalendarRepository, CachedEntryRepository};
+    use crate::storage::InMemoryRepository;
+    use calendsync_core::calendar::Calendar;
+
+    impl AppState {
+        /// Creates AppState with in-memory storage and cache.
+        /// Useful for testing without any external dependencies.
+        pub async fn new_inmemory(config: &Config) -> Result<Self, anyhow::Error> {
+            let inmemory_repo = Arc::new(InMemoryRepository::new());
+            let memory_cache = Arc::new(MemoryCache::new(config.cache_max_entries));
+            let memory_pubsub = Arc::new(MemoryPubSub::new());
+
+            let cached_entry_repo = Arc::new(CachedEntryRepository::new(
+                inmemory_repo.clone(),
+                memory_cache.clone(),
+                memory_pubsub.clone(),
+                config.cache_ttl(),
+            ));
+
+            let cached_calendar_repo = Arc::new(CachedCalendarRepository::new(
+                inmemory_repo,
+                memory_cache,
+                config.cache_ttl(),
+            ));
+
+            Ok(Self::build(
+                cached_entry_repo,
+                cached_calendar_repo,
+                memory_pubsub,
+                config,
+            ))
+        }
+
+        /// Creates AppState with in-memory storage and demo data seeded.
+        pub async fn with_demo_data(config: &Config) -> Result<Self, anyhow::Error> {
+            let state = Self::new_inmemory(config).await?;
+
+            let calendar_id = Uuid::parse_str(Self::DEMO_CALENDAR_ID)?;
+
+            // Create demo calendar
+            let calendar = Calendar::new("Personal", "#3B82F6")
+                .with_id(calendar_id)
+                .with_description("My personal calendar");
+
+            state
+                .calendar_repo
+                .create_calendar(&calendar)
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to create demo calendar: {}", e))?;
+
+            // Create demo entries
+            let today = chrono::Local::now().date_naive();
+            let entries = generate_mock_entries(calendar_id, today);
+
+            for entry in entries {
+                state
+                    .entry_repo
+                    .create_entry(&entry)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Failed to create demo entry: {}", e))?;
+            }
+
+            // Start event listener for demo calendar
+            state.ensure_event_listener(calendar_id);
+
+            tracing::info!(
+                calendar_id = %calendar_id,
+                "Demo data seeded successfully"
+            );
+
+            Ok(state)
+        }
+    }
+}
+
+#[cfg(all(feature = "dynamodb", feature = "memory"))]
+mod dynamodb_memory {
+    use super::*;
+    use crate::cache::memory::{MemoryCache, MemoryPubSub};
+    use crate::mock_data::generate_mock_entries;
+    use crate::storage::cached::{CachedCalendarRepository, CachedEntryRepository};
+    use crate::storage::DynamoDbRepository;
+    use calendsync_core::calendar::Calendar;
+
+    impl AppState {
+        /// Creates AppState with DynamoDB storage and in-memory cache.
+        pub async fn new_dynamodb_memory(config: &Config) -> Result<Self, anyhow::Error> {
+            let aws_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
+            let dynamodb_client = aws_sdk_dynamodb::Client::new(&aws_config);
+            let dynamodb_repo = Arc::new(DynamoDbRepository::new(
+                dynamodb_client,
+                "calendsync".to_string(),
+            ));
+
+            let memory_cache = Arc::new(MemoryCache::new(config.cache_max_entries));
+            let memory_pubsub = Arc::new(MemoryPubSub::new());
+
+            let cached_entry_repo = Arc::new(CachedEntryRepository::new(
+                dynamodb_repo.clone(),
+                memory_cache.clone(),
+                memory_pubsub.clone(),
+                config.cache_ttl(),
+            ));
+
+            let cached_calendar_repo = Arc::new(CachedCalendarRepository::new(
+                dynamodb_repo,
+                memory_cache,
+                config.cache_ttl(),
+            ));
+
+            Ok(Self::build(
+                cached_entry_repo,
+                cached_calendar_repo,
+                memory_pubsub,
+                config,
+            ))
+        }
+
+        /// Creates AppState with DynamoDB + memory cache and demo data seeded.
+        pub async fn with_demo_data(config: &Config) -> Result<Self, anyhow::Error> {
+            let state = Self::new_dynamodb_memory(config).await?;
+
+            let calendar_id = Uuid::parse_str(Self::DEMO_CALENDAR_ID)?;
+
+            // Create demo calendar
+            let calendar = Calendar::new("Personal", "#3B82F6")
+                .with_id(calendar_id)
+                .with_description("My personal calendar");
+
+            state
+                .calendar_repo
+                .create_calendar(&calendar)
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to create demo calendar: {}", e))?;
+
+            // Create demo entries
+            let today = chrono::Local::now().date_naive();
+            let entries = generate_mock_entries(calendar_id, today);
+
+            for entry in entries {
+                state
+                    .entry_repo
+                    .create_entry(&entry)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Failed to create demo entry: {}", e))?;
+            }
+
+            // Start event listener for demo calendar
+            state.ensure_event_listener(calendar_id);
+
+            tracing::info!(
+                calendar_id = %calendar_id,
+                "Demo data seeded successfully"
+            );
+
+            Ok(state)
+        }
+    }
+}
+
+#[cfg(all(feature = "dynamodb", feature = "redis"))]
+mod dynamodb_redis {
+    use super::*;
+    use crate::cache::redis_impl::{RedisCache, RedisPubSub};
+    use crate::mock_data::generate_mock_entries;
+    use crate::storage::cached::{CachedCalendarRepository, CachedEntryRepository};
+    use crate::storage::DynamoDbRepository;
+    use calendsync_core::calendar::Calendar;
+
+    impl AppState {
+        /// Creates AppState with DynamoDB storage and Redis cache.
+        pub async fn new_dynamodb_redis(config: &Config) -> Result<Self, anyhow::Error> {
+            let aws_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
+            let dynamodb_client = aws_sdk_dynamodb::Client::new(&aws_config);
+            let dynamodb_repo = Arc::new(DynamoDbRepository::new(
+                dynamodb_client,
+                "calendsync".to_string(),
+            ));
+
+            let redis_cache = Arc::new(RedisCache::new(&config.redis_url).await?);
+            let redis_pubsub = Arc::new(RedisPubSub::new(&config.redis_url).await?);
+
+            let cached_entry_repo = Arc::new(CachedEntryRepository::new(
+                dynamodb_repo.clone(),
+                redis_cache.clone(),
+                redis_pubsub.clone(),
+                config.cache_ttl(),
+            ));
+
+            let cached_calendar_repo = Arc::new(CachedCalendarRepository::new(
+                dynamodb_repo,
+                redis_cache,
+                config.cache_ttl(),
+            ));
+
+            Ok(Self::build(
+                cached_entry_repo,
+                cached_calendar_repo,
+                redis_pubsub,
+                config,
+            ))
+        }
+
+        /// Creates AppState with DynamoDB + Redis cache and demo data seeded.
+        pub async fn with_demo_data(config: &Config) -> Result<Self, anyhow::Error> {
+            let state = Self::new_dynamodb_redis(config).await?;
+
+            let calendar_id = Uuid::parse_str(Self::DEMO_CALENDAR_ID)?;
+
+            // Create demo calendar
+            let calendar = Calendar::new("Personal", "#3B82F6")
+                .with_id(calendar_id)
+                .with_description("My personal calendar");
+
+            state
+                .calendar_repo
+                .create_calendar(&calendar)
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to create demo calendar: {}", e))?;
+
+            // Create demo entries
+            let today = chrono::Local::now().date_naive();
+            let entries = generate_mock_entries(calendar_id, today);
+
+            for entry in entries {
+                state
+                    .entry_repo
+                    .create_entry(&entry)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Failed to create demo entry: {}", e))?;
+            }
+
+            // Start event listener for demo calendar
+            state.ensure_event_listener(calendar_id);
+
+            tracing::info!(
+                calendar_id = %calendar_id,
+                "Demo data seeded successfully"
+            );
+
+            Ok(state)
+        }
+    }
+}
+
+// ============================================================================
+// Test support - provides Default implementation for unit tests
+// ============================================================================
+
+#[cfg(test)]
+mod test_support {
+    use super::*;
+    use crate::cache::memory::MemoryPubSub;
+
+    use std::collections::HashMap;
+
+    use async_trait::async_trait;
+    use tokio::sync::RwLock;
+
+    use calendsync_core::calendar::{Calendar, CalendarEntry};
+    use calendsync_core::storage::{CalendarRepository, DateRange, EntryRepository, Result};
+
+    /// Minimal in-memory repository for tests.
+    /// This is a simplified version that only implements the traits needed for testing.
+    #[derive(Debug, Default)]
+    struct TestRepository {
+        entries: RwLock<HashMap<Uuid, CalendarEntry>>,
+        calendars: RwLock<HashMap<Uuid, Calendar>>,
+    }
+
+    #[async_trait]
+    impl EntryRepository for TestRepository {
+        async fn get_entry(&self, id: Uuid) -> Result<Option<CalendarEntry>> {
+            let entries = self.entries.read().await;
+            Ok(entries.get(&id).cloned())
+        }
+
+        async fn get_entries_by_calendar(
+            &self,
+            calendar_id: Uuid,
+            date_range: DateRange,
+        ) -> Result<Vec<CalendarEntry>> {
+            let entries = self.entries.read().await;
+            let filtered: Vec<CalendarEntry> = entries
+                .values()
+                .filter(|entry| {
+                    entry.calendar_id == calendar_id
+                        && entry.date >= date_range.start
+                        && entry.date <= date_range.end
+                })
+                .cloned()
+                .collect();
+            Ok(filtered)
+        }
+
+        async fn create_entry(&self, entry: &CalendarEntry) -> Result<()> {
+            let mut entries = self.entries.write().await;
+            entries.insert(entry.id, entry.clone());
+            Ok(())
+        }
+
+        async fn update_entry(&self, entry: &CalendarEntry) -> Result<()> {
+            let mut entries = self.entries.write().await;
+            entries.insert(entry.id, entry.clone());
+            Ok(())
+        }
+
+        async fn delete_entry(&self, id: Uuid) -> Result<()> {
+            let mut entries = self.entries.write().await;
+            entries.remove(&id);
+            Ok(())
+        }
+    }
+
+    #[async_trait]
+    impl CalendarRepository for TestRepository {
+        async fn get_calendar(&self, id: Uuid) -> Result<Option<Calendar>> {
+            let calendars = self.calendars.read().await;
+            Ok(calendars.get(&id).cloned())
+        }
+
+        async fn create_calendar(&self, calendar: &Calendar) -> Result<()> {
+            let mut calendars = self.calendars.write().await;
+            calendars.insert(calendar.id, calendar.clone());
+            Ok(())
+        }
+
+        async fn update_calendar(&self, calendar: &Calendar) -> Result<()> {
+            let mut calendars = self.calendars.write().await;
+            calendars.insert(calendar.id, calendar.clone());
+            Ok(())
+        }
+
+        async fn delete_calendar(&self, id: Uuid) -> Result<()> {
+            let mut calendars = self.calendars.write().await;
+            calendars.remove(&id);
+            Ok(())
+        }
+    }
+
+    impl Default for AppState {
+        /// Creates an AppState with in-memory storage for testing.
+        ///
+        /// This is only available in test builds and provides a simple way
+        /// to create an AppState without external dependencies.
+        fn default() -> Self {
+            let config = Config::default();
+            let test_repo = Arc::new(TestRepository::default());
+            let memory_pubsub = Arc::new(MemoryPubSub::new());
+
+            // For tests, we use the test repository without caching
+            Self::build(test_repo.clone(), test_repo, memory_pubsub, &config)
+        }
     }
 }
