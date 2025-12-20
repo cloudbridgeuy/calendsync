@@ -52,6 +52,8 @@ pub struct EventsQuery {
 ///
 /// Returns a stream of Server-Sent Events for the specified calendar.
 /// If `last_event_id` is provided, sends missed events first before streaming new ones.
+/// If there's a gap in event history (client's last_event_id is older than our oldest),
+/// sends a `refresh_required` event to tell the client to fetch fresh data.
 pub async fn events_sse(
     State(state): State<AppState>,
     Query(query): Query<EventsQuery>,
@@ -59,11 +61,29 @@ pub async fn events_sse(
     let calendar_id = query.calendar_id;
     let last_event_id = query.last_event_id.unwrap_or(0);
 
+    // Ensure event listener is running for this calendar
+    state.ensure_event_listener(calendar_id);
+
     // Subscribe to shutdown signal
     let mut shutdown_rx = state.subscribe_shutdown();
 
+    // Check for gap in event history before creating stream
+    let oldest_event_id = state.oldest_event_id();
+
     // Create the stream
     let stream = async_stream::stream! {
+        // Check if there's a gap in event history
+        // If client has a last_event_id that's older than our oldest stored event,
+        // they've missed events and need to refresh their data
+        if last_event_id > 0 && last_event_id < oldest_event_id {
+            yield Ok(Event::default()
+                .event("refresh_required")
+                .data(serde_json::json!({
+                    "reason": "event_history_gap",
+                    "message": "Please refresh entries from the server"
+                }).to_string()));
+        }
+
         // Track the last event ID we've sent to this client
         let mut current_event_id = last_event_id;
 

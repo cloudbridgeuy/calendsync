@@ -15,8 +15,7 @@ use crate::{
     handlers::{
         calendar_react::{calendar_react_ssr, calendar_react_ssr_entry},
         entries::{
-            create_entry, delete_entry, get_entry, list_calendar_entries, list_entries,
-            toggle_entry, update_entry,
+            create_entry, delete_entry, get_entry, list_entries, toggle_entry, update_entry,
         },
         events::events_sse,
         health::{healthz, readyz},
@@ -43,7 +42,6 @@ pub fn create_app(state: AppState) -> Router {
     let api_routes = Router::new()
         // Entry routes
         .route("/entries", get(list_entries).post(create_entry))
-        .route("/entries/calendar", get(list_calendar_entries))
         .route(
             "/entries/{id}",
             get(get_entry).put(update_entry).delete(delete_entry),
@@ -141,10 +139,12 @@ mod tests {
         let state = AppState::default();
         let app = create_app(state);
 
+        // list_entries now requires calendar_id query parameter
+        let calendar_id = "00000000-0000-0000-0000-000000000001";
         let response = app
             .oneshot(
                 Request::builder()
-                    .uri("/api/entries")
+                    .uri(format!("/api/entries?calendar_id={calendar_id}"))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -156,7 +156,12 @@ mod tests {
         let body = response.into_body().collect().await.unwrap().to_bytes();
         let json: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
 
-        assert!(json.is_empty());
+        // Response is an array of ServerDay objects (days in the date range),
+        // each with an "entries" array that should be empty
+        assert!(!json.is_empty()); // We get days for the date range
+        for day in &json {
+            assert!(day["entries"].as_array().unwrap().is_empty());
+        }
     }
 
     #[tokio::test]

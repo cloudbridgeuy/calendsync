@@ -15,7 +15,8 @@ use axum::{
 use chrono::Local;
 use uuid::Uuid;
 
-use calendsync_core::calendar::{filter_entries, CalendarEntry};
+use calendsync_core::calendar::CalendarEntry;
+use calendsync_core::storage::DateRange;
 use calendsync_ssr::{sanitize_error, SsrConfig, SsrError};
 
 use super::entries::entry_to_server_entry;
@@ -233,39 +234,35 @@ pub async fn calendar_react_ssr(
     State(state): State<AppState>,
     Path(calendar_id): Path<Uuid>,
 ) -> Response {
-    // Validate calendar exists, redirect to default if not found
-    let calendar_exists = state
-        .calendars
-        .read()
-        .expect("Failed to acquire read lock")
-        .contains_key(&calendar_id);
-
-    if !calendar_exists {
-        tracing::warn!(
-            calendar_id = %calendar_id,
-            "Calendar not found, redirecting to default"
-        );
-
-        // Try to redirect to default calendar
-        if let Some(default_id) = state.default_calendar_id() {
-            return Redirect::to(&format!("/calendar/{default_id}")).into_response();
-        }
-
-        // No calendars available at all
-        let urls = get_bundle_urls();
-        return Html(error_html(
-            "No calendars available",
-            &calendar_id.to_string(),
-            &urls.client_js,
-            &urls.css,
-            is_dev_mode(),
-        ))
-        .into_response();
-    }
-
-    // Get bundle URLs and dev mode (before async operations)
+    // Get bundle URLs and dev mode early (needed for error pages)
     let urls = get_bundle_urls();
     let dev_mode = is_dev_mode();
+
+    // Validate calendar exists, redirect to default if not found
+    let calendar = match state.calendar_repo.get_calendar(calendar_id).await {
+        Ok(Some(cal)) => cal,
+        Ok(None) => {
+            tracing::warn!(
+                calendar_id = %calendar_id,
+                "Calendar not found, redirecting to default"
+            );
+
+            // Redirect to the demo calendar
+            return Redirect::to(&format!("/calendar/{}", AppState::DEMO_CALENDAR_ID))
+                .into_response();
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to fetch calendar");
+            return Html(error_html(
+                &format!("Failed to load calendar: {e}"),
+                &calendar_id.to_string(),
+                &urls.client_js,
+                &urls.css,
+                dev_mode,
+            ))
+            .into_response();
+        }
+    };
 
     // Check if SSR pool is available (async for hot-reload support)
     let Some(ssr_pool) = state.get_ssr_pool().await else {
@@ -288,14 +285,43 @@ pub async fn calendar_react_ssr(
     let start = today - chrono::Duration::days(365);
     let end = today + chrono::Duration::days(365);
 
-    // Fetch entries for the date range (scope to drop lock before await)
-    let days = {
-        let entries_store = state.entries.read().expect("Failed to acquire read lock");
-        let all_entries: Vec<CalendarEntry> = entries_store.values().cloned().collect();
-        let filtered: Vec<&CalendarEntry> =
-            filter_entries(&all_entries, None, Some(start), Some(end));
-        entries_to_server_days(&filtered, start, end)
+    // Fetch entries for the date range
+    let date_range = match DateRange::new(start, end) {
+        Ok(range) => range,
+        Err(e) => {
+            tracing::error!(error = %e, "Invalid date range");
+            return Html(error_html(
+                "Invalid date range",
+                &calendar_id.to_string(),
+                &urls.client_js,
+                &urls.css,
+                dev_mode,
+            ))
+            .into_response();
+        }
     };
+
+    let entries = match state
+        .entry_repo
+        .get_entries_by_calendar(calendar.id, date_range)
+        .await
+    {
+        Ok(entries) => entries,
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to fetch entries");
+            return Html(error_html(
+                &format!("Failed to load entries: {e}"),
+                &calendar_id.to_string(),
+                &urls.client_js,
+                &urls.css,
+                dev_mode,
+            ))
+            .into_response();
+        }
+    };
+
+    let entry_refs: Vec<&CalendarEntry> = entries.iter().collect();
+    let days = entries_to_server_days(&entry_refs, start, end);
 
     // Build initial data for SSR
     let initial_data = serde_json::json!({
@@ -340,22 +366,21 @@ pub async fn calendar_react_ssr_entry(
     Path(calendar_id): Path<Uuid>,
     Query(query): Query<EntryModalQuery>,
 ) -> Response {
+    // Get bundle URLs and dev mode early (needed for error pages)
+    let urls = get_bundle_urls();
+    let dev_mode = is_dev_mode();
+
     // Validate calendar exists, redirect to default if not found
-    let calendar_exists = state
-        .calendars
-        .read()
-        .expect("Failed to acquire read lock")
-        .contains_key(&calendar_id);
+    let calendar = match state.calendar_repo.get_calendar(calendar_id).await {
+        Ok(Some(cal)) => cal,
+        Ok(None) => {
+            tracing::warn!(
+                calendar_id = %calendar_id,
+                "Calendar not found, redirecting to default"
+            );
 
-    if !calendar_exists {
-        tracing::warn!(
-            calendar_id = %calendar_id,
-            "Calendar not found, redirecting to default"
-        );
-
-        // Try to redirect to default calendar (with /entry path)
-        if let Some(default_id) = state.default_calendar_id() {
-            // Preserve entry_id query param if present
+            // Redirect to the demo calendar (with /entry path)
+            let default_id = AppState::DEMO_CALENDAR_ID;
             let redirect_url = if let Some(entry_id) = query.entry_id {
                 format!("/calendar/{default_id}/entry?entry_id={entry_id}")
             } else {
@@ -363,22 +388,18 @@ pub async fn calendar_react_ssr_entry(
             };
             return Redirect::to(&redirect_url).into_response();
         }
-
-        // No calendars available at all
-        let urls = get_bundle_urls();
-        return Html(error_html(
-            "No calendars available",
-            &calendar_id.to_string(),
-            &urls.client_js,
-            &urls.css,
-            is_dev_mode(),
-        ))
-        .into_response();
-    }
-
-    // Get bundle URLs and dev mode (before async operations)
-    let urls = get_bundle_urls();
-    let dev_mode = is_dev_mode();
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to fetch calendar");
+            return Html(error_html(
+                &format!("Failed to load calendar: {e}"),
+                &calendar_id.to_string(),
+                &urls.client_js,
+                &urls.css,
+                dev_mode,
+            ))
+            .into_response();
+        }
+    };
 
     // Check if SSR pool is available (async for hot-reload support)
     let Some(ssr_pool) = state.get_ssr_pool().await else {
@@ -401,47 +422,85 @@ pub async fn calendar_react_ssr_entry(
     let start = today - chrono::Duration::days(365);
     let end = today + chrono::Duration::days(365);
 
-    // Fetch entries and optionally the specific entry for edit mode
-    let (days, modal) = {
-        let entries_store = state.entries.read().expect("Failed to acquire read lock");
-        let all_entries: Vec<CalendarEntry> = entries_store.values().cloned().collect();
-        let filtered: Vec<&CalendarEntry> =
-            filter_entries(&all_entries, None, Some(start), Some(end));
-        let days = entries_to_server_days(&filtered, start, end);
+    // Fetch entries for the date range
+    let date_range = match DateRange::new(start, end) {
+        Ok(range) => range,
+        Err(e) => {
+            tracing::error!(error = %e, "Invalid date range");
+            return Html(error_html(
+                "Invalid date range",
+                &calendar_id.to_string(),
+                &urls.client_js,
+                &urls.css,
+                dev_mode,
+            ))
+            .into_response();
+        }
+    };
 
-        // Build modal state based on query params
-        let modal = if let Some(entry_id) = query.entry_id {
-            // Edit mode: look up the entry
-            match entries_store.get(&entry_id) {
-                Some(entry) => serde_json::json!({
-                    "mode": "edit",
-                    "entryId": entry_id.to_string(),
-                    "entry": entry_to_server_entry(entry),
-                }),
-                None => {
-                    // Entry not found - return 404
-                    return (
-                        StatusCode::NOT_FOUND,
-                        Html(error_html(
-                            "Entry not found",
-                            &calendar_id.to_string(),
-                            &urls.client_js,
-                            &urls.css,
-                            dev_mode,
-                        )),
-                    )
-                        .into_response();
-                }
+    let entries = match state
+        .entry_repo
+        .get_entries_by_calendar(calendar.id, date_range)
+        .await
+    {
+        Ok(entries) => entries,
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to fetch entries");
+            return Html(error_html(
+                &format!("Failed to load entries: {e}"),
+                &calendar_id.to_string(),
+                &urls.client_js,
+                &urls.css,
+                dev_mode,
+            ))
+            .into_response();
+        }
+    };
+
+    let entry_refs: Vec<&CalendarEntry> = entries.iter().collect();
+    let days = entries_to_server_days(&entry_refs, start, end);
+
+    // Build modal state based on query params
+    let modal = if let Some(entry_id) = query.entry_id {
+        // Edit mode: look up the entry from repository
+        match state.entry_repo.get_entry(entry_id).await {
+            Ok(Some(entry)) => serde_json::json!({
+                "mode": "edit",
+                "entryId": entry_id.to_string(),
+                "entry": entry_to_server_entry(&entry),
+            }),
+            Ok(None) => {
+                // Entry not found - return 404
+                return (
+                    StatusCode::NOT_FOUND,
+                    Html(error_html(
+                        "Entry not found",
+                        &calendar_id.to_string(),
+                        &urls.client_js,
+                        &urls.css,
+                        dev_mode,
+                    )),
+                )
+                    .into_response();
             }
-        } else {
-            // Create mode: pre-fill with highlighted day
-            serde_json::json!({
-                "mode": "create",
-                "defaultDate": highlighted_day,
-            })
-        };
-
-        (days, modal)
+            Err(e) => {
+                tracing::error!(error = %e, "Failed to fetch entry for edit");
+                return Html(error_html(
+                    &format!("Failed to load entry: {e}"),
+                    &calendar_id.to_string(),
+                    &urls.client_js,
+                    &urls.css,
+                    dev_mode,
+                ))
+                .into_response();
+            }
+        }
+    } else {
+        // Create mode: pre-fill with highlighted day
+        serde_json::json!({
+            "mode": "create",
+            "defaultDate": highlighted_day,
+        })
     };
 
     // Build initial data for SSR with modal state

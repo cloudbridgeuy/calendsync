@@ -1,3 +1,8 @@
+//! Entry CRUD handlers.
+//!
+//! These handlers use repository trait objects for database access.
+//! Event publishing is handled by the cached repository decorator.
+
 use std::collections::BTreeMap;
 
 use axum::{
@@ -6,17 +11,20 @@ use axum::{
     response::IntoResponse,
     Form, Json,
 };
+use chrono::NaiveDate;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use calendsync_core::calendar::{filter_entries, CalendarEntry, CalendarEvent, EntryKind};
+use calendsync_core::calendar::{CalendarEntry, EntryKind};
+use calendsync_core::storage::{DateRange, RepositoryError};
 
 use crate::{
+    handlers::AppError,
     models::{CreateEntry, UpdateEntry},
     state::AppState,
 };
 
-/// Error response with message
+/// Error response with message (for form validation errors).
 fn error_response(status: StatusCode, message: impl Into<String>) -> (StatusCode, String) {
     let msg = message.into();
     tracing::warn!(status = %status, message = %msg, "API error");
@@ -26,59 +34,58 @@ fn error_response(status: StatusCode, message: impl Into<String>) -> (StatusCode
 /// Query parameters for listing entries.
 #[derive(Debug, Deserialize)]
 pub struct ListEntriesQuery {
-    /// Filter by calendar ID
-    pub calendar_id: Option<Uuid>,
-    /// Filter by start date (inclusive) - legacy parameter
-    pub start: Option<chrono::NaiveDate>,
-    /// Filter by end date (inclusive) - legacy parameter
-    pub end: Option<chrono::NaiveDate>,
+    /// Filter by calendar ID (required)
+    pub calendar_id: Uuid,
     /// Center date for React calendar (ISO 8601: YYYY-MM-DD)
-    pub highlighted_day: Option<chrono::NaiveDate>,
-    /// Number of days before highlighted_day (default: 3)
-    pub before: Option<i64>,
-    /// Number of days after highlighted_day (default: 3)
-    pub after: Option<i64>,
+    pub highlighted_day: Option<NaiveDate>,
+    /// Number of days before highlighted_day (default: 365)
+    #[serde(default = "default_before")]
+    pub before: i64,
+    /// Number of days after highlighted_day (default: 365)
+    #[serde(default = "default_after")]
+    pub after: i64,
 }
 
-/// List all entries (GET /api/entries).
+fn default_before() -> i64 {
+    365
+}
+
+fn default_after() -> i64 {
+    365
+}
+
+/// List entries for a calendar (GET /api/entries).
 ///
-/// Supports optional query parameters for filtering:
-/// - `calendar_id`: Filter by calendar
-/// - `start`: Filter by start date (inclusive) - legacy
-/// - `end`: Filter by end date (inclusive) - legacy
-/// - `highlighted_day`: Center date for React calendar
-/// - `before`: Number of days before highlighted_day (default: 3)
-/// - `after`: Number of days after highlighted_day (default: 3)
+/// Returns entries in ServerDay[] format for the React calendar.
 ///
-/// If `highlighted_day` is provided, `before` and `after` are used to calculate the date range.
-/// Otherwise, falls back to `start` and `end` parameters.
+/// Query parameters:
+/// - `calendar_id`: Calendar ID (required)
+/// - `highlighted_day`: Center date (defaults to today)
+/// - `before`: Days before highlighted_day (default: 365)
+/// - `after`: Days after highlighted_day (default: 365)
+#[axum::debug_handler]
 pub async fn list_entries(
     State(state): State<AppState>,
     Query(query): Query<ListEntriesQuery>,
-) -> impl IntoResponse {
-    let entries_store = state.entries.read().expect("Failed to acquire read lock");
+) -> Result<Json<Vec<serde_json::Value>>, AppError> {
+    let highlighted = query
+        .highlighted_day
+        .unwrap_or_else(|| chrono::Local::now().date_naive());
 
-    let all_entries: Vec<CalendarEntry> = entries_store.values().cloned().collect();
+    let start = highlighted - chrono::Duration::days(query.before);
+    let end = highlighted + chrono::Duration::days(query.after);
 
-    // Calculate date range
-    let (start, end) = if let Some(highlighted) = query.highlighted_day {
-        // Use highlighted_day with before/after
-        let before_days = query.before.unwrap_or(3);
-        let after_days = query.after.unwrap_or(3);
-        let start = highlighted - chrono::Duration::days(before_days);
-        let end = highlighted + chrono::Duration::days(after_days);
-        (Some(start), Some(end))
-    } else {
-        // Fall back to legacy start/end parameters
-        (query.start, query.end)
-    };
+    let date_range = DateRange::new(start, end)?;
 
-    // Filter by calendar_id if provided
-    let filtered: Vec<&CalendarEntry> = filter_entries(&all_entries, query.calendar_id, start, end);
+    let entries = state
+        .entry_repo
+        .get_entries_by_calendar(query.calendar_id, date_range)
+        .await?;
 
-    let result: Vec<CalendarEntry> = filtered.into_iter().cloned().collect();
+    let entry_refs: Vec<&CalendarEntry> = entries.iter().collect();
+    let days = entries_to_server_days(&entry_refs, start, end);
 
-    Json(result)
+    Ok(Json(days))
 }
 
 /// Create a new entry (POST /api/entries).
@@ -96,13 +103,13 @@ pub async fn create_entry(
     tracing::debug!(payload = ?payload, "Received create entry request");
 
     // Verify the calendar exists
-    let calendar_exists = state
-        .calendars
-        .read()
-        .expect("Failed to acquire read lock")
-        .contains_key(&payload.calendar_id);
+    let calendar = state
+        .calendar_repo
+        .get_calendar(payload.calendar_id)
+        .await
+        .map_err(|e| error_response(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    if !calendar_exists {
+    if calendar.is_none() {
         return Err(error_response(
             StatusCode::BAD_REQUEST,
             format!("Calendar {} not found", payload.calendar_id),
@@ -116,14 +123,12 @@ pub async fn create_entry(
         )
     })?;
 
+    // Create entry via repository (which handles cache invalidation and event publishing)
     state
-        .entries
-        .write()
-        .expect("Failed to acquire write lock")
-        .insert(entry.id, entry.clone());
-
-    // Publish SSE event for real-time updates
-    state.publish_event(entry.calendar_id, CalendarEvent::entry_added(entry.clone()));
+        .entry_repo
+        .create_entry(&entry)
+        .await
+        .map_err(|e| error_response(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     tracing::info!(entry_id = %entry.id, title = %entry.title, "Created new entry");
 
@@ -134,15 +139,17 @@ pub async fn create_entry(
 pub async fn get_entry(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
-) -> Result<Json<CalendarEntry>, (StatusCode, String)> {
-    state
-        .entries
-        .read()
-        .expect("Failed to acquire read lock")
-        .get(&id)
-        .cloned()
-        .map(Json)
-        .ok_or_else(|| error_response(StatusCode::NOT_FOUND, format!("Entry {id} not found")))
+) -> Result<Json<CalendarEntry>, AppError> {
+    let entry = state.entry_repo.get_entry(id).await?;
+
+    match entry {
+        Some(e) => Ok(Json(e)),
+        None => Err(RepositoryError::NotFound {
+            entity_type: "CalendarEntry",
+            id: id.to_string(),
+        }
+        .into()),
+    }
 }
 
 /// Update an entry by ID (PUT /api/entries/{id}).
@@ -159,23 +166,24 @@ pub async fn update_entry(
 
     tracing::debug!(entry_id = %id, payload = ?payload, "Received update entry request");
 
-    // Update entry and get a clone for the response and event
-    let updated_entry = {
-        let mut entries = state.entries.write().expect("Failed to acquire write lock");
+    // Get existing entry
+    let existing = state
+        .entry_repo
+        .get_entry(id)
+        .await
+        .map_err(|e| error_response(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or_else(|| error_response(StatusCode::NOT_FOUND, format!("Entry {id} not found")))?;
 
-        let entry = entries.get_mut(&id).ok_or_else(|| {
-            error_response(StatusCode::NOT_FOUND, format!("Entry {id} not found"))
-        })?;
+    // Apply updates to a mutable copy
+    let mut updated_entry = existing;
+    payload.apply_to(&mut updated_entry);
 
-        payload.apply_to(entry);
-        entry.clone()
-    }; // Lock is released here
-
-    // Publish SSE event for real-time updates
-    state.publish_event(
-        updated_entry.calendar_id,
-        CalendarEvent::entry_updated(updated_entry.clone()),
-    );
+    // Update via repository (which handles cache invalidation and event publishing)
+    state
+        .entry_repo
+        .update_entry(&updated_entry)
+        .await
+        .map_err(|e| error_response(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     tracing::info!(entry_id = %id, "Updated entry");
 
@@ -186,31 +194,15 @@ pub async fn update_entry(
 pub async fn delete_entry(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
-) -> Result<StatusCode, (StatusCode, String)> {
+) -> Result<StatusCode, AppError> {
     tracing::debug!(entry_id = %id, "Received delete entry request");
 
-    let removed = state
-        .entries
-        .write()
-        .expect("Failed to acquire write lock")
-        .remove(&id);
+    // Delete via repository (which handles cache invalidation and event publishing)
+    state.entry_repo.delete_entry(id).await?;
 
-    match removed {
-        Some(entry) => {
-            // Publish SSE event for real-time updates
-            state.publish_event(
-                entry.calendar_id,
-                CalendarEvent::entry_deleted(entry.id, entry.date),
-            );
+    tracing::info!(entry_id = %id, "Deleted entry");
 
-            tracing::info!(entry_id = %id, title = %entry.title, "Deleted entry");
-            Ok(StatusCode::OK)
-        }
-        None => Err(error_response(
-            StatusCode::NOT_FOUND,
-            format!("Entry {id} not found"),
-        )),
-    }
+    Ok(StatusCode::OK)
 }
 
 /// Toggle a task's completion status (PATCH /api/entries/{id}/toggle).
@@ -220,39 +212,41 @@ pub async fn toggle_entry(
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     tracing::debug!(entry_id = %id, "Received toggle entry request");
 
-    // Toggle entry and get a clone for the response and event
-    let toggled_entry = {
-        let mut entries = state.entries.write().expect("Failed to acquire write lock");
+    // Get existing entry
+    let existing = state
+        .entry_repo
+        .get_entry(id)
+        .await
+        .map_err(|e| error_response(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or_else(|| error_response(StatusCode::NOT_FOUND, format!("Entry {id} not found")))?;
 
-        let entry = entries.get_mut(&id).ok_or_else(|| {
-            error_response(StatusCode::NOT_FOUND, format!("Entry {id} not found"))
-        })?;
-
-        // Only toggle if it's a task
-        match &mut entry.kind {
-            EntryKind::Task { completed } => {
-                *completed = !*completed;
-                tracing::info!(entry_id = %id, completed = %completed, "Toggled task");
-                Ok(entry.clone())
-            }
-            _ => Err(error_response(
+    // Toggle if it's a task
+    let mut updated_entry = existing;
+    match &mut updated_entry.kind {
+        EntryKind::Task { completed } => {
+            *completed = !*completed;
+            tracing::info!(entry_id = %id, completed = %completed, "Toggled task");
+        }
+        _ => {
+            return Err(error_response(
                 StatusCode::BAD_REQUEST,
                 format!("Entry {id} is not a task"),
-            )),
+            ));
         }
-    }?; // Lock is released here
+    }
 
-    // Publish SSE event for real-time updates
-    state.publish_event(
-        toggled_entry.calendar_id,
-        CalendarEvent::entry_updated(toggled_entry.clone()),
-    );
+    // Update via repository (which handles cache invalidation and event publishing)
+    state
+        .entry_repo
+        .update_entry(&updated_entry)
+        .await
+        .map_err(|e| error_response(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(entry_to_server_entry(&toggled_entry)))
+    Ok(Json(entry_to_server_entry(&updated_entry)))
 }
 
 // ============================================================================
-// Calendar entries API (ServerDay[] format for React calendar)
+// Helper functions for ServerDay[] format
 // ============================================================================
 
 /// Convert CalendarEntry to the ServerEntry format expected by the frontend.
@@ -305,13 +299,13 @@ pub fn entry_to_server_entry(entry: &CalendarEntry) -> serde_json::Value {
 
 /// Group entries by date into ServerDay format for a date range.
 /// Creates entries for all dates in the range, even if they have no entries.
-fn entries_to_server_days(
+pub fn entries_to_server_days(
     entries: &[&CalendarEntry],
-    start: chrono::NaiveDate,
-    end: chrono::NaiveDate,
+    start: NaiveDate,
+    end: NaiveDate,
 ) -> Vec<serde_json::Value> {
     // Build a map of entries by date
-    let mut days_map: BTreeMap<chrono::NaiveDate, Vec<serde_json::Value>> = BTreeMap::new();
+    let mut days_map: BTreeMap<NaiveDate, Vec<serde_json::Value>> = BTreeMap::new();
 
     // Initialize all dates in the range with empty vectors
     let mut current = start;
@@ -337,50 +331,4 @@ fn entries_to_server_days(
             })
         })
         .collect()
-}
-
-/// Query parameters for the calendar entries API.
-#[derive(serde::Deserialize)]
-pub struct CalendarEntriesQuery {
-    /// Calendar ID to fetch entries for.
-    pub calendar_id: Uuid,
-    /// Center date (ISO 8601: YYYY-MM-DD)
-    pub highlighted_day: chrono::NaiveDate,
-    /// Number of days before highlighted_day (default: 365)
-    #[serde(default = "default_before")]
-    pub before: i64,
-    /// Number of days after highlighted_day (default: 365)
-    #[serde(default = "default_after")]
-    pub after: i64,
-}
-
-fn default_before() -> i64 {
-    365
-}
-fn default_after() -> i64 {
-    365
-}
-
-/// API handler for fetching calendar entries in ServerDay[] format.
-/// Used by the React calendar client for data fetching.
-///
-/// GET /api/entries/calendar?calendar_id=...&highlighted_day=...&before=3&after=3
-///
-/// NOTE: This generates mock entries on-the-fly for the requested date range.
-/// In production, this would query a database.
-#[axum::debug_handler]
-pub async fn list_calendar_entries(
-    State(_state): State<AppState>,
-    Query(query): Query<CalendarEntriesQuery>,
-) -> Json<Vec<serde_json::Value>> {
-    let start = query.highlighted_day - chrono::Duration::days(query.before);
-    let end = query.highlighted_day + chrono::Duration::days(query.after);
-
-    // Generate mock entries for the requested date range
-    let entries = crate::mock_data::generate_mock_entries(query.calendar_id, query.highlighted_day);
-    let filtered: Vec<&CalendarEntry> =
-        filter_entries(&entries, Some(query.calendar_id), Some(start), Some(end));
-    let days = entries_to_server_days(&filtered, start, end);
-
-    Json(days)
 }
