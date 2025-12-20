@@ -1,12 +1,12 @@
 //! Integration test infrastructure.
 //!
 //! This module provides commands for running integration tests against
-//! real infrastructure (DynamoDB Local via Docker).
+//! real infrastructure (DynamoDB Local, Redis via Docker).
 //!
 //! # Usage
 //!
 //! ```bash
-//! # Run all integration tests
+//! # Run all integration tests (SQLite + DynamoDB with memory cache)
 //! cargo xtask integration
 //!
 //! # Run only SQLite integration tests
@@ -15,8 +15,14 @@
 //! # Run only DynamoDB integration tests
 //! cargo xtask integration --dynamodb
 //!
-//! # Skip container management (assumes DynamoDB Local is already running)
-//! cargo xtask integration --dynamodb --no-docker
+//! # Run with Redis cache (requires Docker)
+//! cargo xtask integration --redis
+//!
+//! # Run SQLite with Redis cache
+//! cargo xtask integration --sqlite --redis
+//!
+//! # Skip container management (assumes services are already running)
+//! cargo xtask integration --dynamodb --redis --no-docker
 //! ```
 
 pub mod error;
@@ -30,16 +36,18 @@ use crate::prelude::*;
 #[command(long_about = "Run integration tests against real infrastructure.
 
 This command manages Docker containers for local testing and runs
-the integration test suite against real storage backends.
+the integration test suite against real storage and cache backends.
 
-By default, it runs tests for both SQLite and DynamoDB backends.
-The command automatically starts DynamoDB Local via Docker before
-running DynamoDB tests and stops it afterward.
+By default, it runs tests for both SQLite and DynamoDB backends with
+in-memory cache. The command automatically starts required Docker
+containers (DynamoDB Local, Redis) and stops them afterward.
 
 Environment variables:
   AWS_ENDPOINT_URL    - Override DynamoDB endpoint (default: http://localhost:8000)
-  AWS_REGION          - AWS region for DynamoDB (default: us-east-1)")]
+  AWS_REGION          - AWS region for DynamoDB (default: us-east-1)
+  REDIS_URL           - Override Redis URL (default: redis://localhost:6379)")]
 pub struct IntegrationCommand {
+    // Storage backend flags
     /// Run only SQLite integration tests.
     #[arg(long, conflicts_with = "dynamodb")]
     pub sqlite: bool,
@@ -48,6 +56,16 @@ pub struct IntegrationCommand {
     #[arg(long, conflicts_with = "sqlite")]
     pub dynamodb: bool,
 
+    // Cache backend flags
+    /// Run tests with in-memory cache (default if no cache flag specified).
+    #[arg(long, conflicts_with = "redis")]
+    pub memory: bool,
+
+    /// Run tests with Redis cache (requires Docker).
+    #[arg(long, conflicts_with = "memory")]
+    pub redis: bool,
+
+    // Container management flags
     /// Skip Docker container management (assume services are already running).
     #[arg(long)]
     pub no_docker: bool,
@@ -63,33 +81,129 @@ pub struct IntegrationCommand {
 
 /// Main entry point for integration command.
 pub async fn run(command: IntegrationCommand, global: crate::Global) -> Result<()> {
-    // Determine which backends to test
+    // Determine which storage backends to test
     // If neither flag is set, run both; otherwise run only the specified one
     let run_sqlite = command.sqlite || !command.dynamodb;
     let run_dynamodb = command.dynamodb || !command.sqlite;
+
+    // Determine which cache backend to use
+    // Default to memory if neither flag is set
+    let use_redis = command.redis;
+    let cache_backend = if use_redis { "redis" } else { "memory" };
 
     if !global.is_silent() {
         aprintln!("{}", p_b("Integration Tests"));
         aprintln!();
         aprintln!(
-            "{} SQLite: {}, DynamoDB: {}",
-            p_b("Backends:"),
-            if run_sqlite { p_g("yes") } else { p_y("no") },
-            if run_dynamodb { p_g("yes") } else { p_y("no") }
+            "{} Storage: {}, Cache: {}",
+            p_b("Config:"),
+            if run_sqlite && run_dynamodb {
+                "SQLite + DynamoDB".to_string()
+            } else if run_sqlite {
+                "SQLite".to_string()
+            } else {
+                "DynamoDB".to_string()
+            },
+            if use_redis { "Redis" } else { "Memory" }
         );
         aprintln!();
     }
 
+    // Track which containers we started
+    let mut redis_started = false;
+    let mut dynamodb_started = false;
+
+    // Start Redis container if needed
+    if use_redis && !command.no_docker {
+        redis_started = start_redis_container(command.health_timeout, &global).await?;
+    } else if use_redis && command.no_docker && !global.is_silent() {
+        aprintln!(
+            "{} {}",
+            p_y("⚠️"),
+            "Skipping Redis container management (--no-docker)"
+        );
+    }
+
     let mut all_passed = true;
 
-    // Run SQLite tests (no infrastructure needed)
-    if run_sqlite && !run_sqlite_tests(&global).await? {
-        all_passed = false;
+    // Run SQLite tests
+    if run_sqlite {
+        if !global.is_silent() {
+            aprintln!(
+                "{} {}",
+                p_b("🔧"),
+                p_b("Running SQLite integration tests...")
+            );
+        }
+
+        let env_vars: Vec<(&str, &str)> = if use_redis {
+            vec![("REDIS_URL", "redis://localhost:6379")]
+        } else {
+            vec![]
+        };
+
+        if !run_tests_with_features("sqlite", cache_backend, env_vars, &global).await? {
+            all_passed = false;
+        }
     }
 
     // Run DynamoDB tests (requires Docker)
-    if run_dynamodb && !run_dynamodb_tests(&command, &global).await? {
-        all_passed = false;
+    if run_dynamodb {
+        if !global.is_silent() {
+            aprintln!(
+                "{} {}",
+                p_b("🔧"),
+                p_b("Running DynamoDB integration tests...")
+            );
+        }
+
+        // Start DynamoDB container if needed
+        if !command.no_docker {
+            dynamodb_started = start_dynamodb_container(command.health_timeout, &global).await?;
+        } else if !global.is_silent() {
+            aprintln!(
+                "{} {}",
+                p_y("⚠️"),
+                "Skipping DynamoDB container management (--no-docker)"
+            );
+        }
+
+        // Set up the test table
+        if !global.is_silent() {
+            aprintln!("{} {}", p_b("📦"), "Setting up test table...");
+        }
+        setup_test_table(&global).await?;
+
+        // Build environment variables
+        let mut env_vars = vec![
+            ("AWS_ENDPOINT_URL", "http://localhost:8000"),
+            ("AWS_REGION", "us-east-1"),
+            ("AWS_ACCESS_KEY_ID", "test"),
+            ("AWS_SECRET_ACCESS_KEY", "test"),
+        ];
+        if use_redis {
+            env_vars.push(("REDIS_URL", "redis://localhost:6379"));
+        }
+
+        if !run_tests_with_features("dynamodb", cache_backend, env_vars, &global).await? {
+            all_passed = false;
+        }
+    }
+
+    // Cleanup containers
+    if !command.keep_containers {
+        if redis_started {
+            stop_redis_container(&global).await?;
+        }
+        if dynamodb_started {
+            stop_dynamodb_container(&global).await?;
+        }
+    } else if (redis_started || dynamodb_started) && !global.is_silent() {
+        aprintln!(
+            "{} {}",
+            p_y("⚠️"),
+            "Containers left running (--keep-containers)"
+        );
     }
 
     aprintln!();
@@ -104,107 +218,53 @@ pub async fn run(command: IntegrationCommand, global: crate::Global) -> Result<(
     }
 }
 
-/// Run SQLite integration tests.
-async fn run_sqlite_tests(global: &crate::Global) -> Result<bool> {
+/// Run tests with specific storage and cache features.
+async fn run_tests_with_features(
+    storage: &str,
+    cache: &str,
+    env_vars: Vec<(&str, &str)>,
+    global: &crate::Global,
+) -> Result<bool> {
+    // Build feature string: e.g., "sqlite,memory" or "dynamodb,redis"
+    let features = format!("{},{}", storage, cache);
+
     if !global.is_silent() {
-        aprintln!(
-            "{} {}",
-            p_b("🔧"),
-            p_b("Running SQLite integration tests...")
-        );
+        aprintln!("{} Running with features: {}", p_b("  →"), p_y(&features));
     }
 
-    // SQLite tests use in-memory database, no setup needed
-    let status = tokio::process::Command::new("cargo")
-        .args([
-            "test",
-            "-p",
-            "calendsync",
-            "--features",
-            "sqlite",
-            "--no-default-features",
-        ])
-        .status()
-        .await?;
+    // Build the command
+    let mut cmd = tokio::process::Command::new("cargo");
+    cmd.args([
+        "test",
+        "-p",
+        "calendsync",
+        "--features",
+        &features,
+        "--no-default-features",
+    ]);
+
+    // Add environment variables
+    for (key, value) in env_vars {
+        cmd.env(key, value);
+    }
+
+    let status = cmd.status().await?;
 
     if status.success() {
         if !global.is_silent() {
-            aprintln!("{} {}", p_g("✅"), "SQLite integration tests passed");
-        }
-        Ok(true)
-    } else {
-        aprintln!("{} {}", p_r("❌"), "SQLite integration tests failed");
-        Ok(false)
-    }
-}
-
-/// Run DynamoDB integration tests.
-async fn run_dynamodb_tests(command: &IntegrationCommand, global: &crate::Global) -> Result<bool> {
-    if !global.is_silent() {
-        aprintln!(
-            "{} {}",
-            p_b("🔧"),
-            p_b("Running DynamoDB integration tests...")
-        );
-    }
-
-    // Start DynamoDB Local container if needed
-    let container_started = if !command.no_docker {
-        start_dynamodb_container(command.health_timeout, global).await?
-    } else {
-        if !global.is_silent() {
             aprintln!(
-                "{} {}",
-                p_y("⚠️"),
-                "Skipping container management (--no-docker)"
+                "{} {} tests passed",
+                p_g("✅"),
+                format!("{}/{}", storage, cache)
             );
         }
-        false
-    };
-
-    // Set up the test table
-    if !global.is_silent() {
-        aprintln!("{} {}", p_b("📦"), "Setting up test table...");
-    }
-    setup_test_table(global).await?;
-
-    // Run the tests
-    let status = tokio::process::Command::new("cargo")
-        .args([
-            "test",
-            "-p",
-            "calendsync",
-            "--features",
-            "dynamodb",
-            "--no-default-features",
-        ])
-        .env("AWS_ENDPOINT_URL", "http://localhost:8000")
-        .env("AWS_REGION", "us-east-1")
-        .env("AWS_ACCESS_KEY_ID", "test")
-        .env("AWS_SECRET_ACCESS_KEY", "test")
-        .status()
-        .await?;
-
-    let passed = status.success();
-
-    // Clean up container if we started it
-    if container_started && !command.keep_containers {
-        stop_dynamodb_container(global).await?;
-    } else if container_started && command.keep_containers && !global.is_silent() {
-        aprintln!(
-            "{} {}",
-            p_y("⚠️"),
-            "Container left running (--keep-containers)"
-        );
-    }
-
-    if passed {
-        if !global.is_silent() {
-            aprintln!("{} {}", p_g("✅"), "DynamoDB integration tests passed");
-        }
         Ok(true)
     } else {
-        aprintln!("{} {}", p_r("❌"), "DynamoDB integration tests failed");
+        aprintln!(
+            "{} {} tests failed",
+            p_r("❌"),
+            format!("{}/{}", storage, cache)
+        );
         Ok(false)
     }
 }
@@ -342,7 +402,134 @@ async fn stop_dynamodb_container(global: &crate::Global) -> Result<()> {
     }
 
     if !global.is_silent() {
-        aprintln!("{} {}", p_g("✅"), "Container stopped");
+        aprintln!("{} {}", p_g("✅"), "DynamoDB container stopped");
+    }
+
+    Ok(())
+}
+
+/// Start the Redis container.
+async fn start_redis_container(timeout_secs: u64, global: &crate::Global) -> Result<bool> {
+    // Check if Docker is available
+    let docker_check = tokio::process::Command::new("docker")
+        .args(["--version"])
+        .output()
+        .await?;
+
+    if !docker_check.status.success() {
+        return Err(IntegrationError::DockerNotAvailable(
+            "docker command not found or not working".to_string(),
+        ));
+    }
+
+    // Check if container is already running
+    let ps_output = tokio::process::Command::new("docker")
+        .args(["ps", "-q", "-f", "name=calendsync-redis"])
+        .output()
+        .await?;
+
+    if !String::from_utf8_lossy(&ps_output.stdout).trim().is_empty() {
+        if !global.is_silent() {
+            aprintln!("{} {}", p_y("⚠️"), "Redis container already running");
+        }
+        return Ok(false); // Container exists but we didn't start it
+    }
+
+    if !global.is_silent() {
+        aprintln!("{} {}", p_b("🐳"), "Starting Redis container...");
+    }
+
+    // Start container using docker compose
+    let compose_status = tokio::process::Command::new("docker")
+        .args(["compose", "up", "-d", "redis"])
+        .status()
+        .await?;
+
+    if !compose_status.success() {
+        return Err(IntegrationError::ContainerFailed(
+            "docker compose up redis failed".to_string(),
+        ));
+    }
+
+    // Wait for container to be healthy
+    if !global.is_silent() {
+        aprintln!(
+            "{} {}",
+            p_b("⏳"),
+            format!("Waiting for Redis health (max {}s)...", timeout_secs)
+        );
+    }
+
+    let start = std::time::Instant::now();
+    loop {
+        if start.elapsed().as_secs() > timeout_secs {
+            return Err(IntegrationError::ContainerNotHealthy {
+                name: "calendsync-redis".to_string(),
+                timeout_secs,
+            });
+        }
+
+        // Check container health via docker inspect
+        let health_output = tokio::process::Command::new("docker")
+            .args([
+                "inspect",
+                "--format",
+                "{{.State.Health.Status}}",
+                "calendsync-redis",
+            ])
+            .output()
+            .await?;
+
+        let health_status = String::from_utf8_lossy(&health_output.stdout)
+            .trim()
+            .to_string();
+
+        if health_status == "healthy" {
+            break;
+        }
+
+        // Also try a direct PING check
+        let ping_check = tokio::process::Command::new("docker")
+            .args(["exec", "calendsync-redis", "redis-cli", "ping"])
+            .output()
+            .await;
+
+        if let Ok(output) = ping_check {
+            let response = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if response == "PONG" {
+                break;
+            }
+        }
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    }
+
+    if !global.is_silent() {
+        aprintln!("{} {}", p_g("✅"), "Redis is ready");
+    }
+
+    Ok(true)
+}
+
+/// Stop the Redis container.
+async fn stop_redis_container(global: &crate::Global) -> Result<()> {
+    if !global.is_silent() {
+        aprintln!("{} {}", p_b("🐳"), "Stopping Redis container...");
+    }
+
+    let status = tokio::process::Command::new("docker")
+        .args(["compose", "down", "redis"])
+        .status()
+        .await?;
+
+    if !status.success() {
+        return Err(IntegrationError::ContainerFailed(
+            "docker compose down redis failed".to_string(),
+        ));
+    }
+
+    if !global.is_silent() {
+        aprintln!("{} {}", p_g("✅"), "Redis container stopped");
     }
 
     Ok(())
