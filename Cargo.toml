@@ -68,6 +68,13 @@ deno_core = "0.371"
 deno_error = "0.7"
 reqwest = { version = "0.12", features = ["json", "stream"] }
 
+# Redis dependencies
+redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
+futures-util = "0.3"
+
+# LRU cache
+lru = "0.16"
+
 # Tauri dependencies
 tauri = { version = "2.4", features = [] }
 tauri-build = { version = "2.4", features = [] }

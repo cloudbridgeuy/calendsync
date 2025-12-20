@@ -15,11 +15,18 @@ name = "calendsync"
 path = "src/main.rs"
 
 [features]
-default = ["sqlite"]
+default = ["sqlite", "memory"]
 
 # Storage backends (mutually exclusive)
 sqlite = ["dep:rusqlite", "dep:tokio-rusqlite"]
 dynamodb = ["dep:aws-sdk-dynamodb", "dep:aws-config"]
+
+# Cache backends (mutually exclusive)
+memory = []
+redis = ["dep:redis", "dep:futures-util"]
+
+# In-memory storage backend (for testing)
+inmemory = []
 
 [dependencies]
 # Internal dependencies
@@ -53,6 +60,13 @@ tokio-rusqlite = { workspace = true, optional = true }
 # DynamoDB (optional)
 aws-sdk-dynamodb = { workspace = true, optional = true }
 aws-config = { workspace = true, optional = true }
+
+# Redis (optional)
+redis = { workspace = true, optional = true }
+futures-util = { workspace = true, optional = true }
+
+# LRU cache
+lru = { workspace = true }
 
 [dev-dependencies]
 http-body-util = { workspace = true }
