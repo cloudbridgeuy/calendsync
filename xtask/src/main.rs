@@ -11,6 +11,7 @@ use clap::Parser;
 mod dev;
 mod dynamodb;
 mod install;
+mod integration;
 mod lint;
 mod prelude;
 mod release;
@@ -148,6 +149,9 @@ enum Commands {
     /// Manage DynamoDB infrastructure
     Dynamodb(dynamodb::DynamodbCommand),
 
+    /// Run integration tests
+    Integration(integration::IntegrationCommand),
+
     /// Documentation tasks (coming soon)
     #[command(hide = true)]
     Docs {
@@ -180,6 +184,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Dynamodb(dynamodb_cmd) => {
             dynamodb::run(dynamodb_cmd, cli.global).await?;
+        }
+        Commands::Integration(integration_cmd) => {
+            integration::run(integration_cmd, cli.global).await?;
         }
         Commands::Docs { .. } => {
             println!("Documentation automation coming soon!");
