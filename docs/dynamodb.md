@@ -16,6 +16,8 @@ The schema uses a single-table design with composite keys, following DynamoDB be
 | `SK` | String | Sort Key |
 | `GSI1PK` | String | GSI1 Partition Key |
 | `GSI1SK` | String | GSI1 Sort Key |
+| `GSI2PK` | String | GSI2 Partition Key (email lookups) |
+| `GSI2SK` | String | GSI2 Sort Key |
 | `entityType` | String | Entity discriminator: `USER`, `CALENDAR`, `MEMBERSHIP`, `ENTRY` |
 
 ### Global Secondary Index (GSI1)
@@ -26,6 +28,22 @@ The schema uses a single-table design with composite keys, following DynamoDB be
 | Partition Key | `GSI1PK` (String) |
 | Sort Key | `GSI1SK` (String) |
 | Projection | `ALL` |
+
+Used for:
+- Get all calendars for a user (via memberships)
+- Get all entries for a calendar within a date range
+
+### Global Secondary Index (GSI2)
+
+| Property | Value |
+|----------|-------|
+| Index Name | `GSI2` |
+| Partition Key | `GSI2PK` (String) |
+| Sort Key | `GSI2SK` (String) |
+| Projection | `ALL` |
+
+Used for:
+- Get user by email address
 
 ### Billing Mode
 
@@ -43,12 +61,16 @@ PAY_PER_REQUEST (on-demand capacity)
 | `SK` | `USER#<user_id>` | `USER#550e8400-e29b-41d4-a716-446655440001` |
 | `GSI1PK` | (not used) | - |
 | `GSI1SK` | (not used) | - |
+| `GSI2PK` | `EMAIL#<email>` | `EMAIL#john@example.com` |
+| `GSI2SK` | `USER#<user_id>` | `USER#550e8400-e29b-41d4-a716-446655440001` |
 
 **Attributes**:
 ```json
 {
   "PK": "USER#550e8400-e29b-41d4-a716-446655440001",
   "SK": "USER#550e8400-e29b-41d4-a716-446655440001",
+  "GSI2PK": "EMAIL#john@example.com",
+  "GSI2SK": "USER#550e8400-e29b-41d4-a716-446655440001",
   "entityType": "USER",
   "id": "550e8400-e29b-41d4-a716-446655440001",
   "name": "John Doe",
@@ -104,7 +126,8 @@ Links users to calendars with roles (`owner`, `writer`, `reader`).
   "calendarId": "550e8400-e29b-41d4-a716-446655440002",
   "userId": "550e8400-e29b-41d4-a716-446655440001",
   "role": "owner",
-  "joinedAt": "2024-01-15T10:30:00Z"
+  "createdAt": "2024-01-15T10:30:00Z",
+  "updatedAt": "2024-01-15T10:30:00Z"
 }
 ```
 
@@ -247,6 +270,19 @@ Query:
 ```
 
 The `~` character (ASCII 126) ensures all entries on the end date are included.
+
+### 7. Get User by Email
+
+```
+Query:
+  TableName: calendsync
+  IndexName: GSI2
+  KeyConditionExpression: GSI2PK = :pk
+  ExpressionAttributeValues:
+    :pk = "EMAIL#john@example.com"
+```
+
+Returns the user item matching the email address. This is a unique lookup since emails are unique per user.
 
 ---
 

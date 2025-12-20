@@ -65,18 +65,32 @@ pub fn calendsync_table_config() -> TableConfig {
             name: "SK".to_string(),
             attribute_type: AttributeType::String,
         }),
-        gsis: vec![GsiConfig {
-            name: "GSI1".to_string(),
-            partition_key: KeyAttribute {
-                name: "GSI1PK".to_string(),
-                attribute_type: AttributeType::String,
+        gsis: vec![
+            GsiConfig {
+                name: "GSI1".to_string(),
+                partition_key: KeyAttribute {
+                    name: "GSI1PK".to_string(),
+                    attribute_type: AttributeType::String,
+                },
+                sort_key: Some(KeyAttribute {
+                    name: "GSI1SK".to_string(),
+                    attribute_type: AttributeType::String,
+                }),
+                projection: ProjectionType::All,
             },
-            sort_key: Some(KeyAttribute {
-                name: "GSI1SK".to_string(),
-                attribute_type: AttributeType::String,
-            }),
-            projection: ProjectionType::All,
-        }],
+            GsiConfig {
+                name: "GSI2".to_string(),
+                partition_key: KeyAttribute {
+                    name: "GSI2PK".to_string(),
+                    attribute_type: AttributeType::String,
+                },
+                sort_key: Some(KeyAttribute {
+                    name: "GSI2SK".to_string(),
+                    attribute_type: AttributeType::String,
+                }),
+                projection: ProjectionType::All,
+            },
+        ],
         billing_mode: BillingMode::PayPerRequest,
     }
 }
