@@ -388,7 +388,6 @@ function VirtualDaysContent() {
           <DayContainer
             key={dateKey}
             date={date}
-            dayWidth={dayWidth}
             isHighlighted={isHighlighted}
             onHeaderClick={() => scrollToDate(date)}
           >
@@ -466,18 +465,14 @@ function Days() {
  * In schedule mode, includes HourColumnFixed and AllDaySection.
  */
 function View() {
-  const { settings, renderedDates, dayWidth, getEntriesForDate } = useCalendarContext()
+  const { settings, renderedDates, getEntriesForDate } = useCalendarContext()
   const isScheduleMode = settings.viewMode === "schedule"
 
   return (
     <>
       {/* All-day section (schedule mode only) */}
       {isScheduleMode && (
-        <AllDaySection
-          renderedDates={renderedDates}
-          dayWidth={dayWidth}
-          getEntriesForDate={getEntriesForDate}
-        />
+        <AllDaySection renderedDates={renderedDates} getEntriesForDate={getEntriesForDate} />
       )}
 
       <div className={`calendar-main-area${isScheduleMode ? " schedule-mode" : ""}`}>

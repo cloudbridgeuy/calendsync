@@ -69,8 +69,6 @@ function AllDayEntryTile({ entry }: AllDayEntryTileProps) {
 interface AllDaySectionProps {
   /** Rendered dates in the virtual window */
   renderedDates: Date[]
-  /** Width of each day column */
-  dayWidth: number
   /** Get entries for a specific date */
   getEntriesForDate: (date: Date) => ServerEntry[]
 }
@@ -79,7 +77,7 @@ interface AllDaySectionProps {
  * Renders the all-day section header with entries for each visible day.
  * Sticky at the top of the schedule view (Google Calendar style).
  */
-export function AllDaySection({ renderedDates, dayWidth, getEntriesForDate }: AllDaySectionProps) {
+export function AllDaySection({ renderedDates, getEntriesForDate }: AllDaySectionProps) {
   // Collect all-day entries for each date
   const allDayEntriesByDate = useMemo(() => {
     const map = new Map<string, ServerEntry[]>()
@@ -115,11 +113,7 @@ export function AllDaySection({ renderedDates, dayWidth, getEntriesForDate }: Al
           const entries = allDayEntriesByDate.get(dateKey) || []
 
           return (
-            <div
-              key={dateKey}
-              className="all-day-column"
-              style={{ width: dayWidth, minWidth: dayWidth }}
-            >
+            <div key={dateKey} className="all-day-column">
               {entries.map((entry) => (
                 <AllDayEntryTile key={entry.id} entry={entry} />
               ))}

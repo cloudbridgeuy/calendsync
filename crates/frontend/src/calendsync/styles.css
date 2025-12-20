@@ -11,6 +11,38 @@
   --accent-light: #fdba74;
   --border: #e5e5e5;
   --tile-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --day-width: calc(100vw / 7);
+}
+
+/* Responsive day width breakpoints */
+@media (max-width: 499px) {
+  :root {
+    --day-width: 100vw;
+  }
+}
+
+@media (min-width: 500px) and (max-width: 749px) {
+  :root {
+    --day-width: 75vw;
+  }
+}
+
+@media (min-width: 750px) and (max-width: 1249px) {
+  :root {
+    --day-width: calc(100vw / 3);
+  }
+}
+
+@media (min-width: 1250px) and (max-width: 1749px) {
+  :root {
+    --day-width: calc(100vw / 5);
+  }
+}
+
+@media (min-width: 1750px) {
+  :root {
+    --day-width: calc(100vw / 7);
+  }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -230,6 +262,8 @@ body {
   flex-direction: column;
   flex-shrink: 0;
   height: 100%;
+  width: var(--day-width);
+  min-width: var(--day-width);
 }
 
 .day-container-header {
@@ -1923,6 +1957,7 @@ body {
 .schedule-day-column {
   position: relative;
   flex-shrink: 0;
+  width: var(--day-width);
   border-right: 1px solid var(--border);
 }
 
@@ -2017,6 +2052,7 @@ body {
 
 .schedule-all-day-column {
   flex-shrink: 0;
+  width: var(--day-width);
   padding: 0.5rem;
   display: flex;
   flex-direction: column;
@@ -2192,6 +2228,7 @@ body {
 
 .all-day-column {
   flex-shrink: 0;
+  width: var(--day-width);
   padding: 0.5rem;
   display: flex;
   flex-direction: column;

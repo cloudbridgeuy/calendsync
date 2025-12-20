@@ -91,8 +91,6 @@ function Content({ children }: ContentProps) {
 interface DayContainerProps {
   /** The date for this day container */
   date: Date
-  /** Width of the day container in pixels */
-  dayWidth: number
   /** Whether this day is highlighted */
   isHighlighted: boolean
   /** Callback when header is clicked */
@@ -105,20 +103,14 @@ interface DayContainerProps {
  * DayContainer compound component - main container with sticky header and scrollable content.
  *
  * @example
- * <DayContainer date={date} dayWidth={120} isHighlighted={false}>
+ * <DayContainer date={date} isHighlighted={false}>
  *   <DayContainer.Header />
  *   <DayContainer.Content>
  *     <DayColumn dateKey={dateKey} entries={entries} />
  *   </DayContainer.Content>
  * </DayContainer>
  */
-function DayContainerRoot({
-  date,
-  dayWidth,
-  isHighlighted,
-  onHeaderClick,
-  children,
-}: DayContainerProps) {
+function DayContainerRoot({ date, isHighlighted, onHeaderClick, children }: DayContainerProps) {
   const contextValue = useMemo<DayContainerContextValue>(
     () => ({
       date,
@@ -130,9 +122,7 @@ function DayContainerRoot({
 
   return (
     <DayContainerContext.Provider value={contextValue}>
-      <div className="day-container" style={{ width: dayWidth, minWidth: dayWidth }}>
-        {children}
-      </div>
+      <div className="day-container">{children}</div>
     </DayContainerContext.Provider>
   )
 }
