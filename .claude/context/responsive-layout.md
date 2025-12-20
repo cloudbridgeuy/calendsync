@@ -1,18 +1,70 @@
 # Responsive Day Column Layout
 
-The calendar uses a responsive layout system that determines how many day columns are visible based on viewport width, and how those columns are positioned within the viewport.
+The calendar uses a responsive layout system that determines how many day columns are visible based on viewport width. Day widths are controlled via CSS custom properties and media queries.
+
+## CSS Custom Property
+
+The `--day-width` CSS variable controls column sizing:
+
+```css
+:root {
+  --day-width: calc(100vw / 7);
+}
+```
+
+Components use this variable directly:
+
+```css
+.day-container {
+  width: var(--day-width);
+  min-width: var(--day-width);
+}
+```
 
 ## Viewport Breakpoints
 
-| Viewport Width  | Visible Days | Day Width          | Notes                                      |
-| --------------- | ------------ | ------------------ | ------------------------------------------ |
-| < 500px         | 1            | 100% of viewport   | Full-width single day for mobile           |
-| 500px - 749px   | 1            | 75% of viewport    | Centered day with partial columns visible  |
-| 750px - 1249px  | 3            | 33.3% of viewport  | Three days fill viewport exactly           |
-| 1250px - 1749px | 5            | 20% of viewport    | Five days fill viewport exactly            |
-| >= 1750px       | 7            | 14.3% of viewport  | Seven days fill viewport exactly           |
+Media queries adjust `--day-width` at specific breakpoints:
 
-## Core Functions
+| Viewport Width  | Visible Days | Day Width          | CSS Value                |
+| --------------- | ------------ | ------------------ | ------------------------ |
+| < 500px         | 1            | 100% of viewport   | `100vw`                  |
+| 500px - 749px   | 1            | 75% of viewport    | `75vw`                   |
+| 750px - 1249px  | 3            | 33.3% of viewport  | `calc(100vw / 3)`        |
+| 1250px - 1749px | 5            | 20% of viewport    | `calc(100vw / 5)`        |
+| >= 1750px       | 7            | 14.3% of viewport  | `calc(100vw / 7)`        |
+
+### CSS Implementation
+
+```css
+/* Default: 7 days */
+:root {
+  --day-width: calc(100vw / 7);
+}
+
+@media (max-width: 499px) {
+  :root { --day-width: 100vw; }
+}
+
+@media (min-width: 500px) and (max-width: 749px) {
+  :root { --day-width: 75vw; }
+}
+
+@media (min-width: 750px) and (max-width: 1249px) {
+  :root { --day-width: calc(100vw / 3); }
+}
+
+@media (min-width: 1250px) and (max-width: 1749px) {
+  :root { --day-width: calc(100vw / 5); }
+}
+
+@media (min-width: 1750px) {
+  :root { --day-width: calc(100vw / 7); }
+}
+```
+
+## JavaScript Functions
+
+While CSS handles the visual layout, JavaScript still needs to calculate widths for scroll positioning and virtual scrolling buffer calculations.
 
 ### `calculateVisibleDays(containerWidth: number): number`
 
@@ -98,8 +150,18 @@ export function calculateScrollPosition(
 | 500-749px| 1            | Yes (12.5% each)| Centered |
 | >= 750px | 3, 5, or 7   | None            | Fill viewport exactly |
 
+## Components Using --day-width
+
+The CSS variable is applied to these selectors:
+
+- `.day-container` - Main day column wrapper
+- `.all-day-column` - All-day events section column
+- `.schedule-day-column` - Schedule view time grid column
+- `.schedule-all-day-column` - Schedule view all-day section column
+
 ## Files
 
+- **CSS styles**: `src/calendsync/styles.css`
 - **Pure functions**: `src/core/calendar/virtualScroll.ts`
 - **Navigation**: `src/core/calendar/navigation.ts`
 - **Hook**: `src/calendsync/hooks/useVirtualScroll.ts`
