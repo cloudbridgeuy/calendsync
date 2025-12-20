@@ -10,10 +10,50 @@ The main axum web server providing REST API and React SSR.
 - **Tokio** - Async runtime
 - **Tower-HTTP** - Middleware (CORS, tracing, timeouts)
 
+## Storage Backends
+
+The server supports two storage backends, selected at compile time via feature flags:
+
+| Feature | Backend | Dependencies | Use Case |
+|---------|---------|--------------|----------|
+| `sqlite` (default) | SQLite | `rusqlite`, `tokio-rusqlite` | Local development, single-instance deployments |
+| `dynamodb` | AWS DynamoDB | `aws-sdk-dynamodb`, `aws-config` | Production, AWS deployments |
+
+### Building with Different Backends
+
+```bash
+# SQLite (default)
+cargo build -p calendsync
+
+# DynamoDB
+cargo build -p calendsync --no-default-features --features dynamodb
+```
+
+### DynamoDB Configuration
+
+When using the DynamoDB backend, set these environment variables:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `AWS_ENDPOINT_URL` | DynamoDB endpoint | AWS default |
+| `AWS_REGION` | AWS region | `us-east-1` |
+| `AWS_PROFILE` | AWS credentials profile | default |
+
+For local development with DynamoDB Local:
+
+```bash
+# Start DynamoDB Local
+docker compose up -d
+
+# Run with DynamoDB backend
+AWS_ENDPOINT_URL=http://localhost:8000 \
+cargo run -p calendsync --no-default-features --features dynamodb
+```
+
 ## Running the Server
 
 ```bash
-# Standard mode
+# Standard mode (SQLite)
 cargo run -p calendsync
 
 # With auto-reload
@@ -62,8 +102,20 @@ src/
 │   ├── calendar_react.rs  # React SSR handler
 │   ├── events.rs       # SSE handler
 │   └── health.rs       # Health endpoints
-└── models/
-    └── entry.rs    # Request types
+├── models/
+│   └── entry.rs    # Request types
+└── storage/        # Storage backend implementations
+    ├── mod.rs          # Feature-gated module exports
+    ├── sqlite/         # SQLite implementation
+    │   ├── schema.rs       # SQL DDL and queries
+    │   ├── conversions.rs  # Row to domain type conversions
+    │   ├── error.rs        # Error mapping
+    │   └── repository.rs   # Repository trait implementations
+    └── dynamodb/       # DynamoDB implementation
+        ├── keys.rs         # Key generation (PK, SK, GSI keys)
+        ├── conversions.rs  # Item to domain type conversions
+        ├── error.rs        # Error mapping
+        └── repository.rs   # Repository trait implementations
 ```
 
 ## Environment Variables
@@ -77,9 +129,21 @@ RUST_LOG=debug cargo run -p calendsync
 ## Testing
 
 ```bash
-# Run all tests
+# Run all tests (SQLite backend)
 cargo test -p calendsync
+
+# Run DynamoDB tests
+cargo test -p calendsync --no-default-features --features dynamodb
 
 # Run with output
 cargo test -p calendsync -- --nocapture
+
+# Run integration tests (includes Docker management)
+cargo xtask integration
+
+# Run only SQLite integration tests
+cargo xtask integration --sqlite
+
+# Run only DynamoDB integration tests
+cargo xtask integration --dynamodb
 ```

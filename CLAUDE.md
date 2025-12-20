@@ -12,8 +12,10 @@ This is a technical exploration of the **"Rust full-stack" pattern**: server-sid
 
 - REST API for calendar entries
 - React SSR calendar with real-time SSE updates
-- In-memory state with demo data for development
+- Storage backend abstractions (SQLite default, DynamoDB optional)
 - Graceful shutdown support
+
+**Note**: Storage implementations exist but are not yet wired into handlers (Phase 4 pending). Handlers currently use in-memory state.
 
 ## Build Commands
 
@@ -92,8 +94,11 @@ src/
 │   ├── calendar_react.rs # React SSR calendar handler (uses SsrPool)
 │   ├── events.rs    # SSE events handler for real-time updates
 │   └── health.rs    # Health check endpoints (/healthz, /readyz)
-└── models/          # Data models
-    └── entry.rs     # CreateEntry, UpdateEntry request types
+├── models/          # Data models
+│   └── entry.rs     # CreateEntry, UpdateEntry request types
+└── storage/         # Storage backend implementations (feature-gated)
+    ├── sqlite/      # SQLite implementation (default)
+    └── dynamodb/    # AWS DynamoDB implementation
 ```
 
 ### xtask Commands
@@ -110,6 +115,9 @@ The project uses the [cargo-xtask](https://github.com/matklad/cargo-xtask/) patt
 - `cargo xtask release create <version>` - Create a new release
 - `cargo xtask dynamodb deploy` - Deploy DynamoDB table infrastructure
 - `cargo xtask dynamodb seed` - Seed calendar with mock entries
+- `cargo xtask integration` - Run integration tests (SQLite and DynamoDB)
+- `cargo xtask integration --sqlite` - Run only SQLite integration tests
+- `cargo xtask integration --dynamodb` - Run only DynamoDB integration tests
 
 ### Tech Stack
 
@@ -606,6 +614,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | Hot-Reload (Web)     | `.claude/context/hot-reload.md`        |
 | systemfd Integration | `.claude/context/systemfd.md`          |
 | Responsive Layout    | `.claude/context/responsive-layout.md` |
+| Storage Layer        | `.claude/context/storage-layer.md`     |
 
 ### Local Working Directories (gitignored)
 
