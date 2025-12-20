@@ -60,7 +60,7 @@ tokio-rusqlite = "0.6"
 
 # File watching dependencies (for hot-reload)
 notify = "7.0"
-notify-debouncer-mini = "0.5"
+notify-debouncer-mini = "0.7"
 
 # Deno runtime dependencies (for examples)
 # Using only deno_core to avoid transitive dependency conflicts with deno_web
