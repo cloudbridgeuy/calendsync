@@ -15,7 +15,7 @@ name = "calendsync"
 path = "src/main.rs"
 
 [features]
-default = ["sqlite", "memory"]
+default = ["inmemory", "memory"]
 
 # Storage backends (mutually exclusive)
 sqlite = ["dep:rusqlite", "dep:tokio-rusqlite"]
