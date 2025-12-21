@@ -16,6 +16,21 @@ pub enum DevError {
 
     #[error("HTTP request error: {0}")]
     HttpError(#[from] reqwest::Error),
+
+    #[error("Container runtime not found: {0}")]
+    ContainerRuntimeNotFound(String),
+
+    #[error("Container '{name}' not healthy after {timeout_secs}s")]
+    ContainerNotHealthy { name: String, timeout_secs: u64 },
+
+    #[error("Container start failed: {0}")]
+    ContainerStartFailed(String),
+
+    #[error("Seeding failed: {0}")]
+    SeedingFailed(String),
+
+    #[error("Server not healthy after {timeout_secs}s")]
+    ServerNotHealthy { timeout_secs: u64 },
 }
 
 pub type Result<T> = std::result::Result<T, DevError>;

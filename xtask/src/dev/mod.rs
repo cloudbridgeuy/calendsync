@@ -1,9 +1,11 @@
 use clap::Subcommand;
 
+pub mod containers;
 pub mod desktop;
 pub mod error;
 pub mod ios;
-pub mod web;
+pub mod seed;
+pub mod server;
 
 use error::Result;
 
@@ -12,13 +14,13 @@ use error::Result;
 #[command(long_about = "Run the application in development mode.
 
 Supports three targets:
-  web      - Run the Axum web server with hot-reload
+  server   - Run the development server with hot-reload
   desktop  - Run the Tauri desktop app (macOS)
   ios      - Run the Tauri iOS app in simulator or device
 
 Examples:
-  cargo xtask dev web                        # Run web server on port 3000
-  cargo xtask dev web --port 8080            # Run on custom port
+  cargo xtask dev server                     # Run server on port 3000
+  cargo xtask dev server --port 8080         # Run on custom port
   cargo xtask dev desktop                    # Run desktop app
   cargo xtask dev desktop --release          # Run in release mode
   cargo xtask dev ios                        # Run iOS simulator
@@ -32,8 +34,8 @@ pub struct DevCommand {
 
 #[derive(Debug, Subcommand)]
 pub enum DevTarget {
-    /// Run the Axum web server
-    Web(web::WebOptions),
+    /// Run the development server
+    Server(server::ServerOptions),
 
     /// Run the Tauri desktop app
     Desktop(desktop::DesktopOptions),
@@ -44,7 +46,7 @@ pub enum DevTarget {
 
 pub async fn run(command: DevCommand, global: crate::Global) -> Result<()> {
     match command.target {
-        DevTarget::Web(opts) => web::run(opts, global).await,
+        DevTarget::Server(opts) => server::run(opts, global).await,
         DevTarget::Desktop(opts) => desktop::run(opts, global).await,
         DevTarget::Ios(opts) => ios::run(opts, global).await,
     }
