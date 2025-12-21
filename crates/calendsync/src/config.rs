@@ -10,6 +10,8 @@ pub struct Config {
     /// Maximum size of event history for SSE (default: 1,000)
     pub event_history_max_size: usize,
     /// Path to SQLite database file (default: "calendsync.db")
+    /// Note: Only used when the `sqlite` feature is enabled.
+    #[allow(dead_code)]
     pub sqlite_path: String,
     /// Redis connection URL (default: "redis://localhost:6379")
     /// Note: Only used when the `redis` feature is enabled.

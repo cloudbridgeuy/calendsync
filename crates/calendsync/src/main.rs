@@ -2,7 +2,6 @@ mod app;
 mod cache;
 mod config;
 mod handlers;
-mod mock_data;
 mod models;
 mod state;
 mod storage;
@@ -51,10 +50,8 @@ async fn main() -> Result<()> {
     // Load configuration from environment
     let config = Config::from_env();
 
-    // Create application state with demo data and SSR pool
-    let state = AppState::with_demo_data(&config)
-        .await?
-        .with_ssr_pool(ssr_pool);
+    // Create application state with SSR pool
+    let state = AppState::new(&config).await?.with_ssr_pool(ssr_pool);
 
     // Build the application router
     let app = create_app(state.clone());

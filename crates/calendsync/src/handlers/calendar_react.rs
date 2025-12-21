@@ -10,7 +10,7 @@ use calendsync_ssr::SsrPool;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
-    response::{Html, IntoResponse, Redirect, Response},
+    response::{Html, IntoResponse, Response},
 };
 use chrono::Local;
 use uuid::Uuid;
@@ -238,18 +238,19 @@ pub async fn calendar_react_ssr(
     let urls = get_bundle_urls();
     let dev_mode = is_dev_mode();
 
-    // Validate calendar exists, redirect to default if not found
+    // Validate calendar exists
     let calendar = match state.calendar_repo.get_calendar(calendar_id).await {
         Ok(Some(cal)) => cal,
         Ok(None) => {
-            tracing::warn!(
-                calendar_id = %calendar_id,
-                "Calendar not found, redirecting to default"
-            );
-
-            // Redirect to the demo calendar
-            return Redirect::to(&format!("/calendar/{}", AppState::DEMO_CALENDAR_ID))
-                .into_response();
+            tracing::warn!(calendar_id = %calendar_id, "Calendar not found");
+            return Html(error_html(
+                "Calendar not found",
+                &calendar_id.to_string(),
+                &urls.client_js,
+                &urls.css,
+                dev_mode,
+            ))
+            .into_response();
         }
         Err(e) => {
             tracing::error!(error = %e, "Failed to fetch calendar");
@@ -370,23 +371,19 @@ pub async fn calendar_react_ssr_entry(
     let urls = get_bundle_urls();
     let dev_mode = is_dev_mode();
 
-    // Validate calendar exists, redirect to default if not found
+    // Validate calendar exists
     let calendar = match state.calendar_repo.get_calendar(calendar_id).await {
         Ok(Some(cal)) => cal,
         Ok(None) => {
-            tracing::warn!(
-                calendar_id = %calendar_id,
-                "Calendar not found, redirecting to default"
-            );
-
-            // Redirect to the demo calendar (with /entry path)
-            let default_id = AppState::DEMO_CALENDAR_ID;
-            let redirect_url = if let Some(entry_id) = query.entry_id {
-                format!("/calendar/{default_id}/entry?entry_id={entry_id}")
-            } else {
-                format!("/calendar/{default_id}/entry")
-            };
-            return Redirect::to(&redirect_url).into_response();
+            tracing::warn!(calendar_id = %calendar_id, "Calendar not found");
+            return Html(error_html(
+                "Calendar not found",
+                &calendar_id.to_string(),
+                &urls.client_js,
+                &urls.css,
+                dev_mode,
+            ))
+            .into_response();
         }
         Err(e) => {
             tracing::error!(error = %e, "Failed to fetch calendar");
