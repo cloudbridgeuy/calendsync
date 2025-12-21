@@ -35,18 +35,19 @@ cargo run -p calendsync
 
 **Environment variables**:
 - `RUST_LOG` - Logging level (default: info)
-- `DEV_MODE` - Enables dev endpoints and runtime manifest (set by `cargo xtask dev web`)
+- `DEV_MODE` - Enables dev endpoints and runtime manifest (set by `cargo xtask dev server`)
 - `DEV_NO_AUTO_REFRESH` - Disables browser auto-refresh in dev mode
 
 ## Development Workflow
 
-For active development with TypeScript hot-reload, use `cargo xtask dev web` instead of `cargo run`:
+For active development with TypeScript hot-reload, use `cargo xtask dev server` instead of `cargo run`:
 
 ```bash
-cargo xtask dev web                  # Default port 3000
-cargo xtask dev web --port 8080      # Custom port
-cargo xtask dev web --no-hot-reload  # Disable hot-reload
-cargo xtask dev web --no-auto-refresh # Hot-reload without browser refresh
+cargo xtask dev server                    # Default: inmemory + memory
+cargo xtask dev server --seed             # With demo data
+cargo xtask dev server --storage sqlite   # SQLite storage
+cargo xtask dev server --no-hot-reload    # Disable hot-reload
+cargo xtask dev server --no-auto-refresh  # Hot-reload without browser refresh
 ```
 
 **What happens**:
