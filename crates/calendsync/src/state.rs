@@ -20,6 +20,30 @@ use calendsync_ssr::SsrPool;
 
 use crate::config::Config;
 
+// ============================================================================
+// Compile-time feature validation
+// ============================================================================
+
+// Storage features: exactly one must be enabled, they are mutually exclusive
+#[cfg(all(feature = "sqlite", feature = "dynamodb"))]
+compile_error!("Cannot enable both 'sqlite' and 'dynamodb' storage features");
+
+#[cfg(all(feature = "sqlite", feature = "inmemory"))]
+compile_error!("Cannot enable both 'sqlite' and 'inmemory' storage features");
+
+#[cfg(all(feature = "dynamodb", feature = "inmemory"))]
+compile_error!("Cannot enable both 'dynamodb' and 'inmemory' storage features");
+
+#[cfg(not(any(feature = "inmemory", feature = "sqlite", feature = "dynamodb")))]
+compile_error!("Must enable exactly one storage feature: 'inmemory', 'sqlite', or 'dynamodb'");
+
+// Cache features: exactly one must be enabled, they are mutually exclusive
+#[cfg(all(feature = "memory", feature = "redis"))]
+compile_error!("Cannot enable both 'memory' and 'redis' cache features");
+
+#[cfg(not(any(feature = "memory", feature = "redis")))]
+compile_error!("Must enable exactly one cache feature: 'memory' or 'redis'");
+
 /// Build error message for dev mode error overlay.
 #[derive(Clone, Debug)]
 pub struct BuildError {
@@ -83,10 +107,6 @@ pub struct AppState {
 }
 
 impl AppState {
-    /// Fixed demo calendar ID for predictable development URLs.
-    /// Use: `/calendar/00000000-0000-0000-0000-000000000001`
-    pub const DEMO_CALENDAR_ID: &'static str = "00000000-0000-0000-0000-000000000001";
-
     /// Creates a new AppState with the given repositories and configuration.
     fn build(
         entry_repo: Arc<dyn EntryRepository>,
@@ -328,14 +348,12 @@ impl AppState {
 mod sqlite_memory {
     use super::*;
     use crate::cache::memory::{MemoryCache, MemoryPubSub};
-    use crate::mock_data::generate_mock_entries;
     use crate::storage::cached::{CachedCalendarRepository, CachedEntryRepository};
     use crate::storage::SqliteRepository;
-    use calendsync_core::calendar::Calendar;
 
     impl AppState {
         /// Creates AppState with SQLite storage and in-memory cache.
-        pub async fn new_sqlite_memory(config: &Config) -> Result<Self, anyhow::Error> {
+        pub async fn new(config: &Config) -> Result<Self, anyhow::Error> {
             let sqlite_repo = Arc::new(SqliteRepository::new(&config.sqlite_path).await?);
             let memory_cache = Arc::new(MemoryCache::new(config.cache_max_entries));
             let memory_pubsub = Arc::new(MemoryPubSub::new());
@@ -360,46 +378,6 @@ mod sqlite_memory {
                 config,
             ))
         }
-
-        /// Creates AppState with SQLite + memory cache and demo data seeded.
-        pub async fn with_demo_data(config: &Config) -> Result<Self, anyhow::Error> {
-            let state = Self::new_sqlite_memory(config).await?;
-
-            let calendar_id = Uuid::parse_str(Self::DEMO_CALENDAR_ID)?;
-
-            // Create demo calendar
-            let calendar = Calendar::new("Personal", "#3B82F6")
-                .with_id(calendar_id)
-                .with_description("My personal calendar");
-
-            state
-                .calendar_repo
-                .create_calendar(&calendar)
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to create demo calendar: {}", e))?;
-
-            // Create demo entries
-            let today = chrono::Local::now().date_naive();
-            let entries = generate_mock_entries(calendar_id, today);
-
-            for entry in entries {
-                state
-                    .entry_repo
-                    .create_entry(&entry)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to create demo entry: {}", e))?;
-            }
-
-            // Start event listener for demo calendar
-            state.ensure_event_listener(calendar_id);
-
-            tracing::info!(
-                calendar_id = %calendar_id,
-                "Demo data seeded successfully"
-            );
-
-            Ok(state)
-        }
     }
 }
 
@@ -407,14 +385,12 @@ mod sqlite_memory {
 mod sqlite_redis {
     use super::*;
     use crate::cache::redis_impl::{RedisCache, RedisPubSub};
-    use crate::mock_data::generate_mock_entries;
     use crate::storage::cached::{CachedCalendarRepository, CachedEntryRepository};
     use crate::storage::SqliteRepository;
-    use calendsync_core::calendar::Calendar;
 
     impl AppState {
         /// Creates AppState with SQLite storage and Redis cache.
-        pub async fn new_sqlite_redis(config: &Config) -> Result<Self, anyhow::Error> {
+        pub async fn new(config: &Config) -> Result<Self, anyhow::Error> {
             let sqlite_repo = Arc::new(SqliteRepository::new(&config.sqlite_path).await?);
             let redis_cache = Arc::new(RedisCache::new(&config.redis_url).await?);
             let redis_pubsub = Arc::new(RedisPubSub::new(&config.redis_url).await?);
@@ -439,47 +415,6 @@ mod sqlite_redis {
                 config,
             ))
         }
-
-        /// Creates AppState with SQLite + Redis cache and demo data seeded.
-        #[cfg(all(feature = "sqlite", feature = "redis"))]
-        pub async fn with_demo_data(config: &Config) -> Result<Self, anyhow::Error> {
-            let state = Self::new_sqlite_redis(config).await?;
-
-            let calendar_id = Uuid::parse_str(Self::DEMO_CALENDAR_ID)?;
-
-            // Create demo calendar
-            let calendar = Calendar::new("Personal", "#3B82F6")
-                .with_id(calendar_id)
-                .with_description("My personal calendar");
-
-            state
-                .calendar_repo
-                .create_calendar(&calendar)
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to create demo calendar: {}", e))?;
-
-            // Create demo entries
-            let today = chrono::Local::now().date_naive();
-            let entries = generate_mock_entries(calendar_id, today);
-
-            for entry in entries {
-                state
-                    .entry_repo
-                    .create_entry(&entry)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to create demo entry: {}", e))?;
-            }
-
-            // Start event listener for demo calendar
-            state.ensure_event_listener(calendar_id);
-
-            tracing::info!(
-                calendar_id = %calendar_id,
-                "Demo data seeded successfully"
-            );
-
-            Ok(state)
-        }
     }
 }
 
@@ -487,15 +422,13 @@ mod sqlite_redis {
 mod inmemory_memory {
     use super::*;
     use crate::cache::memory::{MemoryCache, MemoryPubSub};
-    use crate::mock_data::generate_mock_entries;
     use crate::storage::cached::{CachedCalendarRepository, CachedEntryRepository};
     use crate::storage::InMemoryRepository;
-    use calendsync_core::calendar::Calendar;
 
     impl AppState {
         /// Creates AppState with in-memory storage and cache.
         /// Useful for testing without any external dependencies.
-        pub async fn new_inmemory(config: &Config) -> Result<Self, anyhow::Error> {
+        pub async fn new(config: &Config) -> Result<Self, anyhow::Error> {
             let inmemory_repo = Arc::new(InMemoryRepository::new());
             let memory_cache = Arc::new(MemoryCache::new(config.cache_max_entries));
             let memory_pubsub = Arc::new(MemoryPubSub::new());
@@ -520,46 +453,6 @@ mod inmemory_memory {
                 config,
             ))
         }
-
-        /// Creates AppState with in-memory storage and demo data seeded.
-        pub async fn with_demo_data(config: &Config) -> Result<Self, anyhow::Error> {
-            let state = Self::new_inmemory(config).await?;
-
-            let calendar_id = Uuid::parse_str(Self::DEMO_CALENDAR_ID)?;
-
-            // Create demo calendar
-            let calendar = Calendar::new("Personal", "#3B82F6")
-                .with_id(calendar_id)
-                .with_description("My personal calendar");
-
-            state
-                .calendar_repo
-                .create_calendar(&calendar)
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to create demo calendar: {}", e))?;
-
-            // Create demo entries
-            let today = chrono::Local::now().date_naive();
-            let entries = generate_mock_entries(calendar_id, today);
-
-            for entry in entries {
-                state
-                    .entry_repo
-                    .create_entry(&entry)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to create demo entry: {}", e))?;
-            }
-
-            // Start event listener for demo calendar
-            state.ensure_event_listener(calendar_id);
-
-            tracing::info!(
-                calendar_id = %calendar_id,
-                "Demo data seeded successfully"
-            );
-
-            Ok(state)
-        }
     }
 }
 
@@ -567,14 +460,12 @@ mod inmemory_memory {
 mod dynamodb_memory {
     use super::*;
     use crate::cache::memory::{MemoryCache, MemoryPubSub};
-    use crate::mock_data::generate_mock_entries;
     use crate::storage::cached::{CachedCalendarRepository, CachedEntryRepository};
     use crate::storage::DynamoDbRepository;
-    use calendsync_core::calendar::Calendar;
 
     impl AppState {
         /// Creates AppState with DynamoDB storage and in-memory cache.
-        pub async fn new_dynamodb_memory(config: &Config) -> Result<Self, anyhow::Error> {
+        pub async fn new(config: &Config) -> Result<Self, anyhow::Error> {
             let aws_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
             let dynamodb_client = aws_sdk_dynamodb::Client::new(&aws_config);
             let dynamodb_repo = Arc::new(DynamoDbRepository::new(
@@ -605,46 +496,6 @@ mod dynamodb_memory {
                 config,
             ))
         }
-
-        /// Creates AppState with DynamoDB + memory cache and demo data seeded.
-        pub async fn with_demo_data(config: &Config) -> Result<Self, anyhow::Error> {
-            let state = Self::new_dynamodb_memory(config).await?;
-
-            let calendar_id = Uuid::parse_str(Self::DEMO_CALENDAR_ID)?;
-
-            // Create demo calendar
-            let calendar = Calendar::new("Personal", "#3B82F6")
-                .with_id(calendar_id)
-                .with_description("My personal calendar");
-
-            state
-                .calendar_repo
-                .create_calendar(&calendar)
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to create demo calendar: {}", e))?;
-
-            // Create demo entries
-            let today = chrono::Local::now().date_naive();
-            let entries = generate_mock_entries(calendar_id, today);
-
-            for entry in entries {
-                state
-                    .entry_repo
-                    .create_entry(&entry)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to create demo entry: {}", e))?;
-            }
-
-            // Start event listener for demo calendar
-            state.ensure_event_listener(calendar_id);
-
-            tracing::info!(
-                calendar_id = %calendar_id,
-                "Demo data seeded successfully"
-            );
-
-            Ok(state)
-        }
     }
 }
 
@@ -652,14 +503,12 @@ mod dynamodb_memory {
 mod dynamodb_redis {
     use super::*;
     use crate::cache::redis_impl::{RedisCache, RedisPubSub};
-    use crate::mock_data::generate_mock_entries;
     use crate::storage::cached::{CachedCalendarRepository, CachedEntryRepository};
     use crate::storage::DynamoDbRepository;
-    use calendsync_core::calendar::Calendar;
 
     impl AppState {
         /// Creates AppState with DynamoDB storage and Redis cache.
-        pub async fn new_dynamodb_redis(config: &Config) -> Result<Self, anyhow::Error> {
+        pub async fn new(config: &Config) -> Result<Self, anyhow::Error> {
             let aws_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
             let dynamodb_client = aws_sdk_dynamodb::Client::new(&aws_config);
             let dynamodb_repo = Arc::new(DynamoDbRepository::new(
@@ -689,46 +538,6 @@ mod dynamodb_redis {
                 redis_pubsub,
                 config,
             ))
-        }
-
-        /// Creates AppState with DynamoDB + Redis cache and demo data seeded.
-        pub async fn with_demo_data(config: &Config) -> Result<Self, anyhow::Error> {
-            let state = Self::new_dynamodb_redis(config).await?;
-
-            let calendar_id = Uuid::parse_str(Self::DEMO_CALENDAR_ID)?;
-
-            // Create demo calendar
-            let calendar = Calendar::new("Personal", "#3B82F6")
-                .with_id(calendar_id)
-                .with_description("My personal calendar");
-
-            state
-                .calendar_repo
-                .create_calendar(&calendar)
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to create demo calendar: {}", e))?;
-
-            // Create demo entries
-            let today = chrono::Local::now().date_naive();
-            let entries = generate_mock_entries(calendar_id, today);
-
-            for entry in entries {
-                state
-                    .entry_repo
-                    .create_entry(&entry)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to create demo entry: {}", e))?;
-            }
-
-            // Start event listener for demo calendar
-            state.ensure_event_listener(calendar_id);
-
-            tracing::info!(
-                calendar_id = %calendar_id,
-                "Demo data seeded successfully"
-            );
-
-            Ok(state)
         }
     }
 }
