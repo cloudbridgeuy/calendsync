@@ -1,46 +1,11 @@
 use chrono::{NaiveDate, NaiveTime, Utc};
-use serde::{Deserialize, Deserializer};
+use serde::Deserialize;
 use uuid::Uuid;
 
 use calendsync_core::calendar::{CalendarEntry, EntryKind, EntryType};
-
-/// Deserialize an optional string, treating empty strings as None.
-fn deserialize_optional_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s: Option<String> = Option::deserialize(deserializer)?;
-    Ok(s.filter(|s| !s.trim().is_empty()))
-}
-
-/// Deserialize an optional NaiveDate, treating empty strings as None.
-fn deserialize_optional_date<'de, D>(deserializer: D) -> Result<Option<NaiveDate>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s: Option<String> = Option::deserialize(deserializer)?;
-    match s {
-        Some(s) if !s.trim().is_empty() => NaiveDate::parse_from_str(&s, "%Y-%m-%d")
-            .map(Some)
-            .map_err(serde::de::Error::custom),
-        _ => Ok(None),
-    }
-}
-
-/// Deserialize an optional NaiveTime, treating empty strings as None.
-fn deserialize_optional_time<'de, D>(deserializer: D) -> Result<Option<NaiveTime>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s: Option<String> = Option::deserialize(deserializer)?;
-    match s {
-        Some(s) if !s.trim().is_empty() => NaiveTime::parse_from_str(&s, "%H:%M")
-            .or_else(|_| NaiveTime::parse_from_str(&s, "%H:%M:%S"))
-            .map(Some)
-            .map_err(serde::de::Error::custom),
-        _ => Ok(None),
-    }
-}
+use calendsync_core::serde::{
+    deserialize_optional_date, deserialize_optional_string, deserialize_optional_time,
+};
 
 /// Server-side entry type with custom deserialization.
 ///
