@@ -29,6 +29,12 @@ pub mod error;
 
 pub use error::{IntegrationError, Result};
 
+use std::time::Duration;
+
+use crate::dev::containers::{
+    detect_runtime, start_container, stop_container, wait_for_health, ContainerRuntime,
+    DYNAMODB_SPEC, REDIS_SPEC,
+};
 use crate::prelude::*;
 
 /// Integration test command.
@@ -109,13 +115,22 @@ pub async fn run(command: IntegrationCommand, global: crate::Global) -> Result<(
         aprintln!();
     }
 
+    // Detect container runtime if we need containers
+    let needs_containers = !command.no_docker && (use_redis || run_dynamodb);
+    let runtime = if needs_containers {
+        Some(detect_runtime(false).await?)
+    } else {
+        None
+    };
+
     // Track which containers we started
     let mut redis_started = false;
     let mut dynamodb_started = false;
 
     // Start Redis container if needed
     if use_redis && !command.no_docker {
-        redis_started = start_redis_container(command.health_timeout, &global).await?;
+        let rt = runtime.expect("runtime should be detected when containers are needed");
+        redis_started = start_redis_container(command.health_timeout, &global, rt).await?;
     } else if use_redis && command.no_docker && !global.is_silent() {
         aprintln!(
             "{} {}",
@@ -159,7 +174,9 @@ pub async fn run(command: IntegrationCommand, global: crate::Global) -> Result<(
 
         // Start DynamoDB container if needed
         if !command.no_docker {
-            dynamodb_started = start_dynamodb_container(command.health_timeout, &global).await?;
+            let rt = runtime.expect("runtime should be detected when containers are needed");
+            dynamodb_started =
+                start_dynamodb_container(command.health_timeout, &global, rt).await?;
         } else if !global.is_silent() {
             aprintln!(
                 "{} {}",
@@ -192,11 +209,13 @@ pub async fn run(command: IntegrationCommand, global: crate::Global) -> Result<(
 
     // Cleanup containers
     if !command.keep_containers {
-        if redis_started {
-            stop_redis_container(&global).await?;
-        }
-        if dynamodb_started {
-            stop_dynamodb_container(&global).await?;
+        if let Some(rt) = runtime {
+            if redis_started {
+                stop_redis_container(&global, rt).await?;
+            }
+            if dynamodb_started {
+                stop_dynamodb_container(&global, rt).await?;
+            }
         }
     } else if (redis_started || dynamodb_started) && !global.is_silent() {
         aprintln!(
@@ -270,22 +289,15 @@ async fn run_tests_with_features(
 }
 
 /// Start the DynamoDB Local container.
-async fn start_dynamodb_container(timeout_secs: u64, global: &crate::Global) -> Result<bool> {
-    // Check if Docker is available
-    let docker_check = tokio::process::Command::new("docker")
-        .args(["--version"])
-        .output()
-        .await?;
-
-    if !docker_check.status.success() {
-        return Err(IntegrationError::DockerNotAvailable(
-            "docker command not found or not working".to_string(),
-        ));
-    }
-
+async fn start_dynamodb_container(
+    timeout_secs: u64,
+    global: &crate::Global,
+    runtime: ContainerRuntime,
+) -> Result<bool> {
     // Check if container is already running
-    let ps_output = tokio::process::Command::new("docker")
-        .args(["ps", "-q", "-f", "name=calendsync-dynamodb"])
+    let cmd = crate::dev::containers::runtime_command(runtime);
+    let ps_output = tokio::process::Command::new(cmd)
+        .args(["ps", "-q", "-f", &format!("name={}", DYNAMODB_SPEC.name)])
         .output()
         .await?;
 
@@ -304,17 +316,8 @@ async fn start_dynamodb_container(timeout_secs: u64, global: &crate::Global) -> 
         aprintln!("{} {}", p_b("🐳"), "Starting DynamoDB Local container...");
     }
 
-    // Start container using docker compose
-    let compose_status = tokio::process::Command::new("docker")
-        .args(["compose", "up", "-d", "dynamodb-local"])
-        .status()
-        .await?;
-
-    if !compose_status.success() {
-        return Err(IntegrationError::ContainerFailed(
-            "docker compose up failed".to_string(),
-        ));
-    }
+    // Start container using the container module
+    start_container(runtime, &DYNAMODB_SPEC).await?;
 
     // Wait for container to be healthy
     if !global.is_silent() {
@@ -325,57 +328,7 @@ async fn start_dynamodb_container(timeout_secs: u64, global: &crate::Global) -> 
         );
     }
 
-    let start = std::time::Instant::now();
-    loop {
-        if start.elapsed().as_secs() > timeout_secs {
-            return Err(IntegrationError::ContainerNotHealthy {
-                name: "calendsync-dynamodb".to_string(),
-                timeout_secs,
-            });
-        }
-
-        // Check container health
-        let health_output = tokio::process::Command::new("docker")
-            .args([
-                "inspect",
-                "--format",
-                "{{.State.Health.Status}}",
-                "calendsync-dynamodb",
-            ])
-            .output()
-            .await?;
-
-        let health_status = String::from_utf8_lossy(&health_output.stdout)
-            .trim()
-            .to_string();
-
-        if health_status == "healthy" {
-            break;
-        }
-
-        // Also try a direct connection check
-        let curl_check = tokio::process::Command::new("curl")
-            .args([
-                "-s",
-                "-o",
-                "/dev/null",
-                "-w",
-                "%{http_code}",
-                "http://localhost:8000",
-            ])
-            .output()
-            .await;
-
-        if let Ok(output) = curl_check {
-            let status_code = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if status_code == "400" {
-                // DynamoDB returns 400 for invalid requests, but that means it's running
-                break;
-            }
-        }
-
-        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-    }
+    wait_for_health(runtime, &DYNAMODB_SPEC, Duration::from_secs(timeout_secs)).await?;
 
     if !global.is_silent() {
         aprintln!("{} {}", p_g("✅"), "DynamoDB Local is ready");
@@ -385,21 +338,12 @@ async fn start_dynamodb_container(timeout_secs: u64, global: &crate::Global) -> 
 }
 
 /// Stop the DynamoDB Local container.
-async fn stop_dynamodb_container(global: &crate::Global) -> Result<()> {
+async fn stop_dynamodb_container(global: &crate::Global, runtime: ContainerRuntime) -> Result<()> {
     if !global.is_silent() {
         aprintln!("{} {}", p_b("🐳"), "Stopping DynamoDB Local container...");
     }
 
-    let status = tokio::process::Command::new("docker")
-        .args(["compose", "down", "dynamodb-local"])
-        .status()
-        .await?;
-
-    if !status.success() {
-        return Err(IntegrationError::ContainerFailed(
-            "docker compose down failed".to_string(),
-        ));
-    }
+    stop_container(runtime, DYNAMODB_SPEC.name).await?;
 
     if !global.is_silent() {
         aprintln!("{} {}", p_g("✅"), "DynamoDB container stopped");
@@ -409,22 +353,15 @@ async fn stop_dynamodb_container(global: &crate::Global) -> Result<()> {
 }
 
 /// Start the Redis container.
-async fn start_redis_container(timeout_secs: u64, global: &crate::Global) -> Result<bool> {
-    // Check if Docker is available
-    let docker_check = tokio::process::Command::new("docker")
-        .args(["--version"])
-        .output()
-        .await?;
-
-    if !docker_check.status.success() {
-        return Err(IntegrationError::DockerNotAvailable(
-            "docker command not found or not working".to_string(),
-        ));
-    }
-
+async fn start_redis_container(
+    timeout_secs: u64,
+    global: &crate::Global,
+    runtime: ContainerRuntime,
+) -> Result<bool> {
     // Check if container is already running
-    let ps_output = tokio::process::Command::new("docker")
-        .args(["ps", "-q", "-f", "name=calendsync-redis"])
+    let cmd = crate::dev::containers::runtime_command(runtime);
+    let ps_output = tokio::process::Command::new(cmd)
+        .args(["ps", "-q", "-f", &format!("name={}", REDIS_SPEC.name)])
         .output()
         .await?;
 
@@ -439,17 +376,8 @@ async fn start_redis_container(timeout_secs: u64, global: &crate::Global) -> Res
         aprintln!("{} {}", p_b("🐳"), "Starting Redis container...");
     }
 
-    // Start container using docker compose
-    let compose_status = tokio::process::Command::new("docker")
-        .args(["compose", "up", "-d", "redis"])
-        .status()
-        .await?;
-
-    if !compose_status.success() {
-        return Err(IntegrationError::ContainerFailed(
-            "docker compose up redis failed".to_string(),
-        ));
-    }
+    // Start container using the container module
+    start_container(runtime, &REDIS_SPEC).await?;
 
     // Wait for container to be healthy
     if !global.is_silent() {
@@ -460,49 +388,7 @@ async fn start_redis_container(timeout_secs: u64, global: &crate::Global) -> Res
         );
     }
 
-    let start = std::time::Instant::now();
-    loop {
-        if start.elapsed().as_secs() > timeout_secs {
-            return Err(IntegrationError::ContainerNotHealthy {
-                name: "calendsync-redis".to_string(),
-                timeout_secs,
-            });
-        }
-
-        // Check container health via docker inspect
-        let health_output = tokio::process::Command::new("docker")
-            .args([
-                "inspect",
-                "--format",
-                "{{.State.Health.Status}}",
-                "calendsync-redis",
-            ])
-            .output()
-            .await?;
-
-        let health_status = String::from_utf8_lossy(&health_output.stdout)
-            .trim()
-            .to_string();
-
-        if health_status == "healthy" {
-            break;
-        }
-
-        // Also try a direct PING check
-        let ping_check = tokio::process::Command::new("docker")
-            .args(["exec", "calendsync-redis", "redis-cli", "ping"])
-            .output()
-            .await;
-
-        if let Ok(output) = ping_check {
-            let response = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if response == "PONG" {
-                break;
-            }
-        }
-
-        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-    }
+    wait_for_health(runtime, &REDIS_SPEC, Duration::from_secs(timeout_secs)).await?;
 
     if !global.is_silent() {
         aprintln!("{} {}", p_g("✅"), "Redis is ready");
@@ -512,21 +398,12 @@ async fn start_redis_container(timeout_secs: u64, global: &crate::Global) -> Res
 }
 
 /// Stop the Redis container.
-async fn stop_redis_container(global: &crate::Global) -> Result<()> {
+async fn stop_redis_container(global: &crate::Global, runtime: ContainerRuntime) -> Result<()> {
     if !global.is_silent() {
         aprintln!("{} {}", p_b("🐳"), "Stopping Redis container...");
     }
 
-    let status = tokio::process::Command::new("docker")
-        .args(["compose", "down", "redis"])
-        .status()
-        .await?;
-
-    if !status.success() {
-        return Err(IntegrationError::ContainerFailed(
-            "docker compose down redis failed".to_string(),
-        ));
-    }
+    stop_container(runtime, REDIS_SPEC.name).await?;
 
     if !global.is_silent() {
         aprintln!("{} {}", p_g("✅"), "Redis container stopped");

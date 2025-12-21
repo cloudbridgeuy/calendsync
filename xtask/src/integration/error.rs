@@ -2,6 +2,8 @@
 
 use thiserror::Error;
 
+use crate::dev::error::DevError;
+
 /// Result type alias for integration module.
 pub type Result<T> = std::result::Result<T, IntegrationError>;
 
@@ -32,4 +34,19 @@ pub enum IntegrationError {
 
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
+}
+
+impl From<DevError> for IntegrationError {
+    fn from(err: DevError) -> Self {
+        match err {
+            DevError::ContainerRuntimeNotFound(msg) => IntegrationError::DockerNotAvailable(msg),
+            DevError::ContainerStartFailed(msg) => IntegrationError::ContainerFailed(msg),
+            DevError::ContainerNotHealthy { name, timeout_secs } => {
+                IntegrationError::ContainerNotHealthy { name, timeout_secs }
+            }
+            DevError::Io(e) => IntegrationError::Io(e),
+            // Map other DevError variants to ContainerFailed as a fallback
+            other => IntegrationError::ContainerFailed(other.to_string()),
+        }
+    }
 }
