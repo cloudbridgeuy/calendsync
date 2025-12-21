@@ -12,7 +12,7 @@ This is a technical exploration of the **"Rust full-stack" pattern**: server-sid
 
 - REST API for calendar entries
 - React SSR calendar with real-time SSE updates
-- Storage backends: SQLite (default) or DynamoDB, with memory or Redis caching
+- Storage backends: in-memory (default), SQLite, or DynamoDB with memory or Redis caching
 - Repository pattern with cached decorators for cache-aside + event publishing
 - Graceful shutdown support
 
@@ -49,8 +49,11 @@ cargo test -p calendsync_core
 # Run the React SSR example
 cargo run --example react-ssr -p calendsync
 
-# Build with memory cache (default)
+# Build with default features (inmemory storage + memory cache)
 cargo build -p calendsync
+
+# Build with SQLite storage
+cargo build -p calendsync --no-default-features --features sqlite,memory
 
 # Build with Redis cache
 cargo build -p calendsync --no-default-features --features sqlite,redis
@@ -97,22 +100,23 @@ src/
 ├── app.rs           # Router configuration, middleware (CORS, tracing, timeout)
 ├── config.rs        # Environment-based configuration (cache TTL, paths, URLs)
 ├── state.rs         # AppState with repository trait objects, SSE support
-├── mock_data.rs     # Demo data generation
 ├── handlers/        # HTTP request handlers
+│   ├── calendars.rs # Calendar create endpoint
 │   ├── entries.rs   # Entry CRUD endpoints (uses repositories)
 │   ├── calendar_react.rs # React SSR calendar handler (uses SsrPool)
 │   ├── events.rs    # SSE events handler for real-time updates
 │   ├── error.rs     # AppError type for HTTP error responses
 │   └── health.rs    # Health check endpoints (/healthz, /readyz)
 ├── models/          # Data models
+│   ├── calendar.rs  # CreateCalendar request type
 │   └── entry.rs     # CreateEntry, UpdateEntry request types
 ├── cache/           # Cache backend implementations (feature-gated)
 │   ├── memory/      # In-memory LRU cache (default)
 │   └── redis_impl/  # Redis cache + pub/sub
 └── storage/         # Storage backend implementations (feature-gated)
-    ├── sqlite/      # SQLite implementation (default)
+    ├── sqlite/      # SQLite implementation
     ├── dynamodb/    # AWS DynamoDB implementation
-    ├── inmemory/    # In-memory for testing (feature: inmemory)
+    ├── inmemory/    # In-memory storage (default)
     └── cached/      # Cache-aside decorators (wraps repositories)
 ```
 
@@ -349,6 +353,7 @@ pub async fn fetch_and_filter_metrics(
 ```
 crates/core/src/
 ├── lib.rs           # Public API exports
+├── serde.rs         # Pure serde helpers (deserialize_optional_string, etc.)
 └── calendar/
     ├── mod.rs       # Module exports and re-exports
     ├── types.rs     # Domain types (Calendar, CalendarEntry, CalendarEvent, User, etc.)
@@ -645,6 +650,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | systemfd Integration | `.claude/context/systemfd.md`          |
 | Responsive Layout    | `.claude/context/responsive-layout.md` |
 | Storage Layer        | `.claude/context/storage-layer.md`     |
+| Feature Flags        | `.claude/context/feature-flags.md`     |
 
 ### Local Working Directories (gitignored)
 

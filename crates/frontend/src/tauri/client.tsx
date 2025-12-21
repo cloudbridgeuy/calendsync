@@ -8,7 +8,8 @@ import { App } from "./App"
 
 // Configuration - hardcoded for now, will support deep links later
 const API_URL = "http://localhost:3000"
-const CALENDAR_ID = "00000000-0000-0000-0000-000000000001"
+// TODO: Replace with dynamic calendar selection or deep link parsing
+const CALENDAR_ID = "placeholder-create-calendar-first"
 
 console.log("[Tauri] Mounting React app...")
 console.log(`[Tauri] API URL: ${API_URL}`)

@@ -24,7 +24,15 @@ Server runs on `http://localhost:3000`
 
 #### 2. Access via Web Browser
 
-Open `http://localhost:3000/calendar/00000000-0000-0000-0000-000000000001`
+Create a calendar first, then access it:
+```bash
+# Create a calendar and get its ID
+CALENDAR_ID=$(curl -s -X POST http://localhost:3000/api/calendars \
+  -d "name=Personal" -d "color=#3B82F6" | jq -r '.id')
+
+# Open in browser
+open "http://localhost:3000/calendar/$CALENDAR_ID"
+```
 
 #### 3. Run Desktop App (macOS)
 
