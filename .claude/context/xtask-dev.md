@@ -12,19 +12,37 @@ cargo xtask dev <TARGET> [OPTIONS]
 
 | Target    | Description                      | Underlying Command          |
 |-----------|----------------------------------|-----------------------------|
-| `web`     | Run the Axum web server          | `cargo run -p calendsync`   |
+| `server`  | Run the development server       | `cargo run -p calendsync`   |
 | `desktop` | Run the Tauri desktop app        | `cargo tauri dev`           |
 | `ios`     | Run the Tauri iOS app            | `cargo tauri ios dev`       |
 
-## Web Options
+## Server Options
+
+The server target supports configurable storage and cache backends with automatic container orchestration:
 
 ```bash
-cargo xtask dev web [OPTIONS]
+cargo xtask dev server [OPTIONS]
 
-Options:
-  -p, --port <PORT>   Port to run on (default: 3000)
-  --release           Build in release mode
+Storage/Cache:
+  --storage <TYPE>     inmemory (default), sqlite, dynamodb
+  --cache <TYPE>       memory (default), redis
+
+Container:
+  --podman             Use podman instead of docker
+  --flush              Remove volumes before starting containers
+
+Data:
+  --seed               Seed database with demo data via HTTP
+
+Other:
+  -p, --port <PORT>    Port to run on (default: 3000)
+  --release            Build in release mode
+  --no-hot-reload      Disable TypeScript hot-reload
+  --no-auto-refresh    Disable browser auto-refresh
+  --keep-containers    Keep containers running on error
 ```
+
+For detailed documentation on the server command, see `.claude/context/dev-server.md`.
 
 ## Desktop Options
 
@@ -54,9 +72,13 @@ Options:
 ## Examples
 
 ```bash
-# Web server
-cargo xtask dev web                       # Port 3000
-cargo xtask dev web --port 8080           # Custom port
+# Development server
+cargo xtask dev server                              # Default: inmemory + memory
+cargo xtask dev server --seed                       # With demo data
+cargo xtask dev server --storage sqlite --seed      # SQLite storage
+cargo xtask dev server --storage dynamodb --seed    # DynamoDB (auto-starts container)
+cargo xtask dev server --cache redis --seed         # Redis cache (auto-starts container)
+cargo xtask dev server --storage dynamodb --cache redis --seed  # Full stack
 
 # Desktop app
 cargo xtask dev desktop
@@ -74,11 +96,13 @@ cargo xtask dev ios --host                # Physical device
 
 ```
 xtask/src/dev/
-├── mod.rs        # DevCommand, DevTarget enum, run()
-├── error.rs      # DevError types
-├── ios.rs        # iOS logic (device listing, launching)
-├── web.rs        # Web server logic
-└── desktop.rs    # Desktop app logic
+├── mod.rs          # DevCommand, DevTarget enum, run()
+├── error.rs        # DevError types
+├── server.rs       # Server logic with container orchestration
+├── containers.rs   # Container management (Docker/Podman)
+├── seed.rs         # HTTP-based data seeding
+├── desktop.rs      # Desktop app logic
+└── ios.rs          # iOS logic (device listing, launching)
 ```
 
 ## iOS Device Listing
@@ -96,8 +120,9 @@ Available iOS Simulators:
 
 ## Why This Exists
 
-1. **Unified interface** - One command instead of remembering three different invocations
-2. **Proper `--device` flag** - iOS device is a named argument, not positional
-3. **Device discovery** - `--list-devices` shows available simulators
-4. **Consistent options** - `--release`, `--no-watch` work across all targets
-5. **Extensible** - Easy to add Android support later
+1. **Unified interface** - One command instead of remembering different invocations
+2. **Container orchestration** - Automatic Docker/Podman management for DynamoDB and Redis
+3. **HTTP-based seeding** - Demo data via API endpoints validates the full stack
+4. **Device discovery** - `--list-devices` shows available iOS simulators
+5. **Consistent options** - `--release`, `--seed` work across configurations
+6. **Extensible** - Easy to add Android support later

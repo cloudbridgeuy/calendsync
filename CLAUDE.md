@@ -61,9 +61,13 @@ cargo build -p calendsync --no-default-features --features sqlite,redis
 # Build for production (DynamoDB + Redis)
 cargo build -p calendsync --release --no-default-features --features dynamodb,redis
 
-# Unified dev command (web, desktop, iOS)
-cargo xtask dev web                       # Run web server on port 3000
-cargo xtask dev web --port 8080           # Run on custom port
+# Unified dev command (server, desktop, iOS)
+cargo xtask dev server                    # Run server (inmemory + memory, no containers)
+cargo xtask dev server --seed             # Run with demo data seeded via HTTP
+cargo xtask dev server --storage sqlite   # Use SQLite storage
+cargo xtask dev server --storage dynamodb # Use DynamoDB (auto-starts container)
+cargo xtask dev server --cache redis      # Use Redis cache (auto-starts container)
+cargo xtask dev server --flush --seed     # Fresh start: remove volumes, seed data
 cargo xtask dev desktop                   # Run Tauri desktop app
 cargo xtask dev ios                       # Run iOS simulator
 cargo xtask dev ios --list-devices        # List available iOS simulators
@@ -124,7 +128,8 @@ src/
 
 The project uses the [cargo-xtask](https://github.com/matklad/cargo-xtask/) pattern for development tasks:
 
-- `cargo xtask dev web` - Run the web server (port 3000 by default)
+- `cargo xtask dev server` - Run the development server with hot-reload
+- `cargo xtask dev server --storage dynamodb --seed` - Run with DynamoDB and demo data
 - `cargo xtask dev desktop` - Run the Tauri desktop app
 - `cargo xtask dev ios` - Run the Tauri iOS app in simulator
 - `cargo xtask dev ios --list-devices` - List available iOS simulators
@@ -641,6 +646,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | Tauri                | `.claude/context/tauri.md`             |
 | Tauri iOS            | `.claude/context/tauri-ios.md`         |
 | xtask dev Command    | `.claude/context/xtask-dev.md`         |
+| Dev Server           | `.claude/context/dev-server.md`        |
 | React SSR Context    | `.claude/context/react-ssr-example.md` |
 | Shared Types         | `.claude/context/shared-types.md`      |
 | Running Applications | `.claude/context/running-apps.md`      |
