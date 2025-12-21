@@ -4,7 +4,7 @@ This document describes the hot-reload feature for TypeScript/CSS changes during
 
 ## Overview
 
-When running `cargo xtask dev web`, the system watches for changes in `crates/frontend/src/` and automatically:
+When running `cargo xtask dev server`, the system watches for changes in `crates/frontend/src/` and automatically:
 
 1. Rebuilds the frontend (`bun run build:dev`)
 2. Reloads the SSR worker pool with the new bundle
@@ -13,7 +13,7 @@ When running `cargo xtask dev web`, the system watches for changes in `crates/fr
 ## Architecture
 
 ```
-cargo xtask dev web
+cargo xtask dev server
 ├── Starts server (cargo run -p calendsync) with DEV_MODE=1
 ├── Waits for server health check (/healthz)
 ├── Watches crates/frontend/src/ for changes
@@ -87,21 +87,21 @@ pub dev_reload_tx: broadcast::Sender<()>  // For browser auto-refresh
 
 ```bash
 # With hot-reload + auto-refresh (default)
-cargo xtask dev web
+cargo xtask dev server
 
 # With hot-reload, but manual browser refresh
-cargo xtask dev web --no-auto-refresh
+cargo xtask dev server --no-auto-refresh
 
 # Without hot-reload (Rust changes only)
-cargo xtask dev web --no-hot-reload
+cargo xtask dev server --no-hot-reload
 
 # Release mode (no hot-reload)
-cargo xtask dev web --release
+cargo xtask dev server --release
 ```
 
 ## Workflow
 
-1. Start: `cargo xtask dev web`
+1. Start: `cargo xtask dev server`
 2. Wait for "Ready for changes" message
 3. Browser shows "[Dev] Auto-refresh connected" in console
 4. Edit TypeScript/CSS in `crates/frontend/src/`
@@ -152,7 +152,7 @@ cargo xtask dev web --release
 
 The hot-reload system is **completely isolated from Tauri apps**:
 
-| Aspect | Web (`cargo xtask dev web`) | Tauri (`cargo xtask dev desktop/ios`) |
+| Aspect | Web (`cargo xtask dev server`) | Tauri (`cargo xtask dev desktop/ios`) |
 |--------|------------------------------|---------------------------------------|
 | Dev server | calendsync SSR (port 3000) | Vite dev server (port 5173) |
 | Rendering | Server-side (React SSR) | Client-side (Vite + React) |

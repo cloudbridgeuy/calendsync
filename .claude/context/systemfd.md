@@ -48,7 +48,7 @@ This is useful when:
 
 ```bash
 # Uses custom xtask with TypeScript hot-reload
-cargo xtask dev web
+cargo xtask dev server
 ```
 
 This is the recommended approach because it:
@@ -89,7 +89,7 @@ Key points:
 
 ## Comparison of Approaches
 
-| Feature | systemfd + cargo-watch | cargo xtask dev web |
+| Feature | systemfd + cargo-watch | cargo xtask dev server |
 |---------|----------------------|---------------------|
 | Rust changes | Recompiles + restarts | Recompiles + restarts |
 | TypeScript changes | Not watched | Hot-reloads (no restart) |
@@ -106,7 +106,7 @@ Key points:
 - Testing server behavior during restarts
 - Debugging socket preservation
 
-**Use `cargo xtask dev web`:**
+**Use `cargo xtask dev server`:**
 - Full-stack development (Rust + TypeScript)
 - UI development
 - Most common development scenarios
@@ -154,11 +154,11 @@ Check that listenfd is properly imported and the dependency is in Cargo.toml:
 listenfd = { workspace = true }
 ```
 
-### Port conflict with xtask dev web
+### Port conflict with xtask dev server
 
 The xtask dev command doesn't use systemfd - it binds directly. If you previously used systemfd, make sure it's stopped:
 
 ```bash
 pkill systemfd
-cargo xtask dev web
+cargo xtask dev server
 ```
