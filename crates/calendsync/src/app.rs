@@ -14,6 +14,7 @@ use tower_http::{
 use crate::{
     handlers::{
         calendar_react::{calendar_react_ssr, calendar_react_ssr_entry},
+        calendars::create_calendar,
         entries::{
             create_entry, delete_entry, get_entry, list_entries, toggle_entry, update_entry,
         },
@@ -40,6 +41,8 @@ pub fn create_app(state: AppState) -> Router {
 
     // API routes with CORS
     let api_routes = Router::new()
+        // Calendar routes
+        .route("/calendars", post(create_calendar))
         // Entry routes
         .route("/entries", get(list_entries).post(create_entry))
         .route(
@@ -139,8 +142,9 @@ mod tests {
         let state = AppState::default();
         let app = create_app(state);
 
-        // list_entries now requires calendar_id query parameter
-        let calendar_id = "00000000-0000-0000-0000-000000000001";
+        // list_entries requires calendar_id query parameter
+        // Using a fresh UUID - no calendars exist so entries will be empty
+        let calendar_id = uuid::Uuid::new_v4();
         let response = app
             .oneshot(
                 Request::builder()

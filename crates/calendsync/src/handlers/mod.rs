@@ -1,4 +1,5 @@
 pub mod calendar_react;
+pub mod calendars;
 #[cfg(debug_assertions)]
 pub mod dev;
 pub mod entries;
