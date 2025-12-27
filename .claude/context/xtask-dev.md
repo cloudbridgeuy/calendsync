@@ -33,6 +33,7 @@ Container:
 
 Data:
   --seed               Seed database with demo data via HTTP
+  --open               Open browser after seeding (macOS only)
 
 Other:
   -p, --port <PORT>    Port to run on (default: 3000)
@@ -40,6 +41,7 @@ Other:
   --no-hot-reload      Disable TypeScript hot-reload
   --no-auto-refresh    Disable browser auto-refresh
   --keep-containers    Keep containers running on error
+  --verbose            Print container command output
 ```
 
 For detailed documentation on the server command, see `.claude/context/dev-server.md`.
@@ -75,6 +77,7 @@ Options:
 # Development server
 cargo xtask dev server                              # Default: inmemory + memory
 cargo xtask dev server --seed                       # With demo data
+cargo xtask dev server --seed --open                # Seed and open browser (macOS)
 cargo xtask dev server --storage sqlite --seed      # SQLite storage
 cargo xtask dev server --storage dynamodb --seed    # DynamoDB (auto-starts container)
 cargo xtask dev server --cache redis --seed         # Redis cache (auto-starts container)

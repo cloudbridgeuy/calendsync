@@ -17,9 +17,11 @@ Container Options:
 
 Data Options:
   --seed               Seed the database with demo data via HTTP after startup
+  --open               Open browser to calendar URL after seeding (macOS only)
 
 Debugging Options:
   --keep-containers    Keep containers running on error (default: stop containers)
+  --verbose            Print container command output with color coding
 
 Existing Options:
   -p, --port <PORT>    Port to run the server on [default: 3000]
@@ -75,10 +77,12 @@ Containers follow a predictable lifecycle:
 
 Container specifications:
 
-| Service  | Image                        | Port | Volume                     |
-|----------|------------------------------|------|----------------------------|
-| DynamoDB | `amazon/dynamodb-local:latest` | 8000 | `calendsync-dynamodb-data` |
-| Redis    | `redis:7-alpine`             | 6379 | `calendsync-redis-data`    |
+| Service  | Image                        | Container Port | Volume                     |
+|----------|------------------------------|----------------|----------------------------|
+| DynamoDB | `amazon/dynamodb-local:latest` | 8000         | `calendsync-dynamodb-data` |
+| Redis    | `redis:7-alpine`             | 6379           | `calendsync-redis-data`    |
+
+**Dynamic Port Allocation**: Containers start with dynamic host port allocation (`-p 0:{port}`). After startup, the command queries the actual assigned port using `docker port` and configures environment variables accordingly. This prevents port conflicts when running multiple instances or when default ports are in use.
 
 ## Examples
 
@@ -88,6 +92,9 @@ cargo xtask dev server
 
 # With seeding - creates demo calendar and entries
 cargo xtask dev server --seed
+
+# With seeding and auto-open browser (macOS)
+cargo xtask dev server --seed --open
 
 # SQLite storage (creates .local/data/calendsync.db)
 cargo xtask dev server --storage sqlite --seed
@@ -109,6 +116,9 @@ cargo xtask dev server --storage dynamodb --podman --seed
 
 # Keep containers running for debugging
 cargo xtask dev server --storage dynamodb --keep-containers
+
+# Verbose mode: see all container commands and output
+cargo xtask dev server --storage dynamodb --verbose
 ```
 
 ## Architecture
