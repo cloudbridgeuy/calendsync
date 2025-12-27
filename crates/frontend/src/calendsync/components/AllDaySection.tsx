@@ -5,7 +5,7 @@
 
 import { formatDateKey, separateEntriesByType } from "@core/calendar"
 import type { ServerEntry } from "@core/calendar/types"
-import { useMemo } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import { useCalendarContext } from "../contexts"
 
 /** Width of the hour column on the left */
@@ -71,13 +71,61 @@ interface AllDaySectionProps {
   renderedDates: Date[]
   /** Get entries for a specific date */
   getEntriesForDate: (date: Date) => ServerEntry[]
+  /** Ref to the main scroll container for horizontal scroll synchronization */
+  scrollContainerRef: React.RefObject<HTMLDivElement | null>
 }
 
 /**
  * Renders the all-day section header with entries for each visible day.
  * Sticky at the top of the schedule view (Google Calendar style).
+ * Synchronizes horizontal scroll with the main scroll container using RAF.
  */
-export function AllDaySection({ renderedDates, getEntriesForDate }: AllDaySectionProps) {
+export function AllDaySection({
+  renderedDates,
+  getEntriesForDate,
+  scrollContainerRef,
+}: AllDaySectionProps) {
+  // Ref to the all-day columns container for direct DOM manipulation
+  const allDayColumnsRef = useRef<HTMLDivElement>(null)
+  // Track pending RAF to avoid scheduling multiple frames
+  const rafIdRef = useRef<number | null>(null)
+
+  // Synchronize scroll position with main container using RAF for smooth updates
+  // Uses scrollLeft instead of transform to work with overflow clipping
+  useEffect(() => {
+    const scrollContainer = scrollContainerRef.current
+    const allDayColumns = allDayColumnsRef.current
+    if (!scrollContainer || !allDayColumns) return
+
+    // Update scrollLeft to match main container's scroll position
+    const updateScrollPosition = () => {
+      if (allDayColumnsRef.current && scrollContainerRef.current) {
+        allDayColumnsRef.current.scrollLeft = scrollContainerRef.current.scrollLeft
+      }
+      rafIdRef.current = null
+    }
+
+    // Handle scroll events - schedule RAF if not already pending
+    const handleScroll = () => {
+      if (rafIdRef.current === null) {
+        rafIdRef.current = requestAnimationFrame(updateScrollPosition)
+      }
+    }
+
+    // Set initial position to avoid flash at position 0
+    updateScrollPosition()
+
+    // Listen for scroll events
+    scrollContainer.addEventListener("scroll", handleScroll, { passive: true })
+
+    return () => {
+      scrollContainer.removeEventListener("scroll", handleScroll)
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current)
+      }
+    }
+  }, [scrollContainerRef])
+
   // Collect all-day entries for each date
   const allDayEntriesByDate = useMemo(() => {
     const map = new Map<string, ServerEntry[]>()
@@ -106,8 +154,8 @@ export function AllDaySection({ renderedDates, getEntriesForDate }: AllDaySectio
         className="all-day-spacer"
         style={{ width: HOUR_COLUMN_WIDTH, minWidth: HOUR_COLUMN_WIDTH }}
       />
-      {/* Day columns for all-day entries */}
-      <div className="all-day-columns">
+      {/* Day columns for all-day entries - transform synced with main scroll */}
+      <div ref={allDayColumnsRef} className="all-day-columns">
         {renderedDates.map((date) => {
           const dateKey = formatDateKey(date)
           const entries = allDayEntriesByDate.get(dateKey) || []

@@ -2223,7 +2223,15 @@ body {
 
 .all-day-columns {
   display: flex;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* Hide scrollbar - scroll is controlled programmatically */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.all-day-columns::-webkit-scrollbar {
+  display: none; /* Chrome/Safari/Opera */
 }
 
 .all-day-column {

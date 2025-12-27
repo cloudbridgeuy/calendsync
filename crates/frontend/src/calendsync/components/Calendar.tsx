@@ -465,14 +465,18 @@ function Days() {
  * In schedule mode, includes HourColumnFixed and AllDaySection.
  */
 function View() {
-  const { settings, renderedDates, getEntriesForDate } = useCalendarContext()
+  const { settings, renderedDates, getEntriesForDate, scrollContainerRef } = useCalendarContext()
   const isScheduleMode = settings.viewMode === "schedule"
 
   return (
     <>
       {/* All-day section (schedule mode only) */}
       {isScheduleMode && (
-        <AllDaySection renderedDates={renderedDates} getEntriesForDate={getEntriesForDate} />
+        <AllDaySection
+          renderedDates={renderedDates}
+          getEntriesForDate={getEntriesForDate}
+          scrollContainerRef={scrollContainerRef}
+        />
       )}
 
       <div className={`calendar-main-area${isScheduleMode ? " schedule-mode" : ""}`}>
