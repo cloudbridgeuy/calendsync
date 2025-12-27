@@ -14,7 +14,7 @@ use tower_http::{
 use crate::{
     handlers::{
         calendar_react::{calendar_react_ssr, calendar_react_ssr_entry},
-        calendars::create_calendar,
+        calendars::{create_calendar, delete_calendar, get_calendar, update_calendar},
         entries::{
             create_entry, delete_entry, get_entry, list_entries, toggle_entry, update_entry,
         },
@@ -43,6 +43,12 @@ pub fn create_app(state: AppState) -> Router {
     let api_routes = Router::new()
         // Calendar routes
         .route("/calendars", post(create_calendar))
+        .route(
+            "/calendars/{id}",
+            get(get_calendar)
+                .put(update_calendar)
+                .delete(delete_calendar),
+        )
         // Entry routes
         .route("/entries", get(list_entries).post(create_entry))
         .route(
