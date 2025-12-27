@@ -32,8 +32,8 @@ pub use error::{IntegrationError, Result};
 use std::time::Duration;
 
 use crate::dev::containers::{
-    detect_runtime, start_container, stop_container, wait_for_health, ContainerRuntime,
-    DYNAMODB_SPEC, REDIS_SPEC,
+    detect_runtime, get_container_port, start_container, stop_container, wait_for_health,
+    ContainerRuntime, DYNAMODB_SPEC, REDIS_SPEC,
 };
 use crate::prelude::*;
 
@@ -123,20 +123,29 @@ pub async fn run(command: IntegrationCommand, global: crate::Global) -> Result<(
         None
     };
 
-    // Track which containers we started
+    // Track which containers we started and their ports
+    let mut redis_port: Option<u16> = None;
+    let mut dynamodb_port: Option<u16> = None;
     let mut redis_started = false;
     let mut dynamodb_started = false;
 
     // Start Redis container if needed
     if use_redis && !command.no_docker {
         let rt = runtime.expect("runtime should be detected when containers are needed");
-        redis_started = start_redis_container(command.health_timeout, &global, rt).await?;
-    } else if use_redis && command.no_docker && !global.is_silent() {
-        aprintln!(
-            "{} {}",
-            p_y("⚠️"),
-            "Skipping Redis container management (--no-docker)"
-        );
+        if let Some(port) = start_redis_container(command.health_timeout, &global, rt).await? {
+            redis_port = Some(port);
+            redis_started = true;
+        }
+    } else if use_redis && command.no_docker {
+        // Use default port when --no-docker
+        redis_port = Some(6379);
+        if !global.is_silent() {
+            aprintln!(
+                "{} {}",
+                p_y("⚠️"),
+                "Skipping Redis container management (--no-docker)"
+            );
+        }
     }
 
     let mut all_passed = true;
@@ -151,8 +160,9 @@ pub async fn run(command: IntegrationCommand, global: crate::Global) -> Result<(
             );
         }
 
-        let env_vars: Vec<(&str, &str)> = if use_redis {
-            vec![("REDIS_URL", "redis://localhost:6379")]
+        let redis_url = redis_port.map(|p| format!("redis://localhost:{}", p));
+        let env_vars: Vec<(&str, String)> = if let Some(ref url) = redis_url {
+            vec![("REDIS_URL", url.clone())]
         } else {
             vec![]
         };
@@ -175,31 +185,42 @@ pub async fn run(command: IntegrationCommand, global: crate::Global) -> Result<(
         // Start DynamoDB container if needed
         if !command.no_docker {
             let rt = runtime.expect("runtime should be detected when containers are needed");
-            dynamodb_started =
-                start_dynamodb_container(command.health_timeout, &global, rt).await?;
-        } else if !global.is_silent() {
-            aprintln!(
-                "{} {}",
-                p_y("⚠️"),
-                "Skipping DynamoDB container management (--no-docker)"
-            );
+            if let Some(port) =
+                start_dynamodb_container(command.health_timeout, &global, rt).await?
+            {
+                dynamodb_port = Some(port);
+                dynamodb_started = true;
+            }
+        } else {
+            // Use default port when --no-docker
+            dynamodb_port = Some(8000);
+            if !global.is_silent() {
+                aprintln!(
+                    "{} {}",
+                    p_y("⚠️"),
+                    "Skipping DynamoDB container management (--no-docker)"
+                );
+            }
         }
+
+        let ddb_port = dynamodb_port.unwrap_or(8000);
 
         // Set up the test table
         if !global.is_silent() {
             aprintln!("{} {}", p_b("📦"), "Setting up test table...");
         }
-        setup_test_table(&global).await?;
+        setup_test_table(ddb_port, &global).await?;
 
-        // Build environment variables
+        // Build environment variables with actual port
+        let endpoint_url = format!("http://localhost:{}", ddb_port);
         let mut env_vars = vec![
-            ("AWS_ENDPOINT_URL", "http://localhost:8000"),
-            ("AWS_REGION", "us-east-1"),
-            ("AWS_ACCESS_KEY_ID", "test"),
-            ("AWS_SECRET_ACCESS_KEY", "test"),
+            ("AWS_ENDPOINT_URL", endpoint_url),
+            ("AWS_REGION", "us-east-1".to_string()),
+            ("AWS_ACCESS_KEY_ID", "test".to_string()),
+            ("AWS_SECRET_ACCESS_KEY", "test".to_string()),
         ];
-        if use_redis {
-            env_vars.push(("REDIS_URL", "redis://localhost:6379"));
+        if let Some(port) = redis_port {
+            env_vars.push(("REDIS_URL", format!("redis://localhost:{}", port)));
         }
 
         if !run_tests_with_features("dynamodb", cache_backend, env_vars, &global).await? {
@@ -241,7 +262,7 @@ pub async fn run(command: IntegrationCommand, global: crate::Global) -> Result<(
 async fn run_tests_with_features(
     storage: &str,
     cache: &str,
-    env_vars: Vec<(&str, &str)>,
+    env_vars: Vec<(&str, String)>,
     global: &crate::Global,
 ) -> Result<bool> {
     // Build feature string: e.g., "sqlite,memory" or "dynamodb,redis"
@@ -289,11 +310,14 @@ async fn run_tests_with_features(
 }
 
 /// Start the DynamoDB Local container.
+///
+/// Returns `Some(port)` with the actual host port if we started a new container,
+/// or the port of an existing container if one was already running.
 async fn start_dynamodb_container(
     timeout_secs: u64,
     global: &crate::Global,
     runtime: ContainerRuntime,
-) -> Result<bool> {
+) -> Result<Option<u16>> {
     // Check if container is already running
     let cmd = crate::dev::containers::runtime_command(runtime);
     let ps_output = tokio::process::Command::new(cmd)
@@ -309,7 +333,10 @@ async fn start_dynamodb_container(
                 "DynamoDB Local container already running"
             );
         }
-        return Ok(false); // Container exists but we didn't start it
+        // Query the port of the existing container
+        let port =
+            get_container_port(runtime, DYNAMODB_SPEC.name, DYNAMODB_SPEC.port, false).await?;
+        return Ok(Some(port));
     }
 
     if !global.is_silent() {
@@ -317,7 +344,19 @@ async fn start_dynamodb_container(
     }
 
     // Start container using the container module
-    start_container(runtime, &DYNAMODB_SPEC).await?;
+    let verbose = global.is_verbose();
+    start_container(runtime, &DYNAMODB_SPEC, verbose).await?;
+
+    // Query the actual host port
+    let port = get_container_port(runtime, DYNAMODB_SPEC.name, DYNAMODB_SPEC.port, verbose).await?;
+
+    if !global.is_silent() {
+        aprintln!(
+            "   Container port: {} -> localhost:{}",
+            DYNAMODB_SPEC.port,
+            port
+        );
+    }
 
     // Wait for container to be healthy
     if !global.is_silent() {
@@ -328,13 +367,19 @@ async fn start_dynamodb_container(
         );
     }
 
-    wait_for_health(runtime, &DYNAMODB_SPEC, Duration::from_secs(timeout_secs)).await?;
+    wait_for_health(
+        runtime,
+        &DYNAMODB_SPEC,
+        port,
+        Duration::from_secs(timeout_secs),
+    )
+    .await?;
 
     if !global.is_silent() {
         aprintln!("{} {}", p_g("✅"), "DynamoDB Local is ready");
     }
 
-    Ok(true)
+    Ok(Some(port))
 }
 
 /// Stop the DynamoDB Local container.
@@ -343,7 +388,7 @@ async fn stop_dynamodb_container(global: &crate::Global, runtime: ContainerRunti
         aprintln!("{} {}", p_b("🐳"), "Stopping DynamoDB Local container...");
     }
 
-    stop_container(runtime, DYNAMODB_SPEC.name).await?;
+    stop_container(runtime, DYNAMODB_SPEC.name, global.is_verbose()).await?;
 
     if !global.is_silent() {
         aprintln!("{} {}", p_g("✅"), "DynamoDB container stopped");
@@ -353,11 +398,14 @@ async fn stop_dynamodb_container(global: &crate::Global, runtime: ContainerRunti
 }
 
 /// Start the Redis container.
+///
+/// Returns `Some(port)` with the actual host port if we started a new container,
+/// or `None` if the container was already running.
 async fn start_redis_container(
     timeout_secs: u64,
     global: &crate::Global,
     runtime: ContainerRuntime,
-) -> Result<bool> {
+) -> Result<Option<u16>> {
     // Check if container is already running
     let cmd = crate::dev::containers::runtime_command(runtime);
     let ps_output = tokio::process::Command::new(cmd)
@@ -369,7 +417,9 @@ async fn start_redis_container(
         if !global.is_silent() {
             aprintln!("{} {}", p_y("⚠️"), "Redis container already running");
         }
-        return Ok(false); // Container exists but we didn't start it
+        // Query the port of the existing container
+        let port = get_container_port(runtime, REDIS_SPEC.name, REDIS_SPEC.port, false).await?;
+        return Ok(Some(port));
     }
 
     if !global.is_silent() {
@@ -377,7 +427,19 @@ async fn start_redis_container(
     }
 
     // Start container using the container module
-    start_container(runtime, &REDIS_SPEC).await?;
+    let verbose = global.is_verbose();
+    start_container(runtime, &REDIS_SPEC, verbose).await?;
+
+    // Query the actual host port
+    let port = get_container_port(runtime, REDIS_SPEC.name, REDIS_SPEC.port, verbose).await?;
+
+    if !global.is_silent() {
+        aprintln!(
+            "   Container port: {} -> localhost:{}",
+            REDIS_SPEC.port,
+            port
+        );
+    }
 
     // Wait for container to be healthy
     if !global.is_silent() {
@@ -388,13 +450,19 @@ async fn start_redis_container(
         );
     }
 
-    wait_for_health(runtime, &REDIS_SPEC, Duration::from_secs(timeout_secs)).await?;
+    wait_for_health(
+        runtime,
+        &REDIS_SPEC,
+        port,
+        Duration::from_secs(timeout_secs),
+    )
+    .await?;
 
     if !global.is_silent() {
         aprintln!("{} {}", p_g("✅"), "Redis is ready");
     }
 
-    Ok(true)
+    Ok(Some(port))
 }
 
 /// Stop the Redis container.
@@ -403,7 +471,7 @@ async fn stop_redis_container(global: &crate::Global, runtime: ContainerRuntime)
         aprintln!("{} {}", p_b("🐳"), "Stopping Redis container...");
     }
 
-    stop_container(runtime, REDIS_SPEC.name).await?;
+    stop_container(runtime, REDIS_SPEC.name, global.is_verbose()).await?;
 
     if !global.is_silent() {
         aprintln!("{} {}", p_g("✅"), "Redis container stopped");
@@ -413,7 +481,11 @@ async fn stop_redis_container(global: &crate::Global, runtime: ContainerRuntime)
 }
 
 /// Set up the test table in DynamoDB Local.
-async fn setup_test_table(global: &crate::Global) -> Result<()> {
+///
+/// The `port` parameter specifies the actual DynamoDB Local port (discovered at runtime).
+async fn setup_test_table(port: u16, global: &crate::Global) -> Result<()> {
+    let endpoint_url = format!("http://localhost:{}", port);
+
     // Use cargo xtask dynamodb deploy with force flag
     let status = tokio::process::Command::new("cargo")
         .args([
@@ -424,7 +496,7 @@ async fn setup_test_table(global: &crate::Global) -> Result<()> {
             "--table-name",
             "calendsync",
         ])
-        .env("AWS_ENDPOINT_URL", "http://localhost:8000")
+        .env("AWS_ENDPOINT_URL", &endpoint_url)
         .env("AWS_REGION", "us-east-1")
         .env("AWS_ACCESS_KEY_ID", "test")
         .env("AWS_SECRET_ACCESS_KEY", "test")

@@ -23,7 +23,7 @@ use notify_debouncer_mini::{new_debouncer, DebouncedEventKind};
 use tokio::process::{Child, Command};
 use tokio::sync::mpsc as tokio_mpsc;
 
-use super::containers::{self, Cache, ContainerRuntime, ContainerSpec, Storage};
+use super::containers::{self, Cache, ContainerPorts, ContainerRuntime, ContainerSpec, Storage};
 use super::error::{DevError, Result};
 use super::seed;
 use crate::prelude::*;
@@ -69,6 +69,10 @@ pub struct ServerOptions {
     /// Keep containers running on error (default: stop containers)
     #[arg(long)]
     pub keep_containers: bool,
+
+    /// Open browser to calendar URL after seeding (macOS only)
+    #[arg(long)]
+    pub open: bool,
 }
 
 pub async fn run(opts: ServerOptions, global: crate::Global) -> Result<()> {
@@ -102,10 +106,15 @@ pub async fn run(opts: ServerOptions, global: crate::Global) -> Result<()> {
     // Track started containers for cleanup
     let mut started_containers: Vec<&'static ContainerSpec> = Vec::new();
 
+    // Track discovered container ports
+    let mut container_ports = ContainerPorts::default();
+
     // =========================================================================
     // Stage 2: Container Management
     // =========================================================================
     if let Some(runtime) = runtime {
+        let verbose = global.is_verbose();
+
         // Handle --flush: remove volumes before starting
         if opts.flush {
             for spec in &required {
@@ -113,7 +122,7 @@ pub async fn run(opts: ServerOptions, global: crate::Global) -> Result<()> {
                     aprintln!("{} Removing volume {}...", p_y("🗑"), spec.volume_name);
                 }
                 // Ignore errors - volume might not exist
-                let _ = containers::remove_volume(runtime, spec.volume_name).await;
+                let _ = containers::remove_volume(runtime, spec.volume_name, verbose).await;
             }
         }
 
@@ -123,7 +132,7 @@ pub async fn run(opts: ServerOptions, global: crate::Global) -> Result<()> {
                 aprintln!("{} Starting {}...", p_b("🐳"), spec.name);
             }
 
-            match containers::start_container(runtime, spec).await {
+            match containers::start_container(runtime, spec, verbose).await {
                 Ok(()) => {
                     started_containers.push(spec);
                 }
@@ -136,12 +145,44 @@ pub async fn run(opts: ServerOptions, global: crate::Global) -> Result<()> {
                 }
             }
 
+            // Query the actual host port assigned by Docker/Podman
+            let actual_port = match containers::get_container_port(
+                runtime, spec.name, spec.port, verbose,
+            )
+            .await
+            {
+                Ok(port) => port,
+                Err(e) => {
+                    if !opts.keep_containers {
+                        cleanup_containers(runtime, &started_containers, &global).await;
+                    }
+                    return Err(e);
+                }
+            };
+
+            // Store the discovered port
+            if spec.name == containers::DYNAMODB_SPEC.name {
+                container_ports.dynamodb = Some(actual_port);
+            } else if spec.name == containers::REDIS_SPEC.name {
+                container_ports.redis = Some(actual_port);
+            }
+
+            if !global.is_silent() {
+                aprintln!(
+                    "   Container port: {} -> localhost:{}",
+                    spec.port,
+                    actual_port
+                );
+            }
+
             // Wait for health
             if !global.is_silent() {
                 aprintln!("{} Waiting for {} to be healthy...", p_b("⏳"), spec.name);
             }
 
-            match containers::wait_for_health(runtime, spec, Duration::from_secs(30)).await {
+            match containers::wait_for_health(runtime, spec, actual_port, Duration::from_secs(30))
+                .await
+            {
                 Ok(()) => {
                     if !global.is_silent() {
                         aprintln!("{} {} is ready", p_g("✓"), spec.name);
@@ -166,7 +207,8 @@ pub async fn run(opts: ServerOptions, global: crate::Global) -> Result<()> {
             aprintln!("{} Deploying DynamoDB table schema...", p_b("📦"));
         }
 
-        let deploy_result = deploy_dynamodb_table().await;
+        let dynamodb_port = container_ports.dynamodb.unwrap_or(8000);
+        let deploy_result = deploy_dynamodb_table(dynamodb_port).await;
         if let Err(e) = deploy_result {
             if !opts.keep_containers {
                 if let Some(runtime) = runtime {
@@ -197,7 +239,7 @@ pub async fn run(opts: ServerOptions, global: crate::Global) -> Result<()> {
     // =========================================================================
     // Stage 4: Server Execution
     // =========================================================================
-    let mut server = match start_server_with_features(&opts, &features) {
+    let mut server = match start_server_with_features(&opts, &features, &container_ports) {
         Ok(child) => child,
         Err(e) => {
             if !opts.keep_containers {
@@ -231,18 +273,29 @@ pub async fn run(opts: ServerOptions, global: crate::Global) -> Result<()> {
             // Seed via HTTP
             match seed::seed_via_http(&base_url, global.is_silent()).await {
                 Ok(calendar_id) => {
+                    let calendar_url = format!("{}/calendar/{}", base_url, calendar_id);
                     if !global.is_silent() {
                         aprintln!("{} Seeding complete!", p_g("✓"));
-                        aprintln!(
-                            "   Calendar URL: {}",
-                            p_b(&format!("{}/calendar/{}", base_url, calendar_id))
-                        );
+                        aprintln!("   Calendar URL: {}", p_b(&calendar_url));
+                    }
+
+                    // Open browser if requested
+                    if opts.open {
+                        open_browser(&calendar_url, global.is_silent()).await;
                     }
                 }
                 Err(e) => {
                     aprintln!("{} Seeding failed: {}", p_r("✗"), e);
                     // Continue running server even if seeding fails
                 }
+            }
+        } else if opts.open {
+            // --open without --seed: warn the user
+            if !global.is_silent() {
+                aprintln!(
+                    "{} --open requires --seed to create a calendar to open",
+                    p_y("⚠")
+                );
             }
         }
 
@@ -280,18 +333,29 @@ pub async fn run(opts: ServerOptions, global: crate::Global) -> Result<()> {
 
         match seed::seed_via_http(&base_url, global.is_silent()).await {
             Ok(calendar_id) => {
+                let calendar_url = format!("{}/calendar/{}", base_url, calendar_id);
                 if !global.is_silent() {
                     aprintln!("{} Seeding complete!", p_g("✓"));
-                    aprintln!(
-                        "   Calendar URL: {}",
-                        p_b(&format!("{}/calendar/{}", base_url, calendar_id))
-                    );
+                    aprintln!("   Calendar URL: {}", p_b(&calendar_url));
+                }
+
+                // Open browser if requested
+                if opts.open {
+                    open_browser(&calendar_url, global.is_silent()).await;
                 }
             }
             Err(e) => {
                 aprintln!("{} Seeding failed: {}", p_r("✗"), e);
                 // Continue running server even if seeding fails
             }
+        }
+    } else if opts.open {
+        // --open without --seed: warn the user
+        if !global.is_silent() {
+            aprintln!(
+                "{} --open requires --seed to create a calendar to open",
+                p_y("⚠")
+            );
         }
     }
 
@@ -390,16 +454,21 @@ async fn cleanup_containers(
     containers: &[&'static ContainerSpec],
     global: &crate::Global,
 ) {
+    let verbose = global.is_verbose();
     for spec in containers {
         if !global.is_silent() {
             aprintln!("{} Stopping {}...", p_b("🐳"), spec.name);
         }
-        let _ = containers::stop_container(runtime, spec.name).await;
+        let _ = containers::stop_container(runtime, spec.name, verbose).await;
     }
 }
 
 /// Deploy DynamoDB table using cargo xtask dynamodb deploy.
-async fn deploy_dynamodb_table() -> std::result::Result<(), String> {
+///
+/// The `port` parameter specifies the actual DynamoDB Local port (discovered at runtime).
+async fn deploy_dynamodb_table(port: u16) -> std::result::Result<(), String> {
+    let endpoint_url = format!("http://localhost:{}", port);
+
     let status = Command::new("cargo")
         .args([
             "xtask",
@@ -409,7 +478,7 @@ async fn deploy_dynamodb_table() -> std::result::Result<(), String> {
             "--table-name",
             "calendsync",
         ])
-        .env("AWS_ENDPOINT_URL", "http://localhost:8000")
+        .env("AWS_ENDPOINT_URL", &endpoint_url)
         .env("AWS_REGION", "us-east-1")
         .env("AWS_ACCESS_KEY_ID", "test")
         .env("AWS_SECRET_ACCESS_KEY", "test")
@@ -425,7 +494,13 @@ async fn deploy_dynamodb_table() -> std::result::Result<(), String> {
 }
 
 /// Start the server process with specific features and environment variables.
-fn start_server_with_features(opts: &ServerOptions, features: &str) -> Result<Child> {
+///
+/// The `container_ports` parameter provides the actual ports discovered after starting containers.
+fn start_server_with_features(
+    opts: &ServerOptions,
+    features: &str,
+    container_ports: &ContainerPorts,
+) -> Result<Child> {
     let mut args = vec![
         "run",
         "-p",
@@ -442,7 +517,8 @@ fn start_server_with_features(opts: &ServerOptions, features: &str) -> Result<Ch
     cmd.args(&args);
 
     // Set all environment variables from the configuration
-    let env_vars = containers::environment_variables(opts.storage, opts.cache, opts.port);
+    let env_vars =
+        containers::environment_variables(opts.storage, opts.cache, opts.port, container_ports);
     for (key, value) in env_vars {
         cmd.env(key, value);
     }
@@ -485,6 +561,33 @@ async fn wait_for_server_ready(port: u16, silent: bool) -> bool {
     }
 
     false
+}
+
+/// Opens the browser to the specified URL (macOS only).
+///
+/// Waits briefly to ensure the page is ready before opening.
+async fn open_browser(url: &str, silent: bool) {
+    // Brief delay to ensure the page is ready
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    if !silent {
+        aprintln!("{} Opening browser...", p_b("🌐"));
+    }
+
+    // macOS-specific: use `open` command
+    match Command::new("open").arg(url).spawn() {
+        Ok(_) => {
+            if !silent {
+                aprintln!("{} Browser opened: {}", p_g("✓"), url);
+            }
+        }
+        Err(e) => {
+            if !silent {
+                aprintln!("{} Failed to open browser: {}", p_y("⚠"), e);
+                aprintln!("   Open manually: {}", url);
+            }
+        }
+    }
 }
 
 /// Tracked asset filenames for change detection.

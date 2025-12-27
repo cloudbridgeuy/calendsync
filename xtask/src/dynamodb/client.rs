@@ -81,13 +81,15 @@ pub async fn get_table_state(client: &Client, table_name: &str) -> Result<Option
             Ok(Some(TableState { status, gsis }))
         }
         Err(err) => {
-            let err_str = err.to_string();
-            // Check if it's a ResourceNotFoundException
-            if err_str.contains("ResourceNotFoundException") || err_str.contains("not found") {
-                Ok(None)
-            } else {
-                Err(DynamodbError::AwsSdk(err_str))
+            // Check if it's a ResourceNotFoundException (table doesn't exist)
+            let service_err = err.as_service_error();
+            if service_err.is_some_and(|e| e.is_resource_not_found_exception()) {
+                return Ok(None);
             }
+
+            // For other errors, provide detailed information
+            let err_msg = format!("Failed to describe table '{}': {:?}", table_name, err);
+            Err(DynamodbError::AwsSdk(err_msg))
         }
     }
 }
