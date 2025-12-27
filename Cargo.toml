@@ -28,7 +28,7 @@ calendsync_client = { version = "0.0.0", path = "crates/client" }
 anstream = "0.6.21"
 async-trait = "0.1"
 aws-config = { version = "1.8", features = ["behavior-version-latest"] }
-aws-sdk-dynamodb = "1.100"
+aws-sdk-dynamodb = "1.101"
 anyhow = "1.0.100"
 askama = "0.14.0"
 axum = { version = "0.8.7", features = ["macros"] }
