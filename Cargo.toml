@@ -76,6 +76,6 @@ futures-util = "0.3"
 lru = "0.16"
 
 # Tauri dependencies
-tauri = { version = "2.4", features = [] }
+tauri = { version = "2.9", features = [] }
 tauri-build = { version = "2.4", features = [] }
 tauri-plugin-http = { version = "2.1" }
