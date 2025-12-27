@@ -64,6 +64,7 @@ cargo build -p calendsync --release --no-default-features --features dynamodb,re
 # Unified dev command (server, desktop, iOS)
 cargo xtask dev server                    # Run server (inmemory + memory, no containers)
 cargo xtask dev server --seed             # Run with demo data seeded via HTTP
+cargo xtask dev server --seed --open      # Seed and open browser to calendar (macOS)
 cargo xtask dev server --storage sqlite   # Use SQLite storage
 cargo xtask dev server --storage dynamodb # Use DynamoDB (auto-starts container)
 cargo xtask dev server --cache redis      # Use Redis cache (auto-starts container)
@@ -657,6 +658,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | Responsive Layout    | `.claude/context/responsive-layout.md` |
 | Storage Layer        | `.claude/context/storage-layer.md`     |
 | Feature Flags        | `.claude/context/feature-flags.md`     |
+| cargo-rail           | `.claude/context/cargo-rail.md`        |
 
 ### Local Working Directories (gitignored)
 
