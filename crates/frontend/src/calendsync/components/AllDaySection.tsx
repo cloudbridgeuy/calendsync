@@ -1,70 +1,18 @@
 /**
  * AllDaySection - renders the all-day entries section at the top of the schedule view.
  * Contains all-day events, multi-day events, and tasks in a horizontal band (Google Calendar style).
+ *
+ * NOTE: This component is used by the legacy schedule mode layout.
+ * The new ScheduleGrid component uses ScheduleGrid.AllDayEvents instead.
  */
 
 import { formatDateKey, separateEntriesByType } from "@core/calendar"
 import type { ServerEntry } from "@core/calendar/types"
 import { useEffect, useMemo, useRef } from "react"
-import { useCalendarContext } from "../contexts"
+import { AllDayEntryTile } from "./AllDayEntryTile"
 
 /** Width of the hour column on the left */
 const HOUR_COLUMN_WIDTH = 60
-
-interface AllDayEntryTileProps {
-  entry: ServerEntry
-}
-
-/**
- * Renders a single all-day/multi-day/task entry in the section.
- */
-function AllDayEntryTile({ entry }: AllDayEntryTileProps) {
-  const { onEntryClick, onEntryToggle, flashStates } = useCalendarContext()
-
-  const flashState = flashStates.get(entry.id)
-  const flashClass = flashState ? `flash-${flashState}` : ""
-
-  // Determine badge text
-  let badgeText = ""
-  if (entry.isAllDay) {
-    badgeText = "ALL DAY"
-  } else if (entry.isMultiDay && entry.multiDayStart && entry.multiDayEnd) {
-    badgeText = `${entry.multiDayStart} - ${entry.multiDayEnd}`
-  }
-
-  if (entry.isTask) {
-    return (
-      <div
-        className={`all-day-entry task${entry.completed ? " completed" : ""}${flashClass ? ` ${flashClass}` : ""}`}
-        style={{ borderLeftColor: entry.color || undefined }}
-      >
-        <label className="all-day-task-checkbox">
-          <input type="checkbox" checked={entry.completed} onChange={() => onEntryToggle(entry)} />
-          <span className="all-day-task-title">{entry.title}</span>
-        </label>
-      </div>
-    )
-  }
-
-  return (
-    // biome-ignore lint/a11y/useSemanticElements: Using div with role="button" for layout consistency with other entry tiles
-    <div
-      className={`all-day-entry${entry.isMultiDay ? " multi-day" : ""}${flashClass ? ` ${flashClass}` : ""}`}
-      style={{ backgroundColor: entry.color || undefined }}
-      onClick={() => onEntryClick(entry)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          onEntryClick(entry)
-        }
-      }}
-    >
-      {badgeText && <span className="all-day-badge">{badgeText}</span>}
-      <span className="all-day-title">{entry.title}</span>
-    </div>
-  )
-}
 
 interface AllDaySectionProps {
   /** Rendered dates in the virtual window */
