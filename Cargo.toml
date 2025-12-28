@@ -6,6 +6,7 @@ resolver = "2"
 edition = "2021"
 license = "MIT"
 authors = ["Guzmán Monné"]
+rust-version = "1.88.0"
 
 [profile.dev]
 # Disabling debug info speeds up builds.
@@ -17,65 +18,65 @@ incremental = true
 debug = 0
 
 [workspace.dependencies]
-# Internal Dependencies
-calendsync_core = { version = "0.0.0", path = "crates/core" }
-calendsync_frontend = { version = "0.0.0", path = "crates/frontend" }
-calendsync_ssr_core = { version = "0.0.0", path = "crates/ssr_core" }
-calendsync_ssr = { version = "0.0.0", path = "crates/ssr" }
-calendsync_client = { version = "0.0.0", path = "crates/client" }
 
 # External Dependencies
 anstream = "0.6.21"
+anyhow = "1.0.100"
+askama = "0.14.0"
+async-stream = "0.3"
 async-trait = "0.1"
 aws-config = { version = "1.8", features = ["behavior-version-latest"] }
 aws-sdk-dynamodb = "1.100"
-anyhow = "1.0.100"
-askama = "0.14.0"
 axum = { version = "0.8.7", features = ["macros"] }
+calendsync_client = { version = "0.0.0", path = "crates/client" }
+# Internal Dependencies
+calendsync_core = { version = "0.0.0", path = "crates/core" }
+calendsync_frontend = { version = "0.0.0", path = "crates/frontend" }
+calendsync_ssr = { version = "0.0.0", path = "crates/ssr" }
+calendsync_ssr_core = { version = "0.0.0", path = "crates/ssr_core" }
 chrono = { version = "0.4.42", features = ["serde"] }
 clap = { version = "4.5.53", features = ["derive", "string", "env"] }
+
+# Deno runtime dependencies (for examples)
+# Using only deno_core to avoid transitive dependency conflicts with deno_web
+deno_core = "0.371"
+deno_error = "0.7"
 dialoguer = "0.12.0"
+futures-util = "0.3"
+
+# Test dependencies
+http-body-util = "0.1"
 listenfd = "1.0"
+
+# LRU cache
+lru = "0.16"
+
+# File watching dependencies (for hot-reload)
+notify = "7.0"
+notify-debouncer-mini = "0.5"
+rand = "0.9"
+
+# Redis dependencies
+redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
+
+# SQLite dependencies
+rusqlite = { version = "0.32", features = ["bundled"] }
 semver = "1.0.27"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
+
+# Tauri dependencies
+tauri = { version = "2.4", features = [] }
+tauri-build = { version = "2.4", features = [] }
+tauri-plugin-http = { version = "2.1" }
 thiserror = "2.0.17"
 tokio = { version = "1.48.0", features = ["full"] }
+tokio-rusqlite = "0.6"
 tokio-stream = "0.1"
-async-stream = "0.3"
-rand = "0.9"
 toml_edit = "0.23.7"
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "trace", "timeout", "fs", "set-header"] }
 tracing = { version = "0.1.43" }
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
 uuid = { version = "1.0", features = ["v4", "serde"] }
-
-# Test dependencies
-http-body-util = "0.1"
-
-# SQLite dependencies
-rusqlite = { version = "0.32", features = ["bundled"] }
-tokio-rusqlite = "0.6"
-
-# File watching dependencies (for hot-reload)
-notify = "7.0"
-notify-debouncer-mini = "0.5"
-
-# Deno runtime dependencies (for examples)
-# Using only deno_core to avoid transitive dependency conflicts with deno_web
-deno_core = "0.371"
-deno_error = "0.7"
-reqwest = { version = "0.12", features = ["json", "stream"] }
-
-# Redis dependencies
-redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
-futures-util = "0.3"
-
-# LRU cache
-lru = "0.16"
-
-# Tauri dependencies
-tauri = { version = "2.4", features = [] }
-tauri-build = { version = "2.4", features = [] }
-tauri-plugin-http = { version = "2.1" }
