@@ -14,6 +14,8 @@
 .claude/*
 !.claude/context/
 !.claude/commands/
+!.claude/plans/
+!.claude/designs/
 
 # Frontend build artifacts
 crates/frontend/dist/
@@ -42,7 +44,4 @@ crates/src-tauri/gen/schemas/
 !README.md
 !TODO.md
 !CLAUDE.md
-!.claude/context/*.md
-!.claude/plans/*.md
-!.claude/designs/*.md
 !docs/*.md
