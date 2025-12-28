@@ -74,26 +74,6 @@ pub fn p_c(text: &str) -> String {
     ColorPrinter::cyan(text)
 }
 
-/// Check if a command exists in the system PATH
-pub fn command_exists(command: &str) -> bool {
-    std::process::Command::new("which")
-        .arg(command)
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false)
-}
-
-/// Execute a shell command and return the output
-pub async fn execute_command(
-    command: &str,
-    args: &[&str],
-) -> std::io::Result<std::process::Output> {
-    tokio::process::Command::new(command)
-        .args(args)
-        .output()
-        .await
-}
-
 /// Execute a shell command interactively (with stdin/stdout/stderr connected)
 pub async fn execute_command_interactive(
     command: &str,
