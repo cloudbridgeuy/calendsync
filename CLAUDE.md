@@ -136,8 +136,6 @@ The project uses the [cargo-xtask](https://github.com/matklad/cargo-xtask/) patt
 - `cargo xtask dev ios --list-devices` - List available iOS simulators
 - `cargo xtask dev ios --device "iPhone 16"` - Run on specific simulator
 - `cargo xtask lint` - Run all code quality checks (fmt, check, clippy, test, cargo-machete)
-- `cargo xtask install` - Build and install the binary locally
-- `cargo xtask release create <version>` - Create a new release
 - `cargo xtask dynamodb deploy` - Deploy DynamoDB table infrastructure
 - `cargo xtask dynamodb seed` - Seed calendar with mock entries
 - `cargo xtask integration` - Run integration tests (SQLite + memory cache by default)
@@ -369,39 +367,6 @@ crates/core/src/
     ├── operations.rs # Pure calendar operations
     └── error.rs     # CalendarError enum
 ```
-
-## Release Process
-
-Releases are managed via `cargo xtask release`:
-
-1. **Create Release**:
-
-   ```bash
-   cargo xtask release create 1.2.3
-   ```
-
-   This will:
-
-   - Validate you're on main branch with clean working directory
-   - Check CI status
-   - Update version in all Cargo.toml files
-   - Create version bump commit
-   - Create git tag `v1.2.3`
-   - Push to GitHub
-   - Monitor GitHub Actions release workflow
-   - Optionally upgrade local binary with `--auto-upgrade`
-
-2. **GitHub Actions** (`.github/workflows/release.yml`):
-
-   - Triggered on tag push (`v*`)
-   - Builds for multiple platforms: Linux x86_64, macOS Intel, macOS ARM64
-   - Strips binaries
-   - Creates GitHub release with assets
-
-3. **Cleanup Failed Release**:
-   ```bash
-   cargo xtask release cleanup v1.2.3
-   ```
 
 ## CI/CD
 
