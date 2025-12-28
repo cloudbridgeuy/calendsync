@@ -624,6 +624,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | Storage Layer        | `.claude/context/storage-layer.md`     |
 | Feature Flags        | `.claude/context/feature-flags.md`     |
 | cargo-rail           | `.claude/context/cargo-rail.md`        |
+| Schedule Grid        | `.claude/context/schedule-grid.md`     |
 
 ### Local Working Directories (gitignored)
 
