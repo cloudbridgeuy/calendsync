@@ -11,6 +11,15 @@ export {
   focusDayElement,
   generateNavigationAnnouncement,
 } from "./accessibility"
+// Re-export all-day layout functions
+export type { AllDayCategorized, AllDaySummary } from "./allDayLayout"
+export {
+  categorizeAllDayEntries,
+  computeAllDaySummary,
+  formatOverflowToggle,
+  formatTasksToggle,
+  MAX_VISIBLE_ALL_DAY,
+} from "./allDayLayout"
 // Re-export ARIA functions
 export type { AriaIds } from "./aria"
 export { buildAriaIds } from "./aria"
@@ -23,6 +32,7 @@ export {
   getDayOfMonth,
   getDayOfWeek,
   getMonth,
+  getTimezoneAbbreviation,
   getYear,
   isSameDay,
   isToday,
@@ -34,9 +44,11 @@ export type { DayDisplayInfo } from "./dayContainer"
 export { getDayDisplayInfo, isDayToday } from "./dayContainer"
 // Re-export entry functions
 export {
+  filterAllDayEntries,
   filterByCalendar,
   filterByCompletion,
   filterByTaskVisibility,
+  filterTimedEntries,
   getEntriesForDate,
   getMissingDateKeys,
   getRequiredDateRange,

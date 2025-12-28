@@ -109,7 +109,7 @@ interface ScheduleDayContentProps {
  * Shows hour grid lines and absolutely positioned timed entries.
  * All-day, multi-day, and tasks are rendered in the AllDaySection component.
  */
-function ScheduleDayContent({ entries, dayWidth, dateKey }: ScheduleDayContentProps) {
+export function ScheduleDayContent({ entries, dayWidth, dateKey }: ScheduleDayContentProps) {
   // Separate timed entries from all-day/multi-day/tasks
   const { timed } = useMemo(() => separateEntriesByType(entries), [entries])
 
@@ -119,7 +119,11 @@ function ScheduleDayContent({ entries, dayWidth, dateKey }: ScheduleDayContentPr
   const gridHeight = calculateGridHeight()
 
   return (
-    <div className="schedule-day-content" data-date={dateKey} style={{ height: gridHeight }}>
+    <div
+      className="schedule-day-content"
+      data-date={dateKey}
+      style={{ height: gridHeight, width: dayWidth, minWidth: dayWidth }}
+    >
       {/* Hour grid lines */}
       {Array.from({ length: HOURS_IN_DAY }, (_, hour) => (
         <div

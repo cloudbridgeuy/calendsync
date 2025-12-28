@@ -122,3 +122,23 @@ export function getDatesAround(center: Date, before: number, after: number): Dat
 
   return dates
 }
+
+/**
+ * Get the timezone abbreviation for a date.
+ * Returns abbreviations like "EST", "PST", "GMT", etc.
+ * Falls back to UTC offset format like "UTC-5" if no abbreviation available.
+ */
+export function getTimezoneAbbreviation(date: Date): string {
+  // Try to get timezone abbreviation from toLocaleTimeString
+  const timeString = date.toLocaleTimeString("en-US", { timeZoneName: "short" })
+  const match = timeString.match(/\s([A-Z]{2,5})$/)
+  if (match) {
+    return match[1]
+  }
+
+  // Fallback: calculate UTC offset
+  const offsetMinutes = date.getTimezoneOffset()
+  const offsetHours = Math.abs(Math.floor(offsetMinutes / 60))
+  const sign = offsetMinutes <= 0 ? "+" : "-"
+  return `UTC${sign}${offsetHours}`
+}

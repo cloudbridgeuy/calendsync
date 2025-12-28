@@ -175,3 +175,19 @@ export function filterByTaskVisibility(entries: ServerEntry[], showTasks: boolea
   }
   return entries.filter((entry) => !entry.isTask)
 }
+
+/**
+ * Filter entries to only timed events (not all-day, multi-day, or tasks).
+ * Used for schedule mode timed grid.
+ */
+export function filterTimedEntries(entries: ServerEntry[]): ServerEntry[] {
+  return entries.filter((e) => !e.isAllDay && !e.isMultiDay && !e.isTask)
+}
+
+/**
+ * Filter entries to only all-day, multi-day, and tasks.
+ * Used for schedule mode all-day section.
+ */
+export function filterAllDayEntries(entries: ServerEntry[]): ServerEntry[] {
+  return entries.filter((e) => e.isAllDay || e.isMultiDay || e.isTask)
+}
