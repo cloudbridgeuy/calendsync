@@ -31,7 +31,7 @@ cargo run -p calendsync
 # Run with auto-reload (requires systemfd and cargo-watch)
 systemfd --no-pid -s http::3000 -- cargo watch -x 'run -p calendsync'
 
-# Run code quality checks (fmt, check, clippy, test, machete)
+# Run code quality checks (fmt, check, clippy, test, cargo-rail)
 cargo xtask lint
 
 # Auto-fix formatting issues
@@ -135,7 +135,7 @@ The project uses the [cargo-xtask](https://github.com/matklad/cargo-xtask/) patt
 - `cargo xtask dev ios` - Run the Tauri iOS app in simulator
 - `cargo xtask dev ios --list-devices` - List available iOS simulators
 - `cargo xtask dev ios --device "iPhone 16"` - Run on specific simulator
-- `cargo xtask lint` - Run all code quality checks (fmt, check, clippy, test, cargo-machete)
+- `cargo xtask lint` - Run all code quality checks (fmt, check, clippy, test, cargo-rail)
 - `cargo xtask dynamodb deploy` - Deploy DynamoDB table infrastructure
 - `cargo xtask dynamodb seed` - Seed calendar with mock entries
 - `cargo xtask integration` - Run integration tests (SQLite + memory cache by default)
@@ -257,7 +257,7 @@ The `cargo xtask lint` command runs these checks in order:
 2. `cargo check --all-targets` - Compilation
 3. `cargo clippy --all-targets -- -D warnings` - Linting (warnings are errors)
 4. `cargo test --all-targets` - Tests
-5. `cargo machete` - Unused dependencies detection
+5. `cargo rail unify --check` - Dependency unification, unused deps, dead features
 
 **TypeScript checks (crates/frontend):** 6. `biome check --write --unsafe` - Format and lint with auto-fix 7. `bun run typecheck` - TypeScript type checking 8. `bun test` - Run TypeScript tests
 
@@ -377,7 +377,7 @@ GitHub Actions workflows in `.github/workflows/`:
   - Tests with `cargo test`
   - Clippy with `-D warnings`
   - Format check with `cargo fmt`
-  - Unused dependencies check with `cargo-machete`
+  - Dependency hygiene with `cargo-rail` (unification, unused deps, dead features)
   - Typo check with `typos`
   - Build check on Ubuntu and macOS
 
