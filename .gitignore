@@ -45,3 +45,6 @@ crates/src-tauri/gen/schemas/
 !TODO.md
 !CLAUDE.md
 !docs/*.md
+!.claude/context/*.md
+!.claude/designs/*.md
+!.claude/plans/*.md
