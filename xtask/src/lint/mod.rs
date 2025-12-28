@@ -16,7 +16,7 @@ Rust checks:
 2. cargo check - Compilation check
 3. cargo clippy - Linting with all warnings treated as errors
 4. cargo test - Run all tests including doctests
-5. cargo machete - Unused dependencies detection
+5. cargo rail unify --check - Dependency unification, unused deps, dead features
 
 TypeScript checks (crates/frontend):
 6. biome check --write --unsafe - Format and lint TypeScript (auto-fix)
@@ -94,8 +94,8 @@ async fn run_lint_checks(command: &LintCommand, global: &crate::Global) -> Resul
     // Check required dependencies
     require_command("cargo", "Required for Rust development: https://rustup.rs/")?;
     require_command(
-        "cargo-machete",
-        "Required for unused dependency checks: cargo install cargo-machete",
+        "cargo-rail",
+        "Required for dependency unification: cargo install cargo-rail or cargo binstall cargo-rail",
     )?;
     require_command("bun", "Required for TypeScript: https://bun.sh/")?;
 
@@ -127,8 +127,8 @@ async fn run_lint_checks(command: &LintCommand, global: &crate::Global) -> Resul
         all_passed = false;
     }
 
-    // 5. Run cargo machete
-    if !run_cargo_machete(global).await? {
+    // 5. Run cargo rail unify --check
+    if !run_cargo_rail_unify(global).await? {
         all_passed = false;
     }
 
@@ -171,6 +171,10 @@ async fn run_lint_checks(command: &LintCommand, global: &crate::Global) -> Resul
             aprintln!("  • {} - Format code", p_c("cargo xtask lint --fix"));
             aprintln!("  • {} - Auto-fix clippy issues", p_c("cargo clippy --fix"));
             aprintln!("  • {} - Check compilation", p_c("cargo check"));
+            aprintln!(
+                "  • {} - Fix dependency issues",
+                p_c("cargo rail unify")
+            );
         }
         Err(error::LintError::ChecksFailed)?
     }
@@ -321,50 +325,36 @@ async fn run_cargo_test(global: &crate::Global) -> Result<bool> {
     }
 }
 
-async fn run_cargo_machete(global: &crate::Global) -> Result<bool> {
+async fn run_cargo_rail_unify(global: &crate::Global) -> Result<bool> {
     if !global.is_silent() {
-        aprintln!("{} {}", p_b("🔧"), p_b("Running cargo machete..."));
+        aprintln!("{} {}", p_b("🔧"), p_b("Running cargo rail unify --check..."));
     }
 
     let output = tokio::process::Command::new("cargo")
-        .arg("machete")
+        .args(["rail", "unify", "--check"])
         .output()
         .await?;
 
-    // cargo machete outputs to both stdout and stderr
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-
-    // cargo machete can fail with exit code 2 for various reasons including
-    // trying to analyze non-existent directories mentioned in error messages
-    // We should ignore "No such file or directory" errors from stderr
-    let has_io_error_only =
-        stderr.contains("No such file or directory") && !stderr.contains("unused");
-
-    // Check if there are any unused dependencies
-    // cargo machete reports "didn't find any unused dependencies" on success
-    let found_success_message =
-        stdout.contains("didn't find any unused") || stderr.contains("didn't find any unused");
-
-    if (output.status.success() || has_io_error_only) && found_success_message {
+    // Exit code 0 means no drift, exit code 1 means issues found
+    if output.status.success() {
         if !global.is_silent() {
-            aprintln!("{} {}", p_g("✅"), "No unused dependencies found");
-        }
-        Ok(true)
-    } else if has_io_error_only {
-        // IO errors but no unused deps mentioned - treat as success
-        if !global.is_silent() {
-            aprintln!("{} {}", p_g("✅"), "No unused dependencies found");
+            aprintln!(
+                "{} {}",
+                p_g("✅"),
+                "Dependency unification check passed"
+            );
         }
         Ok(true)
     } else {
-        aprintln!("{} {}", p_r("❌"), "Unused dependencies detected");
+        aprintln!("{} {}", p_r("❌"), "Dependency unification check failed");
         aprintln!(
             "{}",
-            p_r("Please remove unused dependencies from Cargo.toml")
+            p_r("Run 'cargo rail unify' to auto-fix dependency issues")
         );
         // Show the actual output if verbose
         if global.is_verbose() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
             if !stdout.is_empty() {
                 aprintln!("Output: {}", stdout);
             }

@@ -154,7 +154,7 @@ pub async fn install_hooks(global: &crate::Global) -> Result<()> {
     if !global.is_silent() {
         aprintln!("{}", p_b("The following hooks are now active:"));
         aprintln!(
-            "  • {}: Runs cargo fmt, check, clippy, test, and machete",
+            "  • {}: Runs cargo fmt, check, clippy, test, and cargo-rail",
             p_c("pre-commit")
         );
         aprintln!();
@@ -295,7 +295,7 @@ pub async fn show_status() -> Result<()> {
     aprintln!();
     aprintln!("{}", p_b("Available hooks:"));
     aprintln!(
-        "  • {}: Runs cargo fmt, check, clippy, test, and machete before each commit",
+        "  • {}: Runs cargo fmt, check, clippy, test, and cargo-rail before each commit",
         p_c("pre-commit")
     );
     aprintln!("                Supports --force flag to check all Rust files");
