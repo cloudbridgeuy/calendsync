@@ -351,6 +351,7 @@ body {
 .days-scroll {
   display: flex;
   height: 100%;
+  flex: 1;
 }
 
 /* Day column - each day in the virtual window */
@@ -1945,7 +1946,7 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   font-size: 0.625rem;
   color: var(--text-muted);
-  transform: translateY(-0.375rem);
+  transform: translateY(0.25rem);
 }
 
 /* Days Container */
@@ -2321,8 +2322,11 @@ body {
   /* Height set by inline style: 24 * HOUR_HEIGHT_PX */
 }
 
-/* Schedule mode: enable vertical scroll on main container */
+/* Schedule mode: flex row for sticky hour column */
 .calendar-container.schedule-mode .scroll-container {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start; /* Let children use their intrinsic height */
   overflow: auto; /* Both horizontal and vertical */
 }
 
@@ -2335,4 +2339,260 @@ body {
 /* Schedule mode: day container needs full height */
 .calendar-container.schedule-mode .day-container {
   height: auto;
+}
+
+/* Schedule mode: days-scroll as flex column for all-day section + day containers row */
+.calendar-container.schedule-mode .days-scroll {
+  display: flex;
+  flex-direction: column;
+  height: auto;
+}
+
+/* Schedule mode: days-row as flex row for day containers */
+.calendar-container.schedule-mode .days-row {
+  display: flex;
+  flex-direction: row;
+}
+
+/* Schedule mode: day headers sticky at top when scrolling vertically */
+.calendar-container.schedule-mode .day-container-header {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background-color: var(--bg-secondary);
+}
+
+/* Schedule mode: hour column header spacer sticky to align with day headers */
+.calendar-container.schedule-mode .hour-column-header-spacer {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+}
+
+/* Schedule mode: all-day section sticks below day headers */
+.calendar-container.schedule-mode .all-day-section {
+  position: sticky;
+  top: 70px; /* Height of day header */
+  z-index: 3;
+}
+
+/* Schedule mode: hide all-day spacer (hour column is already separate) */
+.calendar-container.schedule-mode .all-day-section .all-day-spacer {
+  display: none;
+}
+
+/* ============================================
+   ScheduleGrid - CSS Grid Layout (Fantastical-style)
+   ============================================ */
+
+.schedule-grid {
+  display: grid;
+  grid-template-columns: 60px 1fr;
+  grid-template-rows: auto auto 1fr;
+  min-height: 100%;
+  width: max-content;
+  min-width: 100%;
+}
+
+/* Row 1: Corner + Day headers - sticky at top */
+.schedule-corner {
+  grid-column: 1;
+  grid-row: 1;
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 10;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  height: 70px; /* Match day header height */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.schedule-timezone {
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.schedule-day-headers {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  position: sticky;
+  top: 0;
+  z-index: 9;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.schedule-day-header {
+  flex-shrink: 0;
+  padding: 0.75rem;
+  text-align: center;
+  border-right: 1px solid var(--border);
+  cursor: pointer;
+  height: 70px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  user-select: none;
+  transition: background-color 0.2s ease;
+}
+
+.schedule-day-header:hover {
+  background-color: var(--bg-tertiary);
+}
+
+.schedule-day-header:last-child {
+  border-right: none;
+}
+
+.schedule-day-header.highlighted {
+  background-color: var(--accent);
+  color: white;
+}
+
+.schedule-day-header.highlighted .schedule-day-name,
+.schedule-day-header.highlighted .schedule-day-today {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.schedule-day-number {
+  font-size: 1.5rem;
+  font-weight: 300;
+}
+
+.schedule-day-name {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.schedule-day-today {
+  font-size: 0.5rem;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-top: 0.25rem;
+}
+
+/* Row 2: All-day section - sticky below headers */
+.schedule-all-day-label {
+  grid-column: 1;
+  grid-row: 2;
+  position: sticky;
+  top: 70px; /* Day header height */
+  left: 0;
+  z-index: 8;
+  background-color: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 0.5rem;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.schedule-all-day-events {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  position: sticky;
+  top: 70px;
+  z-index: 7;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.schedule-all-day-events.empty {
+  min-height: 0;
+  max-height: 0;
+  border-bottom: none;
+}
+
+.schedule-all-day-column {
+  flex-shrink: 0;
+  padding: 0.25rem;
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.schedule-all-day-column:last-child {
+  border-right: none;
+}
+
+/* All-day toggle button */
+.all-day-toggle {
+  background: none;
+  border: none;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  border-radius: 4px;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+  font-family: inherit;
+}
+
+.all-day-toggle:hover {
+  background-color: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+.all-day-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Row 3: Hour column + Timed content */
+.schedule-grid > .schedule-hour-column {
+  grid-column: 1;
+  grid-row: 3;
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  background-color: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+}
+
+.schedule-timed-grid {
+  grid-column: 2;
+  grid-row: 3;
+  display: flex;
+}
+
+/* Day columns in timed grid need borders */
+.schedule-timed-grid .schedule-day-content {
+  border-right: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.schedule-timed-grid .schedule-day-content:last-child {
+  border-right: none;
+}
+
+/* ScheduleGrid scroll container adjustments */
+.calendar-container.schedule-mode .scroll-container:has(.schedule-grid) {
+  display: block;
+  overflow: auto;
+}
+
+/* Make the scroll container use grid layout properly */
+.calendar-container.schedule-mode .schedule-grid {
+  /* Grid takes full height of scroll container */
 }

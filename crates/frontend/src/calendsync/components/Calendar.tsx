@@ -24,13 +24,12 @@ import {
   useVirtualScroll,
 } from "../hooks"
 import type { InitialData } from "../types"
-import { AllDaySection } from "./AllDaySection"
 import { CalendarHeader } from "./CalendarHeader"
 import { DayColumn } from "./DayColumn"
 import { DayContainer } from "./DayContainer"
 import { EntryModal } from "./EntryModal"
-import { HourColumnFixed } from "./HourColumnFixed"
 import { NotificationCenter } from "./NotificationCenter"
+import { ScheduleGrid } from "./ScheduleGrid"
 import { SettingsMenu } from "./SettingsMenu"
 import { TodayButton } from "./TodayButton"
 
@@ -53,6 +52,10 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
   const [notificationState, notificationActions, addNotification] = useNotificationCenter({
     calendarId: initialData.calendarId,
   })
+
+  // All-day section toggle states
+  const [showAllDayOverflow, setShowAllDayOverflow] = useState(false)
+  const [showAllDayTasks, setShowAllDayTasks] = useState(false)
 
   // Calendar state with notification callback
   const [state, actions] = useCalendarState({
@@ -275,6 +278,11 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
       setViewMode: settingsActions.setViewMode,
       setShowTasks: settingsActions.setShowTasks,
       toggleShowTasks: settingsActions.toggleShowTasks,
+      // All-day section toggle states
+      showAllDayOverflow,
+      setShowAllDayOverflow,
+      showAllDayTasks,
+      setShowAllDayTasks,
     }),
     [
       flashStates,
@@ -307,6 +315,8 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
       addNotification,
       settingsState,
       settingsActions,
+      showAllDayOverflow,
+      showAllDayTasks,
     ],
   )
 
@@ -414,8 +424,9 @@ function VirtualDaysContent() {
 function Days() {
   const { sseConnectionState, error, refresh, scrollContainerRef, settings } = useCalendarContext()
   const prevViewModeRef = useRef(settings.viewMode)
+  const isScheduleMode = settings.viewMode === "schedule"
 
-  // Scroll to 8 AM when switching to schedule mode
+  // Scroll to 8 AM when switching to schedule mode (account for day header height)
   useEffect(() => {
     if (settings.viewMode === "schedule" && prevViewModeRef.current !== "schedule") {
       const scrollTop = calculateScrollToHour(DEFAULT_SCROLL_HOUR)
@@ -452,9 +463,20 @@ function Days() {
 
       {/* Scroll container for virtual scrolling */}
       <main ref={scrollContainerRef} className="entry-container scroll-container">
-        <div className="days-scroll">
-          <VirtualDaysContent />
-        </div>
+        {isScheduleMode ? (
+          <ScheduleGrid>
+            <ScheduleGrid.Corner />
+            <ScheduleGrid.DayHeaders />
+            <ScheduleGrid.AllDayLabel />
+            <ScheduleGrid.AllDayEvents />
+            <ScheduleGrid.HourColumn />
+            <ScheduleGrid.TimedGrid />
+          </ScheduleGrid>
+        ) : (
+          <div className="days-scroll">
+            <VirtualDaysContent />
+          </div>
+        )}
       </main>
     </>
   )
@@ -462,31 +484,16 @@ function Days() {
 
 /**
  * View sub-component - renders the main calendar content.
- * In schedule mode, includes HourColumnFixed and AllDaySection.
  */
 function View() {
-  const { settings, renderedDates, getEntriesForDate, scrollContainerRef } = useCalendarContext()
+  const { settings } = useCalendarContext()
   const isScheduleMode = settings.viewMode === "schedule"
 
   return (
-    <>
-      {/* All-day section (schedule mode only) */}
-      {isScheduleMode && (
-        <AllDaySection
-          renderedDates={renderedDates}
-          getEntriesForDate={getEntriesForDate}
-          scrollContainerRef={scrollContainerRef}
-        />
-      )}
-
-      <div className={`calendar-main-area${isScheduleMode ? " schedule-mode" : ""}`}>
-        {/* Hour column (schedule mode only, sticky left) */}
-        {isScheduleMode && <HourColumnFixed />}
-
-        {/* Main days content */}
-        <Days />
-      </div>
-    </>
+    <div className={`calendar-main-area${isScheduleMode ? " schedule-mode" : ""}`}>
+      {/* Main days content (HourColumnFixed and AllDaySection rendered inside for proper scrolling) */}
+      <Days />
+    </div>
   )
 }
 

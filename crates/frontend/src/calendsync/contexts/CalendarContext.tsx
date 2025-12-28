@@ -93,6 +93,16 @@ export interface CalendarContextValue {
   setShowTasks: (show: boolean) => void
   /** Toggle the showTasks setting */
   toggleShowTasks: () => void
+
+  // All-day section toggle states
+  /** Whether to show overflow entries in all-day section */
+  showAllDayOverflow: boolean
+  /** Toggle overflow entries visibility */
+  setShowAllDayOverflow: (show: boolean) => void
+  /** Whether to show task checkboxes in all-day section */
+  showAllDayTasks: boolean
+  /** Toggle task checkboxes visibility */
+  setShowAllDayTasks: (show: boolean) => void
 }
 
 /** CalendarContext - null when not inside provider */
