@@ -38,8 +38,14 @@ jobs:
       - name: Run clippy
         run: cargo clippy -- -D warnings
 
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
+
+      - name: Install cargo-rail
+        run: cargo binstall cargo-rail --no-confirm
+
       - name: Check for unused dependencies
-        uses: bnjbvr/cargo-machete@main
+        run: cargo rail unify --check
 
       - name: Enable auto-merge
         if: success()
