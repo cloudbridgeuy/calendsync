@@ -10,10 +10,30 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  detect:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    if: "!startsWith(github.event.head_commit.message, 'chore: bump version')"
+    outputs:
+      cargo-args: ${{ steps.changes.outputs.cargo-args }}
+      rebuild-all: ${{ steps.changes.outputs.rebuild-all }}
+      frontend-only: ${{ steps.changes.outputs.frontend-only }}
+      count: ${{ steps.changes.outputs.count }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Detect affected crates
+        id: changes
+        uses: loadingalias/cargo-rail-action@v1
+
   test:
     name: Test Suite
     runs-on: ubuntu-latest
-    if: "!startsWith(github.event.head_commit.message, 'chore: bump version')"
+    needs: [detect]
+    if: "!startsWith(github.event.head_commit.message, 'chore: bump version') && needs.detect.outputs.frontend-only != 'true'"
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
@@ -50,11 +70,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-target-
 
-      - name: Run tests
-        run: cargo test --verbose
+      - name: Run tests (all crates)
+        if: needs.detect.outputs.rebuild-all == 'true'
+        run: cargo test --workspace --verbose
+
+      - name: Run tests (affected crates only)
+        if: needs.detect.outputs.rebuild-all != 'true' && needs.detect.outputs.count != '0'
+        run: cargo test ${{ needs.detect.outputs.cargo-args }} --verbose
 
       - name: Run clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Check formatting
         run: cargo fmt -- --check
@@ -112,6 +137,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Install bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -120,8 +148,14 @@ jobs:
       - name: Install frontend dependencies
         run: cd crates/frontend && bun install
 
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
+
+      - name: Install cargo-rail
+        run: cargo binstall cargo-rail --no-confirm
+
       - name: Check for unused dependencies
-        uses: bnjbvr/cargo-machete@main
+        run: cargo rail unify --check
 
   typos:
     name: Check Typos
