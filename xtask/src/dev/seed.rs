@@ -46,7 +46,7 @@ pub struct SeedCalendar {
 pub struct SeedEntry {
     pub calendar_id: Uuid,
     pub title: String,
-    pub date: NaiveDate,
+    pub start_date: NaiveDate,
     pub entry_type: String, // "all_day", "timed", "task", "multi_day"
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
@@ -110,7 +110,7 @@ pub fn convert_entry_to_seed(entry: &CalendarEntry) -> SeedEntry {
     SeedEntry {
         calendar_id: entry.calendar_id,
         title: entry.title.clone(),
-        date: entry.start_date,
+        start_date: entry.start_date,
         entry_type,
         description: entry.description.clone(),
         location: entry.location.clone(),
@@ -346,7 +346,7 @@ mod tests {
 
         assert_eq!(seed.calendar_id, calendar_id);
         assert_eq!(seed.title, "Birthday");
-        assert_eq!(seed.date, date);
+        assert_eq!(seed.start_date, date);
         assert_eq!(seed.entry_type, "all_day");
         assert_eq!(seed.description, Some("John's birthday".to_string()));
         assert_eq!(seed.color, Some("#EC4899".to_string()));
@@ -381,7 +381,7 @@ mod tests {
         let seed = convert_entry_to_seed(&entry);
 
         assert_eq!(seed.entry_type, "multi_day");
-        assert_eq!(seed.date, start);
+        assert_eq!(seed.start_date, start);
         assert_eq!(seed.end_date, Some(end));
         assert!(seed.start_time.is_none());
         assert!(seed.end_time.is_none());
