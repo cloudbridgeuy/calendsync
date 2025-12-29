@@ -584,8 +584,8 @@ mod test_support {
                 .values()
                 .filter(|entry| {
                     entry.calendar_id == calendar_id
-                        && entry.date >= date_range.start
-                        && entry.date <= date_range.end
+                        && entry.start_date <= date_range.end
+                        && entry.end_date >= date_range.start
                 })
                 .cloned()
                 .collect();

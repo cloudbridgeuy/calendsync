@@ -255,7 +255,7 @@ pub fn entry_to_server_entry(entry: &CalendarEntry) -> serde_json::Value {
         EntryKind::AllDay => ("all-day", false, false, true, false, false),
         EntryKind::Timed { .. } => ("timed", false, false, false, true, false),
         EntryKind::Task { completed } => ("task", *completed, false, false, false, true),
-        EntryKind::MultiDay { .. } => ("multi-day", false, true, false, false, false),
+        EntryKind::MultiDay => ("multi-day", false, true, false, false, false),
     };
 
     let start_time = entry
@@ -263,16 +263,6 @@ pub fn entry_to_server_entry(entry: &CalendarEntry) -> serde_json::Value {
         .start_time()
         .map(|t| t.format("%H:%M").to_string());
     let end_time = entry.kind.end_time().map(|t| t.format("%H:%M").to_string());
-    let multi_day_start = entry
-        .kind
-        .multi_day_start()
-        .map(|d| d.format("%b %d").to_string());
-    let multi_day_end = entry
-        .kind
-        .multi_day_end()
-        .map(|d| d.format("%b %d").to_string());
-    let multi_day_start_date = entry.kind.multi_day_start().map(|d| d.to_string());
-    let multi_day_end_date = entry.kind.multi_day_end().map(|d| d.to_string());
 
     serde_json::json!({
         "id": entry.id.to_string(),
@@ -287,13 +277,10 @@ pub fn entry_to_server_entry(entry: &CalendarEntry) -> serde_json::Value {
         "description": entry.description,
         "location": entry.location,
         "color": entry.color,
-        "date": entry.date.to_string(),
+        "startDate": entry.start_date.to_string(),
+        "endDate": entry.end_date.to_string(),
         "startTime": start_time,
         "endTime": end_time,
-        "multiDayStart": multi_day_start,
-        "multiDayEnd": multi_day_end,
-        "multiDayStartDate": multi_day_start_date,
-        "multiDayEndDate": multi_day_end_date,
     })
 }
 
@@ -304,21 +291,24 @@ pub fn entries_to_server_days(
     start: NaiveDate,
     end: NaiveDate,
 ) -> Vec<serde_json::Value> {
-    // Build a map of entries by date
     let mut days_map: BTreeMap<NaiveDate, Vec<serde_json::Value>> = BTreeMap::new();
 
-    // Initialize all dates in the range with empty vectors
+    // Initialize all dates in the range
     let mut current = start;
     while current <= end {
         days_map.insert(current, Vec::new());
         current += chrono::Duration::days(1);
     }
 
-    // Add entries to their respective dates
+    // Add entries - use start_date for grouping
+    // (Frontend will expand multi-day entries)
     for entry in entries {
-        if entry.date >= start && entry.date <= end {
+        if entry.start_date >= start && entry.start_date <= end {
             let server_entry = entry_to_server_entry(entry);
-            days_map.entry(entry.date).or_default().push(server_entry);
+            days_map
+                .entry(entry.start_date)
+                .or_default()
+                .push(server_entry);
         }
     }
 

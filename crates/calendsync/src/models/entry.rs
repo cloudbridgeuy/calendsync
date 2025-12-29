@@ -43,7 +43,7 @@ pub struct CreateEntry {
     pub description: Option<String>,
     #[serde(default, deserialize_with = "deserialize_optional_string")]
     pub location: Option<String>,
-    pub date: NaiveDate,
+    pub start_date: NaiveDate,
     pub entry_type: ServerEntryType,
     #[serde(default, deserialize_with = "deserialize_optional_time")]
     pub start_time: Option<NaiveTime>,
@@ -59,6 +59,11 @@ impl CreateEntry {
     /// Converts the create request into a CalendarEntry.
     /// Returns None if the entry type requires fields that are not provided.
     pub fn into_entry(self) -> Option<CalendarEntry> {
+        let end_date = match self.entry_type {
+            ServerEntryType::MultiDay => self.end_date?,
+            _ => self.start_date,
+        };
+
         let kind = match self.entry_type {
             ServerEntryType::AllDay => EntryKind::AllDay,
             ServerEntryType::Timed => {
@@ -67,35 +72,23 @@ impl CreateEntry {
                 EntryKind::Timed { start, end }
             }
             ServerEntryType::Task => EntryKind::Task { completed: false },
-            ServerEntryType::MultiDay => {
-                let end = self.end_date?;
-                EntryKind::MultiDay {
-                    start: self.date,
-                    end,
-                }
-            }
+            ServerEntryType::MultiDay => EntryKind::MultiDay,
         };
 
         let now = Utc::now();
-        let mut entry = CalendarEntry {
+        Some(CalendarEntry {
             id: Uuid::new_v4(),
             calendar_id: self.calendar_id,
             title: self.title,
             description: self.description,
             location: self.location,
             kind,
-            date: self.date,
+            start_date: self.start_date,
+            end_date,
             color: self.color,
             created_at: now,
             updated_at: now,
-        };
-
-        // If no custom color, entry will use calendar's default
-        if entry.color.is_none() {
-            entry.color = None;
-        }
-
-        Some(entry)
+        })
     }
 }
 
@@ -112,7 +105,7 @@ pub struct UpdateEntry {
     #[serde(default, deserialize_with = "deserialize_optional_string")]
     pub location: Option<String>,
     #[serde(default, deserialize_with = "deserialize_optional_date")]
-    pub date: Option<NaiveDate>,
+    pub start_date: Option<NaiveDate>,
     #[serde(default)]
     pub entry_type: Option<ServerEntryType>,
     #[serde(default, deserialize_with = "deserialize_optional_time")]
@@ -142,8 +135,15 @@ impl UpdateEntry {
         if let Some(location) = self.location {
             entry.location = Some(location);
         }
-        if let Some(date) = self.date {
-            entry.date = date;
+        if let Some(start_date) = self.start_date {
+            entry.start_date = start_date;
+            // For non-multi-day entries, keep end_date in sync
+            if !matches!(entry.kind, EntryKind::MultiDay) {
+                entry.end_date = start_date;
+            }
+        }
+        if let Some(end_date) = self.end_date {
+            entry.end_date = end_date;
         }
         if let Some(color) = self.color {
             entry.color = Some(color);
@@ -152,8 +152,14 @@ impl UpdateEntry {
         // Handle entry type changes
         if let Some(entry_type) = self.entry_type {
             entry.kind = match entry_type {
-                ServerEntryType::AllDay => EntryKind::AllDay,
+                ServerEntryType::AllDay => {
+                    // When changing to all-day, sync end_date to start_date
+                    entry.end_date = entry.start_date;
+                    EntryKind::AllDay
+                }
                 ServerEntryType::Timed => {
+                    // When changing to timed, sync end_date to start_date
+                    entry.end_date = entry.start_date;
                     let start = self.start_time.unwrap_or_else(|| {
                         entry
                             .kind
@@ -169,15 +175,17 @@ impl UpdateEntry {
                     EntryKind::Timed { start, end }
                 }
                 ServerEntryType::Task => {
+                    // When changing to task, sync end_date to start_date
+                    entry.end_date = entry.start_date;
                     let completed = self.completed.unwrap_or(false);
                     EntryKind::Task { completed }
                 }
                 ServerEntryType::MultiDay => {
-                    let start = self.date.unwrap_or(entry.date);
-                    let end = self
-                        .end_date
-                        .unwrap_or_else(|| entry.kind.multi_day_end().unwrap_or(start));
-                    EntryKind::MultiDay { start, end }
+                    // When changing to multi-day, use provided end_date or keep existing
+                    if let Some(end) = self.end_date {
+                        entry.end_date = end;
+                    }
+                    EntryKind::MultiDay
                 }
             };
         } else {
@@ -188,11 +196,6 @@ impl UpdateEntry {
                         *start = new_start;
                     }
                     if let Some(new_end) = self.end_time {
-                        *end = new_end;
-                    }
-                }
-                EntryKind::MultiDay { end, .. } => {
-                    if let Some(new_end) = self.end_date {
                         *end = new_end;
                     }
                 }

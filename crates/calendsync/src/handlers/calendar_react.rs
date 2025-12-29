@@ -90,21 +90,24 @@ fn entries_to_server_days(
     start: chrono::NaiveDate,
     end: chrono::NaiveDate,
 ) -> Vec<serde_json::Value> {
-    // Build a map of entries by date
     let mut days_map: BTreeMap<chrono::NaiveDate, Vec<serde_json::Value>> = BTreeMap::new();
 
-    // Initialize all dates in the range with empty vectors
+    // Initialize all dates in the range
     let mut current = start;
     while current <= end {
         days_map.insert(current, Vec::new());
         current += chrono::Duration::days(1);
     }
 
-    // Add entries to their respective dates
+    // Add entries - use start_date for grouping
+    // (Frontend will expand multi-day entries)
     for entry in entries {
-        if entry.date >= start && entry.date <= end {
+        if entry.start_date >= start && entry.start_date <= end {
             let server_entry = entry_to_server_entry(entry);
-            days_map.entry(entry.date).or_default().push(server_entry);
+            days_map
+                .entry(entry.start_date)
+                .or_default()
+                .push(server_entry);
         }
     }
 
