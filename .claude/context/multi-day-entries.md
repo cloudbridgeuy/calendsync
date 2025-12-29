@@ -76,9 +76,58 @@ DynamoDB doesn't support native overlap queries, so we use a two-phase approach:
 
 This over-fetches slightly but ensures correctness.
 
-## Frontend Expansion
+## Frontend Rendering
 
-The backend returns one entry per multi-day event. The frontend expands multi-day entries across the days they span for display:
+The backend returns one entry per multi-day event, stored in the cache by `startDate`. The frontend handles multi-day rendering through two key mechanisms:
+
+### Entry Cache Structure
+
+Entries are cached by their `startDate`:
+
+```typescript
+// entryCache: Map<string, ServerEntry[]>
+// Key: YYYY-MM-DD (startDate), Value: entries starting on that date
+```
+
+### Filtering by Date (Calendar Component)
+
+The `Calendar.tsx` component uses the pure `getEntriesForDate` function to filter entries for each visible day. This function checks if the queried date falls within each entry's date range:
+
+```typescript
+// From entries.ts - pure function
+function getEntriesForDate(entries: ServerEntry[], dateKey: string): ServerEntry[] {
+  return entries.filter((entry) => {
+    if (entry.startDate === dateKey) return true
+    if (entry.isMultiDay) {
+      return dateKey >= entry.startDate && dateKey <= entry.endDate
+    }
+    return false
+  })
+}
+
+// In Calendar.tsx - flatten cache and use pure function
+const allEntries = useMemo(() => {
+  const entries: ServerEntry[] = []
+  for (const dayEntries of entryCache.values()) {
+    entries.push(...dayEntries)
+  }
+  return entries
+}, [entryCache])
+
+const getEntriesForDate = useCallback(
+  (date: Date): ServerEntry[] => {
+    const key = formatDateKey(date)
+    return getEntriesForDatePure(allEntries, key)
+  },
+  [allEntries],
+)
+```
+
+**Important**: The Calendar component must use the pure `getEntriesForDate` function from `@core/calendar/entries`. A simple cache lookup by date key would miss multi-day entries stored under different start dates.
+
+### Bulk Expansion (expandMultiDayEntries)
+
+For pre-computing entries across a view range:
 
 ```typescript
 function expandMultiDayEntries(
