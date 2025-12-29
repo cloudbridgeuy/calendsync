@@ -71,6 +71,16 @@ pub trait EntryRepository: Send + Sync {
 }
 ```
 
+**Date Range Queries (Overlap Detection)**
+
+The `get_entries_by_calendar` method uses overlap detection to find entries that intersect with the requested date range. An entry overlaps if:
+
+```
+entry.start_date <= query.end AND entry.end_date >= query.start
+```
+
+This ensures multi-day entries appear on all days they span, not just their start date.
+
 ### CalendarRepository
 
 ```rust
@@ -146,13 +156,20 @@ CREATE TABLE IF NOT EXISTS calendars (
 CREATE TABLE IF NOT EXISTS entries (
     id TEXT PRIMARY KEY,
     calendar_id TEXT NOT NULL REFERENCES calendars(id),
-    date TEXT NOT NULL,
     title TEXT NOT NULL,
     description TEXT,
+    location TEXT,
     kind TEXT NOT NULL,  -- JSON for EntryKind
+    start_date TEXT NOT NULL,
+    end_date TEXT NOT NULL,
+    color TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+-- Index for overlap queries
+CREATE INDEX IF NOT EXISTS idx_entries_calendar_range
+    ON entries(calendar_id, start_date, end_date);
 
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
@@ -191,13 +208,22 @@ Single-table design with composite keys:
 | Entity | PK | SK | GSI1 PK | GSI1 SK | GSI2 PK |
 |--------|----|----|---------|---------|---------|
 | Calendar | `CALENDAR#{id}` | `#METADATA` | - | - | - |
-| Entry | `CALENDAR#{calendar_id}` | `ENTRY#{date}#{id}` | - | - | - |
+| Entry | `CALENDAR#{calendar_id}` | `ENTRY#{start_date}#{id}` | `CALENDAR#{calendar_id}` | `ENTRY#{start_date}#{id}` | - |
 | User | `USER#{id}` | `#METADATA` | - | - | `EMAIL#{email}` |
 | Membership | `CALENDAR#{calendar_id}` | `MEMBER#{user_id}` | `USER#{user_id}` | `CALENDAR#{calendar_id}` | - |
 
+**Entry Overlap Query Strategy**
+
+DynamoDB doesn't support native overlap queries, so we use a two-phase approach:
+
+1. **Query**: Find entries where `SK <= ENTRY#{query_end}#~` (entries starting on or before query end)
+2. **Filter**: Client-side filter where `end_date >= query_start` (entries ending on or after query start)
+
+This over-fetches slightly but ensures correctness for multi-day entries.
+
 ### GSI Usage
 
-- **GSI1**: User's calendar memberships (`get_calendars_for_user`)
+- **GSI1**: User's calendar memberships (`get_calendars_for_user`), Entry date-sorted queries
 - **GSI2**: User lookup by email (`get_user_by_email`)
 
 ### Usage
