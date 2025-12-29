@@ -171,10 +171,7 @@ async fn run_lint_checks(command: &LintCommand, global: &crate::Global) -> Resul
             aprintln!("  • {} - Format code", p_c("cargo xtask lint --fix"));
             aprintln!("  • {} - Auto-fix clippy issues", p_c("cargo clippy --fix"));
             aprintln!("  • {} - Check compilation", p_c("cargo check"));
-            aprintln!(
-                "  • {} - Fix dependency issues",
-                p_c("cargo rail unify")
-            );
+            aprintln!("  • {} - Fix dependency issues", p_c("cargo rail unify"));
         }
         Err(error::LintError::ChecksFailed)?
     }
@@ -327,7 +324,11 @@ async fn run_cargo_test(global: &crate::Global) -> Result<bool> {
 
 async fn run_cargo_rail_unify(global: &crate::Global) -> Result<bool> {
     if !global.is_silent() {
-        aprintln!("{} {}", p_b("🔧"), p_b("Running cargo rail unify --check..."));
+        aprintln!(
+            "{} {}",
+            p_b("🔧"),
+            p_b("Running cargo rail unify --check...")
+        );
     }
 
     let output = tokio::process::Command::new("cargo")
@@ -338,11 +339,7 @@ async fn run_cargo_rail_unify(global: &crate::Global) -> Result<bool> {
     // Exit code 0 means no drift, exit code 1 means issues found
     if output.status.success() {
         if !global.is_silent() {
-            aprintln!(
-                "{} {}",
-                p_g("✅"),
-                "Dependency unification check passed"
-            );
+            aprintln!("{} {}", p_g("✅"), "Dependency unification check passed");
         }
         Ok(true)
     } else {

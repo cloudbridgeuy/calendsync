@@ -30,7 +30,7 @@ fn entry_to_item(entry: &CalendarEntry) -> HashMap<String, AttributeValue> {
     );
     item.insert(
         "GSI1SK".to_string(),
-        AttributeValue::S(format!("ENTRY#{}#{}", entry.date, entry.id)),
+        AttributeValue::S(format!("ENTRY#{}#{}", entry.start_date, entry.id)),
     );
 
     // Entity type
@@ -48,7 +48,7 @@ fn entry_to_item(entry: &CalendarEntry) -> HashMap<String, AttributeValue> {
     item.insert("title".to_string(), AttributeValue::S(entry.title.clone()));
     item.insert(
         "date".to_string(),
-        AttributeValue::S(entry.date.to_string()),
+        AttributeValue::S(entry.start_date.to_string()),
     );
 
     if let Some(desc) = &entry.description {

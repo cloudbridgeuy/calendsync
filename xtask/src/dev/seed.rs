@@ -87,7 +87,7 @@ pub fn entry_type_string(kind: &EntryKind) -> &'static str {
         EntryKind::AllDay => "all_day",
         EntryKind::Timed { .. } => "timed",
         EntryKind::Task { .. } => "task",
-        EntryKind::MultiDay { .. } => "multi_day",
+        EntryKind::MultiDay => "multi_day",
     }
 }
 
@@ -101,16 +101,16 @@ pub fn convert_entry_to_seed(entry: &CalendarEntry) -> SeedEntry {
         _ => (None, None),
     };
 
-    // Extract end_date from MultiDay variant
+    // Extract end_date for MultiDay entries (now stored in entry.end_date)
     let end_date = match &entry.kind {
-        EntryKind::MultiDay { end, .. } => Some(*end),
+        EntryKind::MultiDay => Some(entry.end_date),
         _ => None,
     };
 
     SeedEntry {
         calendar_id: entry.calendar_id,
         title: entry.title.clone(),
-        date: entry.date,
+        date: entry.start_date,
         entry_type,
         description: entry.description.clone(),
         location: entry.location.clone(),
@@ -331,13 +331,7 @@ mod tests {
             entry_type_string(&EntryKind::Task { completed: false }),
             "task"
         );
-        assert_eq!(
-            entry_type_string(&EntryKind::MultiDay {
-                start: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
-                end: NaiveDate::from_ymd_opt(2024, 1, 3).unwrap(),
-            }),
-            "multi_day"
-        );
+        assert_eq!(entry_type_string(&EntryKind::MultiDay), "multi_day");
     }
 
     #[test]
@@ -382,7 +376,7 @@ mod tests {
         let calendar_id = Uuid::new_v4();
         let start = NaiveDate::from_ymd_opt(2024, 6, 15).unwrap();
         let end = NaiveDate::from_ymd_opt(2024, 6, 18).unwrap();
-        let entry = CalendarEntry::multi_day(calendar_id, "Vacation", start, end, start);
+        let entry = CalendarEntry::multi_day(calendar_id, "Vacation", start, end);
 
         let seed = convert_entry_to_seed(&entry);
 

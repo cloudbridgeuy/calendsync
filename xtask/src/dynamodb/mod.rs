@@ -235,7 +235,7 @@ async fn run_seed(cmd: SeedCommand, global: &crate::Global) -> Result<()> {
         for entry in entries.iter().take(5) {
             aprintln!(
                 "  {} - {} ({})",
-                entry.date,
+                entry.start_date,
                 entry.title,
                 seed::format_entry_kind(&entry.kind)
             );
