@@ -142,3 +142,40 @@ export function getTimezoneAbbreviation(date: Date): string {
   const sign = offsetMinutes <= 0 ? "+" : "-"
   return `UTC${sign}${offsetHours}`
 }
+
+/**
+ * Add days to an ISO date string.
+ */
+export function addDaysToString(dateStr: string, days: number): string {
+  const date = parseDateKey(dateStr)
+  const result = addDays(date, days)
+  return formatDateKey(result)
+}
+
+/**
+ * Generate all ISO date strings from start to end (inclusive).
+ * Assumes YYYY-MM-DD format.
+ */
+export function dateRangeStrings(start: string, end: string): string[] {
+  const dates: string[] = []
+  let current = start
+  while (current <= end) {
+    dates.push(current)
+    current = addDaysToString(current, 1)
+  }
+  return dates
+}
+
+/**
+ * Return the later of two ISO date strings.
+ */
+export function maxDateString(a: string, b: string): string {
+  return a > b ? a : b
+}
+
+/**
+ * Return the earlier of two ISO date strings.
+ */
+export function minDateString(a: string, b: string): string {
+  return a < b ? a : b
+}
