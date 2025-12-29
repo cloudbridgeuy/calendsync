@@ -26,7 +26,7 @@ impl EntryType {
             EntryKind::AllDay => EntryType::AllDay,
             EntryKind::Timed { .. } => EntryType::Timed,
             EntryKind::Task { .. } => EntryType::Task,
-            EntryKind::MultiDay { .. } => EntryType::MultiDay,
+            EntryKind::MultiDay => EntryType::MultiDay,
         }
     }
 }
@@ -128,7 +128,7 @@ impl UpdateCalendarRequest {
 pub struct CreateEntryRequest {
     pub calendar_id: Uuid,
     pub title: String,
-    pub date: NaiveDate,
+    pub start_date: NaiveDate,
     pub entry_type: EntryType,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
@@ -146,11 +146,11 @@ pub struct CreateEntryRequest {
 
 impl CreateEntryRequest {
     /// Create an all-day entry request.
-    pub fn all_day(calendar_id: Uuid, title: impl Into<String>, date: NaiveDate) -> Self {
+    pub fn all_day(calendar_id: Uuid, title: impl Into<String>, start_date: NaiveDate) -> Self {
         Self {
             calendar_id,
             title: title.into(),
-            date,
+            start_date,
             entry_type: EntryType::AllDay,
             description: None,
             location: None,
@@ -165,14 +165,14 @@ impl CreateEntryRequest {
     pub fn timed(
         calendar_id: Uuid,
         title: impl Into<String>,
-        date: NaiveDate,
+        start_date: NaiveDate,
         start: NaiveTime,
         end: NaiveTime,
     ) -> Self {
         Self {
             calendar_id,
             title: title.into(),
-            date,
+            start_date,
             entry_type: EntryType::Timed,
             description: None,
             location: None,
@@ -184,11 +184,11 @@ impl CreateEntryRequest {
     }
 
     /// Create a task entry request.
-    pub fn task(calendar_id: Uuid, title: impl Into<String>, date: NaiveDate) -> Self {
+    pub fn task(calendar_id: Uuid, title: impl Into<String>, start_date: NaiveDate) -> Self {
         Self {
             calendar_id,
             title: title.into(),
-            date,
+            start_date,
             entry_type: EntryType::Task,
             description: None,
             location: None,
@@ -203,19 +203,19 @@ impl CreateEntryRequest {
     pub fn multi_day(
         calendar_id: Uuid,
         title: impl Into<String>,
-        start: NaiveDate,
-        end: NaiveDate,
+        start_date: NaiveDate,
+        end_date: NaiveDate,
     ) -> Self {
         Self {
             calendar_id,
             title: title.into(),
-            date: start,
+            start_date,
             entry_type: EntryType::MultiDay,
             description: None,
             location: None,
             start_time: None,
             end_time: None,
-            end_date: Some(end),
+            end_date: Some(end_date),
             color: None,
         }
     }
@@ -241,6 +241,11 @@ impl CreateEntryRequest {
     /// Convert into a CalendarEntry.
     /// Returns None if required fields for the entry type are missing.
     pub fn into_entry(self) -> Option<CalendarEntry> {
+        let end_date = match self.entry_type {
+            EntryType::MultiDay => self.end_date?,
+            _ => self.start_date,
+        };
+
         let kind = match self.entry_type {
             EntryType::AllDay => EntryKind::AllDay,
             EntryType::Timed => {
@@ -249,13 +254,7 @@ impl CreateEntryRequest {
                 EntryKind::Timed { start, end }
             }
             EntryType::Task => EntryKind::Task { completed: false },
-            EntryType::MultiDay => {
-                let end = self.end_date?;
-                EntryKind::MultiDay {
-                    start: self.date,
-                    end,
-                }
-            }
+            EntryType::MultiDay => EntryKind::MultiDay,
         };
 
         let now = Utc::now();
@@ -266,7 +265,8 @@ impl CreateEntryRequest {
             description: self.description,
             location: self.location,
             kind,
-            date: self.date,
+            start_date: self.start_date,
+            end_date,
             color: self.color,
             created_at: now,
             updated_at: now,
@@ -280,7 +280,7 @@ pub struct UpdateEntryRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub date: Option<NaiveDate>,
+    pub start_date: Option<NaiveDate>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub entry_type: Option<EntryType>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -311,9 +311,9 @@ impl UpdateEntryRequest {
         self
     }
 
-    /// Set the entry date.
-    pub fn with_date(mut self, date: NaiveDate) -> Self {
-        self.date = Some(date);
+    /// Set the entry start date.
+    pub fn with_start_date(mut self, start_date: NaiveDate) -> Self {
+        self.start_date = Some(start_date);
         self
     }
 
@@ -376,8 +376,15 @@ impl UpdateEntryRequest {
         if let Some(location) = self.location {
             entry.location = Some(location);
         }
-        if let Some(date) = self.date {
-            entry.date = date;
+        if let Some(start_date) = self.start_date {
+            entry.start_date = start_date;
+            // For non-multi-day entries, keep start_date == end_date
+            if !entry.kind.is_multi_day() {
+                entry.end_date = start_date;
+            }
+        }
+        if let Some(end_date) = self.end_date {
+            entry.end_date = end_date;
         }
         if let Some(color) = self.color {
             entry.color = Some(color);
@@ -386,8 +393,14 @@ impl UpdateEntryRequest {
         // Handle entry type changes
         if let Some(entry_type) = self.entry_type {
             entry.kind = match entry_type {
-                EntryType::AllDay => EntryKind::AllDay,
+                EntryType::AllDay => {
+                    // For AllDay, ensure start_date == end_date
+                    entry.end_date = entry.start_date;
+                    EntryKind::AllDay
+                }
                 EntryType::Timed => {
+                    // For Timed, ensure start_date == end_date
+                    entry.end_date = entry.start_date;
                     let start = self.start_time.unwrap_or_else(|| {
                         entry
                             .kind
@@ -403,15 +416,21 @@ impl UpdateEntryRequest {
                     EntryKind::Timed { start, end }
                 }
                 EntryType::Task => {
+                    // For Task, ensure start_date == end_date
+                    entry.end_date = entry.start_date;
                     let completed = self.completed.unwrap_or(false);
                     EntryKind::Task { completed }
                 }
                 EntryType::MultiDay => {
-                    let start = self.date.unwrap_or(entry.date);
-                    let end = self
-                        .end_date
-                        .unwrap_or_else(|| entry.kind.multi_day_end().unwrap_or(start));
-                    EntryKind::MultiDay { start, end }
+                    // For MultiDay, set end_date from request or default to existing end_date
+                    if let Some(new_end_date) = self.end_date {
+                        entry.end_date = new_end_date;
+                    }
+                    // If end_date <= start_date, default to start_date + 1 day
+                    if entry.end_date <= entry.start_date {
+                        entry.end_date = entry.start_date;
+                    }
+                    EntryKind::MultiDay
                 }
             };
         } else {
@@ -422,11 +441,6 @@ impl UpdateEntryRequest {
                         *start = new_start;
                     }
                     if let Some(new_end) = self.end_time {
-                        *end = new_end;
-                    }
-                }
-                EntryKind::MultiDay { end, .. } => {
-                    if let Some(new_end) = self.end_date {
                         *end = new_end;
                     }
                 }
@@ -552,13 +566,13 @@ mod tests {
     #[test]
     fn test_create_entry_timed_missing_times() {
         let calendar_id = Uuid::new_v4();
-        let date = NaiveDate::from_ymd_opt(2024, 6, 15).unwrap();
+        let start_date = NaiveDate::from_ymd_opt(2024, 6, 15).unwrap();
 
         // This creates a timed request but without times
         let req = CreateEntryRequest {
             calendar_id,
             title: "Meeting".to_string(),
-            date,
+            start_date,
             entry_type: EntryType::Timed,
             description: None,
             location: None,
@@ -617,10 +631,7 @@ mod tests {
             EntryType::Task
         );
         assert_eq!(
-            EntryType::from_kind(&EntryKind::MultiDay {
-                start: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
-                end: NaiveDate::from_ymd_opt(2024, 1, 3).unwrap(),
-            }),
+            EntryType::from_kind(&EntryKind::MultiDay),
             EntryType::MultiDay
         );
     }

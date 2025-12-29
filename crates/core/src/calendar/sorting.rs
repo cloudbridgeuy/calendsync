@@ -21,12 +21,12 @@ pub fn sort_entries_by_hierarchy(entries: &mut [CalendarEntry]) {
     });
 }
 
-/// Groups entries by their display date.
+/// Groups entries by their start date.
 pub fn group_entries_by_date(entries: &[CalendarEntry]) -> HashMap<NaiveDate, Vec<&CalendarEntry>> {
     let mut grouped: HashMap<NaiveDate, Vec<&CalendarEntry>> = HashMap::new();
 
     for entry in entries {
-        grouped.entry(entry.date).or_default().push(entry);
+        grouped.entry(entry.start_date).or_default().push(entry);
     }
 
     grouped
@@ -54,17 +54,15 @@ pub fn expand_multi_day_entries(entries: Vec<CalendarEntry>) -> Vec<CalendarEntr
     let mut expanded = Vec::new();
 
     for entry in entries {
-        match &entry.kind {
-            super::types::EntryKind::MultiDay { start, end } => {
-                let mut current = *start;
-                while current <= *end {
-                    let mut day_entry = entry.clone();
-                    day_entry.date = current;
-                    expanded.push(day_entry);
-                    current += Duration::days(1);
-                }
+        if entry.kind.is_multi_day() {
+            let mut current = entry.start_date;
+            while current <= entry.end_date {
+                let day_entry = entry.clone();
+                expanded.push(day_entry);
+                current += Duration::days(1);
             }
-            _ => expanded.push(entry),
+        } else {
+            expanded.push(entry);
         }
     }
 
@@ -120,7 +118,7 @@ mod tests {
             CalendarEntry::timed(cal_id, "Meeting", date, make_time(14, 0), make_time(15, 0)),
             CalendarEntry::all_day(cal_id, "Birthday", date),
             CalendarEntry::timed(cal_id, "Standup", date, make_time(9, 0), make_time(9, 30)),
-            CalendarEntry::multi_day(cal_id, "Retreat", date, date + Duration::days(2), date),
+            CalendarEntry::multi_day(cal_id, "Retreat", date, date + Duration::days(2)),
         ];
 
         sort_entries_by_hierarchy(&mut entries);
@@ -161,7 +159,7 @@ mod tests {
         let start = make_date(2024, 1, 15);
         let end = make_date(2024, 1, 17);
         let entries = vec![
-            CalendarEntry::multi_day(cal_id, "Retreat", start, end, start),
+            CalendarEntry::multi_day(cal_id, "Retreat", start, end),
             CalendarEntry::all_day(cal_id, "Single", start),
         ];
 

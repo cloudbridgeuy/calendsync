@@ -189,7 +189,7 @@ impl Calendar {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EntryKind {
     /// An event spanning multiple days.
-    MultiDay { start: NaiveDate, end: NaiveDate },
+    MultiDay,
     /// An all-day event (no specific time).
     AllDay,
     /// A timed activity with start and end times.
@@ -203,7 +203,7 @@ impl EntryKind {
     /// Lower values appear first in the hierarchy.
     pub fn sort_priority(&self) -> u8 {
         match self {
-            EntryKind::MultiDay { .. } => 0,
+            EntryKind::MultiDay => 0,
             EntryKind::AllDay => 1,
             EntryKind::Timed { .. } => 2,
             EntryKind::Task { .. } => 3,
@@ -212,7 +212,7 @@ impl EntryKind {
 
     /// Returns true if this is a multi-day event.
     pub fn is_multi_day(&self) -> bool {
-        matches!(self, EntryKind::MultiDay { .. })
+        matches!(self, EntryKind::MultiDay)
     }
 
     /// Returns true if this is an all-day event.
@@ -249,7 +249,7 @@ impl EntryKind {
     /// Returns the CSS class name for this entry kind.
     pub fn css_class(&self) -> &'static str {
         match self {
-            EntryKind::MultiDay { .. } => "multi-day",
+            EntryKind::MultiDay => "multi-day",
             EntryKind::AllDay => "all-day",
             EntryKind::Timed { .. } => "timed",
             EntryKind::Task { .. } => "task",
@@ -259,22 +259,6 @@ impl EntryKind {
     /// Returns true if this is a completed task.
     pub fn is_completed(&self) -> bool {
         matches!(self, EntryKind::Task { completed: true })
-    }
-
-    /// Returns the start date for multi-day events.
-    pub fn multi_day_start(&self) -> Option<NaiveDate> {
-        match self {
-            EntryKind::MultiDay { start, .. } => Some(*start),
-            _ => None,
-        }
-    }
-
-    /// Returns the end date for multi-day events.
-    pub fn multi_day_end(&self) -> Option<NaiveDate> {
-        match self {
-            EntryKind::MultiDay { end, .. } => Some(*end),
-            _ => None,
-        }
     }
 }
 
@@ -288,9 +272,14 @@ pub struct CalendarEntry {
     pub description: Option<String>,
     pub location: Option<String>,
     pub kind: EntryKind,
-    /// The display date for this entry.
-    /// For multi-day events, entries are duplicated for each day they span.
-    pub date: NaiveDate,
+    /// The start date for this entry.
+    /// For single-day entries: `start_date == end_date`
+    /// For multi-day entries: `start_date < end_date`
+    pub start_date: NaiveDate,
+    /// The end date for this entry (inclusive).
+    /// For single-day entries: `start_date == end_date`
+    /// For multi-day entries: `start_date < end_date`
+    pub end_date: NaiveDate,
     /// Optional accent color for the entry tile (CSS color value).
     pub color: Option<String>,
     pub created_at: DateTime<Utc>,
@@ -304,7 +293,6 @@ impl CalendarEntry {
         title: impl Into<String>,
         start: NaiveDate,
         end: NaiveDate,
-        display_date: NaiveDate,
     ) -> Self {
         let now = Utc::now();
         Self {
@@ -313,8 +301,9 @@ impl CalendarEntry {
             title: title.into(),
             description: None,
             location: None,
-            kind: EntryKind::MultiDay { start, end },
-            date: display_date,
+            kind: EntryKind::MultiDay,
+            start_date: start,
+            end_date: end,
             color: None,
             created_at: now,
             updated_at: now,
@@ -331,7 +320,8 @@ impl CalendarEntry {
             description: None,
             location: None,
             kind: EntryKind::AllDay,
-            date,
+            start_date: date,
+            end_date: date,
             color: None,
             created_at: now,
             updated_at: now,
@@ -354,7 +344,8 @@ impl CalendarEntry {
             description: None,
             location: None,
             kind: EntryKind::Timed { start, end },
-            date,
+            start_date: date,
+            end_date: date,
             color: None,
             created_at: now,
             updated_at: now,
@@ -376,7 +367,8 @@ impl CalendarEntry {
             description: None,
             location: None,
             kind: EntryKind::Task { completed },
-            date,
+            start_date: date,
+            end_date: date,
             color: None,
             created_at: now,
             updated_at: now,
@@ -499,13 +491,13 @@ pub enum CalendarEvent {
 impl CalendarEvent {
     /// Creates an EntryAdded event.
     pub fn entry_added(entry: CalendarEntry) -> Self {
-        let date = entry.date.to_string();
+        let date = entry.start_date.to_string();
         Self::EntryAdded { entry, date }
     }
 
     /// Creates an EntryUpdated event.
     pub fn entry_updated(entry: CalendarEntry) -> Self {
-        let date = entry.date.to_string();
+        let date = entry.start_date.to_string();
         Self::EntryUpdated { entry, date }
     }
 
@@ -542,10 +534,7 @@ mod tests {
 
     #[test]
     fn test_entry_kind_sort_priority() {
-        let multi_day = EntryKind::MultiDay {
-            start: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
-            end: NaiveDate::from_ymd_opt(2024, 1, 3).unwrap(),
-        };
+        let multi_day = EntryKind::MultiDay;
         let all_day = EntryKind::AllDay;
         let timed = EntryKind::Timed {
             start: NaiveTime::from_hms_opt(10, 0, 0).unwrap(),
@@ -581,8 +570,22 @@ mod tests {
         assert_eq!(entry.description, Some("John's birthday party".to_string()));
         assert_eq!(entry.location, Some("123 Main St".to_string()));
         assert_eq!(entry.color, Some("#F97316".to_string()));
-        assert_eq!(entry.date, date);
+        assert_eq!(entry.start_date, date);
+        assert_eq!(entry.end_date, date);
         assert!(entry.kind.is_all_day());
+    }
+
+    #[test]
+    fn test_multi_day_entry_dates() {
+        let calendar_id = Uuid::new_v4();
+        let start = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
+        let end = NaiveDate::from_ymd_opt(2024, 1, 20).unwrap();
+        let entry = CalendarEntry::multi_day(calendar_id, "Vacation", start, end);
+
+        assert_eq!(entry.start_date, start);
+        assert_eq!(entry.end_date, end);
+        assert!(entry.start_date < entry.end_date);
+        assert!(entry.kind.is_multi_day());
     }
 
     #[test]

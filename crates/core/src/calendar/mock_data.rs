@@ -64,9 +64,7 @@ pub fn generate_seed_entries(
         let end = start + Duration::days(2);
         let title = multi_day_titles[i as usize % multi_day_titles.len()];
         let color = multi_day_colors[i as usize % multi_day_colors.len()];
-        entries.push(
-            CalendarEntry::multi_day(calendar_id, title, start, end, start).with_color(color),
-        );
+        entries.push(CalendarEntry::multi_day(calendar_id, title, start, end).with_color(color));
     }
 
     // All-day events
@@ -145,7 +143,7 @@ pub fn generate_seed_entries(
 /// Returns a lowercase string representation of the entry kind.
 pub fn format_entry_kind(kind: &EntryKind) -> &'static str {
     match kind {
-        EntryKind::MultiDay { .. } => "multi-day",
+        EntryKind::MultiDay => "multi-day",
         EntryKind::AllDay => "all-day",
         EntryKind::Timed { .. } => "timed",
         EntryKind::Task { .. } => "task",
@@ -176,7 +174,7 @@ mod tests {
 
         let multi_day = entries
             .iter()
-            .filter(|e| matches!(e.kind, EntryKind::MultiDay { .. }))
+            .filter(|e| matches!(e.kind, EntryKind::MultiDay))
             .count();
         let all_day = entries
             .iter()
@@ -211,13 +209,7 @@ mod tests {
 
     #[test]
     fn test_format_entry_kind() {
-        assert_eq!(
-            format_entry_kind(&EntryKind::MultiDay {
-                start: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
-                end: NaiveDate::from_ymd_opt(2024, 1, 3).unwrap()
-            }),
-            "multi-day"
-        );
+        assert_eq!(format_entry_kind(&EntryKind::MultiDay), "multi-day");
         assert_eq!(format_entry_kind(&EntryKind::AllDay), "all-day");
         assert_eq!(
             format_entry_kind(&EntryKind::Timed {

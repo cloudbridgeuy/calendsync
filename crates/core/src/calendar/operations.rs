@@ -15,7 +15,8 @@ pub fn filter_entries_by_calendar(
         .collect()
 }
 
-/// Filters entries that fall within a date range (inclusive).
+/// Filters entries that overlap with a date range.
+/// An entry overlaps if it starts before or on the end date AND ends on or after the start date.
 pub fn filter_entries_by_date_range(
     entries: &[CalendarEntry],
     start: NaiveDate,
@@ -23,11 +24,12 @@ pub fn filter_entries_by_date_range(
 ) -> Vec<&CalendarEntry> {
     entries
         .iter()
-        .filter(|entry| entry.date >= start && entry.date <= end)
+        .filter(|entry| entry.start_date <= end && entry.end_date >= start)
         .collect()
 }
 
 /// Filters entries by calendar ID and date range.
+/// Uses overlap logic: an entry is included if it overlaps with the date range.
 pub fn filter_entries(
     entries: &[CalendarEntry],
     calendar_id: Option<Uuid>,
@@ -38,8 +40,8 @@ pub fn filter_entries(
         .iter()
         .filter(|entry| {
             calendar_id.is_none_or(|id| entry.calendar_id == id)
-                && start.is_none_or(|s| entry.date >= s)
-                && end.is_none_or(|e| entry.date <= e)
+                && start.is_none_or(|s| entry.end_date >= s)
+                && end.is_none_or(|e| entry.start_date <= e)
         })
         .collect()
 }
@@ -69,8 +71,8 @@ pub fn validate_entry(entry: &CalendarEntry) -> Result<(), EntryError> {
 
     // Validate date/time ranges for specific entry kinds
     match &entry.kind {
-        EntryKind::MultiDay { start, end } => {
-            if end < start {
+        EntryKind::MultiDay => {
+            if entry.end_date < entry.start_date {
                 return Err(EntryError::InvalidDateRange);
             }
         }
@@ -218,7 +220,7 @@ mod tests {
         let cal_id = test_calendar_id();
         let start = NaiveDate::from_ymd_opt(2024, 1, 20).unwrap();
         let end = NaiveDate::from_ymd_opt(2024, 1, 10).unwrap(); // Before start!
-        let entry = CalendarEntry::multi_day(cal_id, "Invalid", start, end, start);
+        let entry = CalendarEntry::multi_day(cal_id, "Invalid", start, end);
         assert_eq!(validate_entry(&entry), Err(EntryError::InvalidDateRange));
     }
 
