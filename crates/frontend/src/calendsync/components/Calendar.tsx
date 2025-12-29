@@ -9,6 +9,7 @@ import {
   DEFAULT_SCROLL_HOUR,
   filterByTaskVisibility,
   formatDateKey,
+  getEntriesForDate as getEntriesForDatePure,
   isSameCalendarDay,
 } from "@core/calendar"
 import type { ServerEntry } from "@core/calendar/types"
@@ -151,16 +152,30 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
   }, [modalState])
 
   /**
+   * Flatten entry cache into a single array for multi-day entry filtering.
+   * Multi-day entries are stored only at their startDate, so we need all entries
+   * to properly filter for any given date.
+   */
+  const allEntries = useMemo(() => {
+    const entries: ServerEntry[] = []
+    for (const dayEntries of entryCache.values()) {
+      entries.push(...dayEntries)
+    }
+    return entries
+  }, [entryCache])
+
+  /**
    * Get entries for a specific date from the cache.
+   * Uses pure function to handle multi-day entry expansion.
    * Applies task visibility filtering based on settings.
    */
   const getEntriesForDate = useCallback(
     (date: Date): ServerEntry[] => {
       const key = formatDateKey(date)
-      const entries = entryCache.get(key) || []
+      const entries = getEntriesForDatePure(allEntries, key)
       return filterByTaskVisibility(entries, settingsState.showTasks)
     },
-    [entryCache, settingsState.showTasks],
+    [allEntries, settingsState.showTasks],
   )
 
   /**
