@@ -160,7 +160,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .create_entry(CreateEntryRequest {
                             calendar_id,
                             title,
-                            date,
+                            start_date: date,
                             entry_type: entry_type.into(),
                             description,
                             location,
@@ -202,7 +202,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             id,
                             UpdateEntryRequest {
                                 title,
-                                date,
+                                start_date: date,
                                 entry_type: entry_type.map(Into::into),
                                 description,
                                 location,

@@ -52,7 +52,7 @@ pub fn format_entry(entry: &CalendarEntry) -> String {
     let kind_str = entry.kind.css_class();
     let mut output = format!(
         "{} [{}]\n  ID: {}\n  Calendar: {}\n  Date: {}",
-        entry.title, kind_str, entry.id, entry.calendar_id, entry.date
+        entry.title, kind_str, entry.id, entry.calendar_id, entry.start_date
     );
     if let Some(desc) = &entry.description {
         output.push_str(&format!("\n  Description: {}", desc));
@@ -118,7 +118,8 @@ mod tests {
             title: title.to_string(),
             description: None,
             location: None,
-            date,
+            start_date: date,
+            end_date: date,
             color: None,
             kind: EntryKind::AllDay,
             created_at: now,
