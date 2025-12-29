@@ -15,13 +15,10 @@ export interface ServerEntry {
   description: string | null
   location: string | null
   color: string | null
-  date: string
+  startDate: string
+  endDate: string
   startTime: string | null
   endTime: string | null
-  multiDayStart: string | null
-  multiDayEnd: string | null
-  multiDayStartDate: string | null
-  multiDayEndDate: string | null
 }
 
 /**

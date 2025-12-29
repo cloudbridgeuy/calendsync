@@ -28,13 +28,10 @@ function createServerEntry(overrides: Partial<ServerEntry> = {}): ServerEntry {
     description: null,
     location: null,
     color: null,
-    date: "2024-01-15",
+    startDate: "2024-01-15",
+    endDate: "2024-01-15",
     startTime: null,
     endTime: null,
-    multiDayStart: null,
-    multiDayEnd: null,
-    multiDayStartDate: null,
-    multiDayEndDate: null,
     ...overrides,
   }
 }
@@ -117,7 +114,7 @@ describe("entryToFormData", () => {
     const result = entryToFormData(entry)
 
     expect(result.title).toBe("Test Entry")
-    expect(result.date).toBe("2024-01-15")
+    expect(result.startDate).toBe("2024-01-15")
     expect(result.isAllDay).toBe(true)
     expect(result.entryType).toBe("all_day")
     expect(result.startTime).toBeUndefined()
@@ -188,8 +185,8 @@ describe("entryToFormData", () => {
       isTimed: false,
       isTask: false,
       isMultiDay: true,
-      multiDayStartDate: "2024-01-15",
-      multiDayEndDate: "2024-01-18",
+      startDate: "2024-01-15",
+      endDate: "2024-01-18",
     })
     const result = entryToFormData(entry)
 
@@ -229,7 +226,7 @@ describe("createDefaultFormData", () => {
     const result = createDefaultFormData()
 
     expect(result.title).toBe("")
-    expect(result.date).toBe("")
+    expect(result.startDate).toBe("")
     expect(result.isAllDay).toBe(true)
     expect(result.entryType).toBe("all_day")
   })
@@ -237,7 +234,7 @@ describe("createDefaultFormData", () => {
   test("creates form data with default date", () => {
     const result = createDefaultFormData("2024-01-15")
 
-    expect(result.date).toBe("2024-01-15")
+    expect(result.startDate).toBe("2024-01-15")
     expect(result.isAllDay).toBe(true)
   })
 })
@@ -246,7 +243,7 @@ describe("formDataToApiPayload", () => {
   test("converts all-day entry", () => {
     const data: EntryFormData = {
       title: "Test Event",
-      date: "2024-01-15",
+      startDate: "2024-01-15",
       isAllDay: true,
       entryType: "all_day",
     }
@@ -254,7 +251,7 @@ describe("formDataToApiPayload", () => {
 
     expect(result.get("calendar_id")).toBe("cal-123")
     expect(result.get("title")).toBe("Test Event")
-    expect(result.get("date")).toBe("2024-01-15")
+    expect(result.get("start_date")).toBe("2024-01-15")
     expect(result.get("entry_type")).toBe("all_day")
     expect(result.get("start_time")).toBeNull()
     expect(result.get("end_time")).toBeNull()
@@ -263,7 +260,7 @@ describe("formDataToApiPayload", () => {
   test("converts timed entry with times", () => {
     const data: EntryFormData = {
       title: "Meeting",
-      date: "2024-01-15",
+      startDate: "2024-01-15",
       isAllDay: false,
       entryType: "timed",
       startTime: "09:00",
@@ -279,7 +276,7 @@ describe("formDataToApiPayload", () => {
   test("includes optional description and location", () => {
     const data: EntryFormData = {
       title: "Event",
-      date: "2024-01-15",
+      startDate: "2024-01-15",
       isAllDay: true,
       entryType: "all_day",
       description: "A description",
@@ -294,7 +291,7 @@ describe("formDataToApiPayload", () => {
   test("excludes empty optional fields", () => {
     const data: EntryFormData = {
       title: "Event",
-      date: "2024-01-15",
+      startDate: "2024-01-15",
       isAllDay: true,
       entryType: "all_day",
       description: "",
@@ -309,7 +306,7 @@ describe("formDataToApiPayload", () => {
   test("includes end_date for multi-day entries", () => {
     const data: EntryFormData = {
       title: "Conference",
-      date: "2024-01-15",
+      startDate: "2024-01-15",
       isAllDay: false,
       entryType: "multi_day",
       endDate: "2024-01-18",
@@ -323,7 +320,7 @@ describe("formDataToApiPayload", () => {
   test("ignores end_date for non-multi-day entries", () => {
     const data: EntryFormData = {
       title: "Event",
-      date: "2024-01-15",
+      startDate: "2024-01-15",
       isAllDay: true,
       entryType: "all_day",
       endDate: "2024-01-18", // Should be ignored
@@ -336,7 +333,7 @@ describe("formDataToApiPayload", () => {
   test("includes completed for task entries", () => {
     const data: EntryFormData = {
       title: "Task",
-      date: "2024-01-15",
+      startDate: "2024-01-15",
       isAllDay: false,
       entryType: "task",
       completed: true,
@@ -350,7 +347,7 @@ describe("formDataToApiPayload", () => {
   test("includes completed=false for incomplete tasks", () => {
     const data: EntryFormData = {
       title: "Task",
-      date: "2024-01-15",
+      startDate: "2024-01-15",
       isAllDay: false,
       entryType: "task",
       completed: false,
@@ -363,7 +360,7 @@ describe("formDataToApiPayload", () => {
   test("ignores completed for non-task entries", () => {
     const data: EntryFormData = {
       title: "Event",
-      date: "2024-01-15",
+      startDate: "2024-01-15",
       isAllDay: true,
       entryType: "all_day",
       completed: true, // Should be ignored
@@ -378,7 +375,7 @@ describe("validateFormData", () => {
   test("validates valid all-day entry", () => {
     const data: EntryFormData = {
       title: "Valid Event",
-      date: "2024-01-15",
+      startDate: "2024-01-15",
       isAllDay: true,
       entryType: "all_day",
     }
@@ -391,7 +388,7 @@ describe("validateFormData", () => {
   test("validates valid timed entry", () => {
     const data: EntryFormData = {
       title: "Meeting",
-      date: "2024-01-15",
+      startDate: "2024-01-15",
       isAllDay: false,
       entryType: "timed",
       startTime: "09:00",
@@ -405,7 +402,7 @@ describe("validateFormData", () => {
   test("requires title", () => {
     const data: EntryFormData = {
       title: "",
-      date: "2024-01-15",
+      startDate: "2024-01-15",
       isAllDay: true,
       entryType: "all_day",
     }
@@ -418,7 +415,7 @@ describe("validateFormData", () => {
   test("requires title with content (not just whitespace)", () => {
     const data: EntryFormData = {
       title: "   ",
-      date: "2024-01-15",
+      startDate: "2024-01-15",
       isAllDay: true,
       entryType: "all_day",
     }
@@ -428,36 +425,36 @@ describe("validateFormData", () => {
     expect(result.errors).toContain("Title is required")
   })
 
-  test("requires date", () => {
+  test("requires start date", () => {
     const data: EntryFormData = {
       title: "Event",
-      date: "",
+      startDate: "",
       isAllDay: true,
       entryType: "all_day",
     }
     const result = validateFormData(data)
 
     expect(result.valid).toBe(false)
-    expect(result.errors).toContain("Date is required")
+    expect(result.errors).toContain("Start date is required")
   })
 
-  test("validates date format", () => {
+  test("validates start date format", () => {
     const data: EntryFormData = {
       title: "Event",
-      date: "01-15-2024", // Wrong format
+      startDate: "01-15-2024", // Wrong format
       isAllDay: true,
       entryType: "all_day",
     }
     const result = validateFormData(data)
 
     expect(result.valid).toBe(false)
-    expect(result.errors).toContain("Date must be in YYYY-MM-DD format")
+    expect(result.errors).toContain("Start date must be in YYYY-MM-DD format")
   })
 
   test("validates start time format", () => {
     const data: EntryFormData = {
       title: "Event",
-      date: "2024-01-15",
+      startDate: "2024-01-15",
       isAllDay: false,
       entryType: "timed",
       startTime: "9:00", // Missing leading zero
@@ -471,7 +468,7 @@ describe("validateFormData", () => {
   test("validates end time format", () => {
     const data: EntryFormData = {
       title: "Event",
-      date: "2024-01-15",
+      startDate: "2024-01-15",
       isAllDay: false,
       entryType: "timed",
       startTime: "09:00",
@@ -486,7 +483,7 @@ describe("validateFormData", () => {
   test("validates end time is after start time", () => {
     const data: EntryFormData = {
       title: "Event",
-      date: "2024-01-15",
+      startDate: "2024-01-15",
       isAllDay: false,
       entryType: "timed",
       startTime: "10:00",
@@ -501,7 +498,7 @@ describe("validateFormData", () => {
   test("rejects same start and end time", () => {
     const data: EntryFormData = {
       title: "Event",
-      date: "2024-01-15",
+      startDate: "2024-01-15",
       isAllDay: false,
       entryType: "timed",
       startTime: "10:00",
@@ -516,7 +513,7 @@ describe("validateFormData", () => {
   test("requires end date for multi-day entries", () => {
     const data: EntryFormData = {
       title: "Conference",
-      date: "2024-01-15",
+      startDate: "2024-01-15",
       isAllDay: false,
       entryType: "multi_day",
     }
@@ -529,7 +526,7 @@ describe("validateFormData", () => {
   test("validates end date is after start date for multi-day", () => {
     const data: EntryFormData = {
       title: "Conference",
-      date: "2024-01-15",
+      startDate: "2024-01-15",
       isAllDay: false,
       entryType: "multi_day",
       endDate: "2024-01-14", // Before start
@@ -543,7 +540,7 @@ describe("validateFormData", () => {
   test("rejects same start and end date for multi-day", () => {
     const data: EntryFormData = {
       title: "Conference",
-      date: "2024-01-15",
+      startDate: "2024-01-15",
       isAllDay: false,
       entryType: "multi_day",
       endDate: "2024-01-15", // Same as start
@@ -557,7 +554,7 @@ describe("validateFormData", () => {
   test("allows end date only for multi-day entries", () => {
     const data: EntryFormData = {
       title: "Event",
-      date: "2024-01-15",
+      startDate: "2024-01-15",
       isAllDay: true,
       entryType: "all_day",
       endDate: "2024-01-18", // Should be ignored, not cause error
@@ -570,7 +567,7 @@ describe("validateFormData", () => {
   test("collects multiple errors", () => {
     const data: EntryFormData = {
       title: "",
-      date: "",
+      startDate: "",
       isAllDay: false,
       entryType: "multi_day",
     }
@@ -579,7 +576,7 @@ describe("validateFormData", () => {
     expect(result.valid).toBe(false)
     expect(result.errors.length).toBeGreaterThan(1)
     expect(result.errors).toContain("Title is required")
-    expect(result.errors).toContain("Date is required")
+    expect(result.errors).toContain("Start date is required")
   })
 })
 

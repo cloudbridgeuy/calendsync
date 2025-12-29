@@ -3,7 +3,7 @@
  * These functions have no side effects and are fully testable.
  */
 
-import { formatDateKey } from "./dates"
+import { dateRangeStrings, formatDateKey, maxDateString, minDateString } from "./dates"
 import type { ServerDay, ServerEntry } from "./types"
 
 /**
@@ -14,9 +14,9 @@ export function groupEntriesByDate(entries: ServerEntry[]): Map<string, ServerEn
   const grouped = new Map<string, ServerEntry[]>()
 
   for (const entry of entries) {
-    const existing = grouped.get(entry.date) || []
+    const existing = grouped.get(entry.startDate) || []
     existing.push(entry)
-    grouped.set(entry.date, existing)
+    grouped.set(entry.startDate, existing)
   }
 
   return grouped
@@ -54,11 +54,11 @@ export function sortDayEntries(entries: ServerEntry[]): ServerEntry[] {
 export function getEntriesForDate(entries: ServerEntry[], dateKey: string): ServerEntry[] {
   return entries.filter((entry) => {
     // Simple case: entry's date matches
-    if (entry.date === dateKey) return true
+    if (entry.startDate === dateKey) return true
 
     // Multi-day case: check if dateKey falls within the span
-    if (entry.isMultiDay && entry.multiDayStartDate && entry.multiDayEndDate) {
-      return dateKey >= entry.multiDayStartDate && dateKey <= entry.multiDayEndDate
+    if (entry.isMultiDay) {
+      return dateKey >= entry.startDate && dateKey <= entry.endDate
     }
 
     return false
@@ -190,4 +190,42 @@ export function filterTimedEntries(entries: ServerEntry[]): ServerEntry[] {
  */
 export function filterAllDayEntries(entries: ServerEntry[]): ServerEntry[] {
   return entries.filter((e) => e.isAllDay || e.isMultiDay || e.isTask)
+}
+
+/**
+ * Expand multi-day entries into a map of date -> entries.
+ * Multi-day entries appear on every day they span (clipped to view bounds).
+ * Single-day entries appear only on their start date.
+ */
+export function expandMultiDayEntries(
+  entries: ServerEntry[],
+  viewStart: string,
+  viewEnd: string,
+): Map<string, ServerEntry[]> {
+  const dayMap = new Map<string, ServerEntry[]>()
+
+  for (const entry of entries) {
+    if (entry.isMultiDay) {
+      // Clip to view bounds
+      const start = maxDateString(entry.startDate, viewStart)
+      const end = minDateString(entry.endDate, viewEnd)
+
+      for (const date of dateRangeStrings(start, end)) {
+        addToDay(dayMap, date, entry)
+      }
+    } else {
+      // Single-day entry
+      if (entry.startDate >= viewStart && entry.startDate <= viewEnd) {
+        addToDay(dayMap, entry.startDate, entry)
+      }
+    }
+  }
+
+  return dayMap
+}
+
+function addToDay(map: Map<string, ServerEntry[]>, date: string, entry: ServerEntry): void {
+  const existing = map.get(date) ?? []
+  existing.push(entry)
+  map.set(date, existing)
 }

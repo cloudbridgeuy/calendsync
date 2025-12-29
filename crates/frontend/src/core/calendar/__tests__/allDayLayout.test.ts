@@ -23,13 +23,10 @@ function createEntry(overrides: Partial<ServerEntry> = {}): ServerEntry {
     description: null,
     location: null,
     color: null,
-    date: "2024-01-15",
+    startDate: "2024-01-15",
+    endDate: "2024-01-15",
     startTime: "10:00",
     endTime: "11:00",
-    multiDayStart: null,
-    multiDayEnd: null,
-    multiDayStartDate: null,
-    multiDayEndDate: null,
     ...overrides,
   }
 }

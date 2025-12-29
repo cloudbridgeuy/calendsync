@@ -18,14 +18,14 @@ export interface ParsedModalUrl {
  */
 export interface EntryFormData {
   title: string
-  date: string
-  startTime?: string
-  endTime?: string
+  startDate: string
+  endDate?: string
   isAllDay: boolean
   description?: string
   location?: string
   entryType: "all_day" | "timed" | "task" | "multi_day"
-  endDate?: string
+  startTime?: string
+  endTime?: string
   completed?: boolean
 }
 
@@ -113,14 +113,14 @@ export function entryToFormData(entry: ServerEntry): EntryFormData {
 
   return {
     title: entry.title,
-    date: entry.date,
-    startTime: entry.startTime ?? undefined,
-    endTime: entry.endTime ?? undefined,
+    startDate: entry.startDate,
+    endDate: entry.isMultiDay ? entry.endDate : undefined,
     isAllDay: entry.isAllDay,
     description: entry.description ?? undefined,
     location: entry.location ?? undefined,
     entryType,
-    endDate: entry.multiDayEndDate ?? undefined,
+    startTime: entry.startTime ?? undefined,
+    endTime: entry.endTime ?? undefined,
     completed: entry.isTask ? entry.completed : undefined,
   }
 }
@@ -131,7 +131,7 @@ export function entryToFormData(entry: ServerEntry): EntryFormData {
 export function createDefaultFormData(defaultDate?: string): EntryFormData {
   return {
     title: "",
-    date: defaultDate ?? "",
+    startDate: defaultDate ?? "",
     isAllDay: true,
     entryType: "all_day",
   }
@@ -145,7 +145,7 @@ export function formDataToApiPayload(data: EntryFormData, calendarId: string): U
 
   params.set("calendar_id", calendarId)
   params.set("title", data.title)
-  params.set("date", data.date)
+  params.set("start_date", data.startDate)
 
   // Determine entry_type based on isAllDay and presence of times
   if (data.isAllDay) {
@@ -191,13 +191,13 @@ export function validateFormData(data: EntryFormData): ValidationResult {
     errors.push("Title is required")
   }
 
-  if (!data.date) {
-    errors.push("Date is required")
+  if (!data.startDate) {
+    errors.push("Start date is required")
   }
 
   // Validate date format (YYYY-MM-DD)
-  if (data.date && !/^\d{4}-\d{2}-\d{2}$/.test(data.date)) {
-    errors.push("Date must be in YYYY-MM-DD format")
+  if (data.startDate && !/^\d{4}-\d{2}-\d{2}$/.test(data.startDate)) {
+    errors.push("Start date must be in YYYY-MM-DD format")
   }
 
   // Validate time format if provided (HH:MM)
@@ -218,7 +218,7 @@ export function validateFormData(data: EntryFormData): ValidationResult {
   if (data.entryType === "multi_day") {
     if (!data.endDate) {
       errors.push("End date is required for multi-day entries")
-    } else if (data.date && data.endDate <= data.date) {
+    } else if (data.startDate && data.endDate <= data.startDate) {
       errors.push("End date must be after start date")
     }
   }

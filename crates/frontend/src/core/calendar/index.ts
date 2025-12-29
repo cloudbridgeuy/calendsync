@@ -44,6 +44,7 @@ export type { DayDisplayInfo } from "./dayContainer"
 export { getDayDisplayInfo, isDayToday } from "./dayContainer"
 // Re-export entry functions
 export {
+  expandMultiDayEntries,
   filterAllDayEntries,
   filterByCalendar,
   filterByCompletion,

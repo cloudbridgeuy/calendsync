@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import {
+  expandMultiDayEntries,
   filterByCalendar,
   filterByCompletion,
   getEntriesForDate,
@@ -30,13 +31,10 @@ function createEntry(overrides: Partial<ServerEntry> = {}): ServerEntry {
     description: null,
     location: null,
     color: null,
-    date: "2024-01-15",
+    startDate: "2024-01-15",
+    endDate: "2024-01-15",
     startTime: "10:00",
     endTime: "11:00",
-    multiDayStart: null,
-    multiDayEnd: null,
-    multiDayStartDate: null,
-    multiDayEndDate: null,
     ...overrides,
   }
 }
@@ -44,9 +42,9 @@ function createEntry(overrides: Partial<ServerEntry> = {}): ServerEntry {
 describe("groupEntriesByDate", () => {
   test("groups entries by date", () => {
     const entries = [
-      createEntry({ id: "1", date: "2024-01-15" }),
-      createEntry({ id: "2", date: "2024-01-16" }),
-      createEntry({ id: "3", date: "2024-01-15" }),
+      createEntry({ id: "1", startDate: "2024-01-15" }),
+      createEntry({ id: "2", startDate: "2024-01-16" }),
+      createEntry({ id: "3", startDate: "2024-01-15" }),
     ]
 
     const grouped = groupEntriesByDate(entries)
@@ -117,8 +115,8 @@ describe("sortDayEntries", () => {
 describe("getEntriesForDate", () => {
   test("returns entries matching date", () => {
     const entries = [
-      createEntry({ id: "1", date: "2024-01-15" }),
-      createEntry({ id: "2", date: "2024-01-16" }),
+      createEntry({ id: "1", startDate: "2024-01-15" }),
+      createEntry({ id: "2", startDate: "2024-01-16" }),
     ]
 
     const result = getEntriesForDate(entries, "2024-01-15")
@@ -131,10 +129,9 @@ describe("getEntriesForDate", () => {
     const entries = [
       createEntry({
         id: "1",
-        date: "2024-01-14",
+        startDate: "2024-01-14",
+        endDate: "2024-01-16",
         isMultiDay: true,
-        multiDayStartDate: "2024-01-14",
-        multiDayEndDate: "2024-01-16",
       }),
     ]
 
@@ -148,10 +145,9 @@ describe("getEntriesForDate", () => {
     const entries = [
       createEntry({
         id: "1",
-        date: "2024-01-10",
+        startDate: "2024-01-10",
+        endDate: "2024-01-12",
         isMultiDay: true,
-        multiDayStartDate: "2024-01-10",
-        multiDayEndDate: "2024-01-12",
       }),
     ]
 
@@ -331,5 +327,54 @@ describe("getUniqueCalendarIds", () => {
   test("returns empty array for no entries", () => {
     const ids = getUniqueCalendarIds([])
     expect(ids).toEqual([])
+  })
+})
+
+describe("expandMultiDayEntries", () => {
+  test("expands multi-day entry across all days", () => {
+    const entry = createEntry({
+      isMultiDay: true,
+      isAllDay: false,
+      startDate: "2024-01-15",
+      endDate: "2024-01-18",
+    })
+
+    const result = expandMultiDayEntries([entry], "2024-01-01", "2024-01-31")
+
+    expect(result.get("2024-01-15")).toContainEqual(entry)
+    expect(result.get("2024-01-16")).toContainEqual(entry)
+    expect(result.get("2024-01-17")).toContainEqual(entry)
+    expect(result.get("2024-01-18")).toContainEqual(entry)
+    expect(result.has("2024-01-14")).toBe(false)
+    expect(result.has("2024-01-19")).toBe(false)
+  })
+
+  test("clips expansion to view bounds", () => {
+    const entry = createEntry({
+      isMultiDay: true,
+      isAllDay: false,
+      startDate: "2024-01-10",
+      endDate: "2024-01-20",
+    })
+
+    const result = expandMultiDayEntries([entry], "2024-01-15", "2024-01-18")
+
+    expect(result.size).toBe(4)
+    expect(result.has("2024-01-10")).toBe(false)
+    expect(result.has("2024-01-15")).toBe(true)
+    expect(result.has("2024-01-18")).toBe(true)
+    expect(result.has("2024-01-20")).toBe(false)
+  })
+
+  test("single-day entries are not expanded", () => {
+    const entry = createEntry({
+      startDate: "2024-01-15",
+      endDate: "2024-01-15",
+    })
+
+    const result = expandMultiDayEntries([entry], "2024-01-01", "2024-01-31")
+
+    expect(result.get("2024-01-15")).toContainEqual(entry)
+    expect(result.has("2024-01-16")).toBe(false)
   })
 })
