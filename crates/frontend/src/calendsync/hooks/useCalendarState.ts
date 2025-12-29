@@ -439,7 +439,7 @@ export function useCalendarState(config: UseCalendarStateConfig): [CalendarState
    * SSE handler will deduplicate when the server event arrives.
    */
   const addEntryOptimistic = useCallback((entry: ServerEntry) => {
-    const date = entry.date
+    const date = entry.startDate
     setEntryCache((prev) => {
       const next = new Map(prev)
       const existing = next.get(date) || []
@@ -457,7 +457,7 @@ export function useCalendarState(config: UseCalendarStateConfig): [CalendarState
    * SSE handler will reconcile if server data differs.
    */
   const updateEntryOptimistic = useCallback((entry: ServerEntry) => {
-    const date = entry.date
+    const date = entry.startDate
     setEntryCache((prev) => {
       const next = new Map(prev)
 

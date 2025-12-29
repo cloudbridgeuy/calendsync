@@ -53,10 +53,10 @@ export function EntryTile({ entry }: EntryTileProps) {
 
   // Badge for multi-day or all-day events
   let badge: React.ReactNode = null
-  if (entry.isMultiDay && entry.multiDayStart && entry.multiDayEnd) {
+  if (entry.isMultiDay && entry.startDate && entry.endDate) {
     badge = (
       <div className="entry-badge">
-        {entry.multiDayStart} - {entry.multiDayEnd}
+        {entry.startDate} - {entry.endDate}
       </div>
     )
   } else if (entry.isAllDay) {

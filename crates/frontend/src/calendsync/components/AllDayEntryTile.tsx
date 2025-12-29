@@ -23,8 +23,8 @@ export function AllDayEntryTile({ entry }: AllDayEntryTileProps) {
   let badgeText = ""
   if (entry.isAllDay) {
     badgeText = "ALL DAY"
-  } else if (entry.isMultiDay && entry.multiDayStart && entry.multiDayEnd) {
-    badgeText = `${entry.multiDayStart} - ${entry.multiDayEnd}`
+  } else if (entry.isMultiDay && entry.startDate && entry.endDate) {
+    badgeText = `${entry.startDate} - ${entry.endDate}`
   }
 
   if (entry.isTask) {

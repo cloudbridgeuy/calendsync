@@ -173,8 +173,8 @@ export function EntryModal(props: EntryModalProps) {
             <input
               id="entry-date"
               type="date"
-              value={formData.date}
-              onChange={(e) => handleFieldChange("date", e.target.value)}
+              value={formData.startDate}
+              onChange={(e) => handleFieldChange("startDate", e.target.value)}
               disabled={isSubmitting}
             />
           </div>
@@ -229,7 +229,7 @@ export function EntryModal(props: EntryModalProps) {
                 id="entry-end-date"
                 type="date"
                 value={formData.endDate || ""}
-                min={formData.date}
+                min={formData.startDate}
                 onChange={(e) => handleFieldChange("endDate", e.target.value)}
                 disabled={isSubmitting}
               />
