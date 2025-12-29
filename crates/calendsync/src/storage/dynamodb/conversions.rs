@@ -162,7 +162,7 @@ pub fn entry_to_item(
     );
     item.insert(
         "GSI1SK".to_string(),
-        AttributeValue::S(keys::entry_gsi1_sk(entry.date, entry.id)),
+        AttributeValue::S(keys::entry_gsi1_sk(entry.start_date, entry.id)),
     );
 
     // Entity type
@@ -179,8 +179,12 @@ pub fn entry_to_item(
     );
     item.insert("title".to_string(), AttributeValue::S(entry.title.clone()));
     item.insert(
-        "date".to_string(),
-        AttributeValue::S(entry.date.format("%Y-%m-%d").to_string()),
+        "start_date".to_string(),
+        AttributeValue::S(entry.start_date.to_string()),
+    );
+    item.insert(
+        "end_date".to_string(),
+        AttributeValue::S(entry.end_date.to_string()),
     );
 
     if let Some(desc) = &entry.description {
@@ -218,6 +222,9 @@ pub fn item_to_entry(
     let kind: EntryKind = serde_json::from_str(&kind_json)
         .map_err(|e| RepositoryError::Serialization(e.to_string()))?;
 
+    let start_date = get_date(item, "start_date")?;
+    let end_date = get_date(item, "end_date")?;
+
     Ok(CalendarEntry {
         id: get_uuid(item, "id")?,
         calendar_id: get_uuid(item, "calendarId")?,
@@ -225,7 +232,8 @@ pub fn item_to_entry(
         description: get_optional_string(item, "description"),
         location: get_optional_string(item, "location"),
         kind,
-        date: get_date(item, "date")?,
+        start_date,
+        end_date,
         color: get_optional_string(item, "color"),
         created_at: get_datetime(item, "createdAt")?,
         updated_at: get_datetime(item, "updatedAt")?,
@@ -410,6 +418,7 @@ mod tests {
     }
 
     fn sample_entry() -> CalendarEntry {
+        let date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
         CalendarEntry {
             id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440003").unwrap(),
             calendar_id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440002").unwrap(),
@@ -420,7 +429,8 @@ mod tests {
                 start: NaiveTime::from_hms_opt(9, 0, 0).unwrap(),
                 end: NaiveTime::from_hms_opt(9, 30, 0).unwrap(),
             },
-            date: NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+            start_date: date,
+            end_date: date,
             color: Some("#3B82F6".to_string()),
             created_at: DateTime::parse_from_rfc3339("2024-01-15T08:00:00Z")
                 .unwrap()
@@ -497,7 +507,8 @@ mod tests {
         assert_eq!(entry.id, parsed.id);
         assert_eq!(entry.calendar_id, parsed.calendar_id);
         assert_eq!(entry.title, parsed.title);
-        assert_eq!(entry.date, parsed.date);
+        assert_eq!(entry.start_date, parsed.start_date);
+        assert_eq!(entry.end_date, parsed.end_date);
         assert_eq!(entry.kind, parsed.kind);
     }
 

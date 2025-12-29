@@ -32,7 +32,8 @@ CREATE TABLE IF NOT EXISTS entries (
     description TEXT,
     location TEXT,
     kind TEXT NOT NULL,
-    date TEXT NOT NULL,
+    start_date TEXT NOT NULL,
+    end_date TEXT NOT NULL,
     color TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -53,8 +54,7 @@ CREATE TABLE IF NOT EXISTS memberships (
 
 -- Indexes for efficient queries
 CREATE INDEX IF NOT EXISTS idx_entries_calendar_id ON entries(calendar_id);
-CREATE INDEX IF NOT EXISTS idx_entries_date ON entries(date);
-CREATE INDEX IF NOT EXISTS idx_entries_calendar_date ON entries(calendar_id, date);
+CREATE INDEX IF NOT EXISTS idx_entries_calendar_range ON entries(calendar_id, start_date, end_date);
 CREATE INDEX IF NOT EXISTS idx_memberships_user_id ON memberships(user_id);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 "#;
@@ -108,26 +108,28 @@ WHERE id = ?1
 
 // Entry queries
 pub const INSERT_ENTRY: &str = r#"
-INSERT INTO entries (id, calendar_id, title, description, location, kind, date, color, created_at, updated_at)
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+INSERT INTO entries (id, calendar_id, title, description, location, kind, start_date, end_date, color, created_at, updated_at)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
 "#;
 
 pub const SELECT_ENTRY_BY_ID: &str = r#"
-SELECT id, calendar_id, title, description, location, kind, date, color, created_at, updated_at
+SELECT id, calendar_id, title, description, location, kind, start_date, end_date, color, created_at, updated_at
 FROM entries
 WHERE id = ?1
 "#;
 
 pub const SELECT_ENTRIES_BY_CALENDAR_AND_DATE_RANGE: &str = r#"
-SELECT id, calendar_id, title, description, location, kind, date, color, created_at, updated_at
+SELECT id, calendar_id, title, description, location, kind, start_date, end_date, color, created_at, updated_at
 FROM entries
-WHERE calendar_id = ?1 AND date >= ?2 AND date <= ?3
-ORDER BY date ASC
+WHERE calendar_id = ?1
+  AND start_date <= ?3
+  AND end_date >= ?2
+ORDER BY start_date ASC, end_date ASC
 "#;
 
 pub const UPDATE_ENTRY: &str = r#"
 UPDATE entries
-SET title = ?2, description = ?3, location = ?4, kind = ?5, date = ?6, color = ?7, updated_at = ?8
+SET title = ?2, description = ?3, location = ?4, kind = ?5, start_date = ?6, end_date = ?7, color = ?8, updated_at = ?9
 WHERE id = ?1
 "#;
 
@@ -197,7 +199,8 @@ mod tests {
         // Entry queries
         assert!(INSERT_ENTRY.contains("INSERT"));
         assert!(SELECT_ENTRY_BY_ID.contains("SELECT"));
-        assert!(SELECT_ENTRIES_BY_CALENDAR_AND_DATE_RANGE.contains("date >="));
+        assert!(SELECT_ENTRIES_BY_CALENDAR_AND_DATE_RANGE.contains("start_date <="));
+        assert!(SELECT_ENTRIES_BY_CALENDAR_AND_DATE_RANGE.contains("end_date >="));
         assert!(UPDATE_ENTRY.contains("UPDATE"));
         assert!(DELETE_ENTRY.contains("DELETE"));
 

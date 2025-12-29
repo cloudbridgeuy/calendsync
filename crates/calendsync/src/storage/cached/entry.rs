@@ -237,7 +237,7 @@ where
             }
 
             // 4. Publish event for cross-instance propagation
-            let event = CalendarEvent::entry_deleted(e.id, e.date);
+            let event = CalendarEvent::entry_deleted(e.id, e.start_date);
             if let Err(err) = self.pubsub.publish(e.calendar_id, &event).await {
                 tracing::warn!(
                     calendar_id = %e.calendar_id,
@@ -305,8 +305,8 @@ mod tests {
                 .values()
                 .filter(|e| {
                     e.calendar_id == calendar_id
-                        && e.date >= date_range.start
-                        && e.date <= date_range.end
+                        && e.start_date <= date_range.end
+                        && e.end_date >= date_range.start
                 })
                 .cloned()
                 .collect())

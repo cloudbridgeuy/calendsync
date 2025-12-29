@@ -85,20 +85,25 @@ impl EntryRepository for DynamoDbRepository {
         calendar_id: Uuid,
         date_range: DateRange,
     ) -> Result<Vec<CalendarEntry>> {
+        // Overlap query strategy:
+        // 1. Key condition: entries starting on or before query end (GSI1SK <= max)
+        // 2. Filter: entries ending on or after query start (end_date >= query_start)
+        // This captures all entries that overlap with the query range.
         let result = self
             .client
             .query()
             .table_name(&self.table_name)
             .index_name("GSI1")
-            .key_condition_expression("GSI1PK = :pk AND GSI1SK BETWEEN :start AND :end")
+            .key_condition_expression("GSI1PK = :pk AND GSI1SK <= :max_sk")
+            .filter_expression("end_date >= :query_start")
             .expression_attribute_values(":pk", AttributeValue::S(keys::entry_gsi1_pk(calendar_id)))
             .expression_attribute_values(
-                ":start",
-                AttributeValue::S(keys::entry_gsi1_sk_start(date_range.start)),
+                ":max_sk",
+                AttributeValue::S(keys::entry_gsi1_sk_max(date_range.end)),
             )
             .expression_attribute_values(
-                ":end",
-                AttributeValue::S(keys::entry_gsi1_sk_end(date_range.end)),
+                ":query_start",
+                AttributeValue::S(date_range.start.to_string()),
             )
             .send()
             .await

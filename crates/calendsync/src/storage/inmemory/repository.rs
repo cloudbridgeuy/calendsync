@@ -56,16 +56,12 @@ impl EntryRepository for InMemoryRepository {
         date_range: DateRange,
     ) -> Result<Vec<CalendarEntry>> {
         let entries = self.entries.read().await;
-        let filtered: Vec<CalendarEntry> = entries
+        Ok(entries
             .values()
-            .filter(|entry| {
-                entry.calendar_id == calendar_id
-                    && entry.date >= date_range.start
-                    && entry.date <= date_range.end
-            })
+            .filter(|e| e.calendar_id == calendar_id)
+            .filter(|e| e.start_date <= date_range.end && e.end_date >= date_range.start)
             .cloned()
-            .collect();
-        Ok(filtered)
+            .collect())
     }
 
     async fn create_entry(&self, entry: &CalendarEntry) -> Result<()> {

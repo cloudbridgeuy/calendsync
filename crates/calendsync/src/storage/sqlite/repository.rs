@@ -128,7 +128,8 @@ impl EntryRepository for SqliteRepository {
         let description = entry.description.clone();
         let location = entry.location.clone();
         let kind_json = entry_kind_to_json(&entry.kind)?;
-        let date = format_date(&entry.date);
+        let start_date = format_date(&entry.start_date);
+        let end_date = format_date(&entry.end_date);
         let color = entry.color.clone();
         let created_at = format_datetime(&entry.created_at);
         let updated_at = format_datetime(&entry.updated_at);
@@ -145,7 +146,8 @@ impl EntryRepository for SqliteRepository {
                         description,
                         location,
                         kind_json,
-                        date,
+                        start_date,
+                        end_date,
                         color,
                         created_at,
                         updated_at
@@ -164,7 +166,8 @@ impl EntryRepository for SqliteRepository {
         let description = entry.description.clone();
         let location = entry.location.clone();
         let kind_json = entry_kind_to_json(&entry.kind)?;
-        let date = format_date(&entry.date);
+        let start_date = format_date(&entry.start_date);
+        let end_date = format_date(&entry.end_date);
         let color = entry.color.clone();
         let updated_at = format_datetime(&entry.updated_at);
         let entry_id = entry.id.to_string();
@@ -175,14 +178,15 @@ impl EntryRepository for SqliteRepository {
                     .execute(
                         schema::UPDATE_ENTRY,
                         rusqlite::params![
+                            id,
                             title,
                             description,
                             location,
                             kind_json,
-                            date,
+                            start_date,
+                            end_date,
                             color,
-                            updated_at,
-                            id
+                            updated_at
                         ],
                     )
                     .map_err(wrap_err)?;

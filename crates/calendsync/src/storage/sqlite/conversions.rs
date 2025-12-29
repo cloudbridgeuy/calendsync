@@ -90,7 +90,7 @@ pub fn row_to_calendar_with_role(row: &Row) -> rusqlite::Result<(Calendar, Calen
 
 /// Convert a SQLite row to a CalendarEntry.
 ///
-/// Expected columns: id, calendar_id, title, description, location, kind, date, color, created_at, updated_at
+/// Expected columns: id, calendar_id, title, description, location, kind, start_date, end_date, color, created_at, updated_at
 pub fn row_to_entry(row: &Row) -> rusqlite::Result<CalendarEntry> {
     let id: String = row.get(0)?;
     let calendar_id: String = row.get(1)?;
@@ -98,10 +98,11 @@ pub fn row_to_entry(row: &Row) -> rusqlite::Result<CalendarEntry> {
     let description: Option<String> = row.get(3)?;
     let location: Option<String> = row.get(4)?;
     let kind_json: String = row.get(5)?;
-    let date: String = row.get(6)?;
-    let color: Option<String> = row.get(7)?;
-    let created_at: String = row.get(8)?;
-    let updated_at: String = row.get(9)?;
+    let start_date: String = row.get(6)?;
+    let end_date: String = row.get(7)?;
+    let color: Option<String> = row.get(8)?;
+    let created_at: String = row.get(9)?;
+    let updated_at: String = row.get(10)?;
 
     Ok(CalendarEntry {
         id: parse_uuid(&id)?,
@@ -110,7 +111,8 @@ pub fn row_to_entry(row: &Row) -> rusqlite::Result<CalendarEntry> {
         description,
         location,
         kind: json_to_entry_kind_internal(&kind_json)?,
-        date: parse_date(&date)?,
+        start_date: parse_date(&start_date)?,
+        end_date: parse_date(&end_date)?,
         color,
         created_at: parse_datetime(&created_at)?,
         updated_at: parse_datetime(&updated_at)?,
@@ -277,14 +279,9 @@ mod tests {
 
     #[test]
     fn test_entry_kind_to_json_multi_day() {
-        let kind = EntryKind::MultiDay {
-            start: NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
-            end: NaiveDate::from_ymd_opt(2024, 1, 17).unwrap(),
-        };
+        let kind = EntryKind::MultiDay;
         let json = entry_kind_to_json(&kind).unwrap();
-        assert!(json.contains("MultiDay"));
-        assert!(json.contains("2024-01-15"));
-        assert!(json.contains("2024-01-17"));
+        assert_eq!(json, r#""MultiDay""#);
     }
 
     #[test]
@@ -296,10 +293,7 @@ mod tests {
                 end: NaiveTime::from_hms_opt(15, 0, 0).unwrap(),
             },
             EntryKind::Task { completed: false },
-            EntryKind::MultiDay {
-                start: NaiveDate::from_ymd_opt(2024, 6, 1).unwrap(),
-                end: NaiveDate::from_ymd_opt(2024, 6, 5).unwrap(),
-            },
+            EntryKind::MultiDay,
         ];
 
         for kind in kinds {

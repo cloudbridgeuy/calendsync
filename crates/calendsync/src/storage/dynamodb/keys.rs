@@ -93,11 +93,11 @@ pub fn entry_gsi1_pk(calendar_id: Uuid) -> String {
 
 /// Generate GSI1 sort key for Entry (date-sorted lookup).
 ///
-/// Pattern: `ENTRY#<date>#<entry_id>`
+/// Pattern: `ENTRY#<start_date>#<entry_id>`
 ///
-/// The date is in ISO 8601 format (YYYY-MM-DD) for lexicographic sorting.
-pub fn entry_gsi1_sk(date: NaiveDate, entry_id: Uuid) -> String {
-    format!("{ENTRY_PREFIX}{}#{entry_id}", date.format("%Y-%m-%d"))
+/// The start_date is in ISO 8601 format (YYYY-MM-DD) for lexicographic sorting.
+pub fn entry_gsi1_sk(start_date: NaiveDate, entry_id: Uuid) -> String {
+    format!("{ENTRY_PREFIX}{}#{entry_id}", start_date.format("%Y-%m-%d"))
 }
 
 /// Generate the start bound for a date range query on GSI1SK.
@@ -116,6 +116,14 @@ pub fn entry_gsi1_sk_start(date: NaiveDate) -> String {
 /// The `~` character (ASCII 126) is higher than any UUID character,
 /// ensuring all entries on the end date are included.
 pub fn entry_gsi1_sk_end(date: NaiveDate) -> String {
+    format!("{ENTRY_PREFIX}{}#~", date.format("%Y-%m-%d"))
+}
+
+/// Generate the maximum sort key for overlap queries.
+/// Used to find all entries starting on or before a given date.
+///
+/// Pattern: `ENTRY#<date>#~`
+pub fn entry_gsi1_sk_max(date: NaiveDate) -> String {
     format!("{ENTRY_PREFIX}{}#~", date.format("%Y-%m-%d"))
 }
 
@@ -195,10 +203,10 @@ mod tests {
 
     #[test]
     fn test_entry_gsi1_sk() {
-        let date = NaiveDate::from_ymd_opt(2024, 6, 15).unwrap();
+        let start_date = NaiveDate::from_ymd_opt(2024, 6, 15).unwrap();
         let id = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440003").unwrap();
         assert_eq!(
-            entry_gsi1_sk(date, id),
+            entry_gsi1_sk(start_date, id),
             "ENTRY#2024-06-15#550e8400-e29b-41d4-a716-446655440003"
         );
     }
@@ -208,6 +216,12 @@ mod tests {
         let date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
         assert_eq!(entry_gsi1_sk_start(date), "ENTRY#2024-01-15#");
         assert_eq!(entry_gsi1_sk_end(date), "ENTRY#2024-01-15#~");
+    }
+
+    #[test]
+    fn test_entry_gsi1_sk_max() {
+        let date = NaiveDate::from_ymd_opt(2024, 3, 20).unwrap();
+        assert_eq!(entry_gsi1_sk_max(date), "ENTRY#2024-03-20#~");
     }
 
     #[test]
