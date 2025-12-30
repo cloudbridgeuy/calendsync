@@ -451,6 +451,67 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
+/* Entry Style Variants - Compact (border) vs Filled (background) */
+
+/* Compact style (default) - border accent */
+.entry-tile.entry-style-compact {
+  background-color: var(--bg-secondary);
+  border-left: 4px solid var(--accent);
+}
+
+.entry-tile.entry-style-compact.task {
+  border-left-style: dashed;
+}
+
+.entry-tile.entry-style-compact.multi-day {
+  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+}
+
+/* Filled style - full background color */
+.entry-tile.entry-style-filled {
+  background-color: var(--accent);
+  color: white;
+  border-left: none;
+}
+
+.entry-tile.entry-style-filled .entry-title {
+  color: white;
+}
+
+.entry-tile.entry-style-filled .entry-description {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.entry-tile.entry-style-filled .entry-time {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.entry-tile.entry-style-filled .entry-location {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.entry-tile.entry-style-filled .entry-badge {
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+.entry-tile.entry-style-filled.task {
+  background-color: var(--bg-tertiary);
+  border-left: 4px dashed var(--accent);
+  color: var(--text-primary);
+}
+
+.entry-tile.entry-style-filled.task .entry-title {
+  color: var(--text-primary);
+}
+
+.entry-tile.entry-style-filled.task .entry-description {
+  color: var(--text-secondary);
+}
+
+.entry-tile.entry-style-filled.multi-day {
+  background: linear-gradient(90deg, var(--accent), var(--accent-light));
+}
+
 .task-checkbox {
   width: 1.25rem;
   height: 1.25rem;
@@ -2029,6 +2090,50 @@ body {
   text-overflow: ellipsis;
 }
 
+/* Schedule Timed Entry Style Variants */
+
+/* Compact style - border accent */
+.schedule-timed-entry.entry-style-compact {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  border-left: 3px solid var(--accent);
+}
+
+.schedule-timed-entry.entry-style-compact .schedule-timed-entry-time {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+.schedule-timed-entry.entry-style-compact .schedule-timed-entry-title {
+  color: var(--text-primary);
+}
+
+.schedule-timed-entry.entry-style-compact .schedule-timed-entry-location {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+/* Filled style - full background (default current behavior) */
+.schedule-timed-entry.entry-style-filled {
+  background-color: var(--accent);
+  color: white;
+  border-left: none;
+}
+
+.schedule-timed-entry.entry-style-filled .schedule-timed-entry-time {
+  color: white;
+  opacity: 0.9;
+}
+
+.schedule-timed-entry.entry-style-filled .schedule-timed-entry-title {
+  color: white;
+}
+
+.schedule-timed-entry.entry-style-filled .schedule-timed-entry-location {
+  color: white;
+  opacity: 0.8;
+}
+
 /* All-Day Section */
 .schedule-all-day-section {
   display: flex;
@@ -2314,6 +2419,39 @@ body {
 
 .all-day-task-title {
   font-size: 0.75rem;
+}
+
+/* All-day Entry Style Variants */
+
+/* Compact style - border accent */
+.all-day-entry.entry-style-compact {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  border-left: 3px solid var(--accent);
+}
+
+.all-day-entry.entry-style-compact.multi-day {
+  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+}
+
+.all-day-entry.entry-style-compact .all-day-badge {
+  background-color: var(--accent);
+  color: white;
+}
+
+/* Filled style - full background (default current behavior) */
+.all-day-entry.entry-style-filled {
+  background-color: var(--accent);
+  color: white;
+  border-left: none;
+}
+
+.all-day-entry.entry-style-filled.multi-day {
+  background: linear-gradient(90deg, var(--accent), var(--accent-light));
+}
+
+.all-day-entry.entry-style-filled .all-day-badge {
+  background-color: rgba(255, 255, 255, 0.2);
 }
 
 /* Schedule Day Content (inside DayColumn) */
