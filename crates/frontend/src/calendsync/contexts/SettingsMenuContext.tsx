@@ -4,7 +4,7 @@
  */
 
 import { buildAriaIds } from "@core/calendar"
-import type { ViewMode } from "@core/calendar/settings"
+import type { EntryStyle, ViewMode } from "@core/calendar/settings"
 import { createContext, useCallback, useContext, useId, useMemo, useState } from "react"
 
 /** Settings menu state */
@@ -15,6 +15,8 @@ export interface SettingsMenuState {
   viewMode: ViewMode
   /** Whether to show task entries */
   showTasks: boolean
+  /** Entry color style */
+  entryStyle: EntryStyle
 }
 
 /** Settings menu actions */
@@ -27,6 +29,8 @@ export interface SettingsMenuActions {
   setViewMode: (mode: ViewMode) => void
   /** Toggle task visibility */
   toggleShowTasks: () => void
+  /** Set the entry color style */
+  setEntryStyle: (style: EntryStyle) => void
 }
 
 /** Context value shared with settings menu sub-components */
@@ -55,10 +59,14 @@ export interface SettingsMenuProviderProps {
   viewMode: ViewMode
   /** Current showTasks from calendar settings */
   showTasks: boolean
+  /** Current entry style from calendar settings */
+  entryStyle: EntryStyle
   /** Callback to set view mode */
   onViewModeChange: (mode: ViewMode) => void
   /** Callback to toggle showTasks */
   onToggleShowTasks: () => void
+  /** Callback to set entry style */
+  onEntryStyleChange: (style: EntryStyle) => void
 }
 
 /**
@@ -68,8 +76,10 @@ export function SettingsMenuProvider({
   children,
   viewMode,
   showTasks,
+  entryStyle,
   onViewModeChange,
   onToggleShowTasks,
+  onEntryStyleChange,
 }: SettingsMenuProviderProps) {
   const id = useId()
   const { triggerId, contentId } = buildAriaIds(`settings-menu-${id}`)
@@ -94,6 +104,13 @@ export function SettingsMenuProvider({
     onToggleShowTasks()
   }, [onToggleShowTasks])
 
+  const setEntryStyle = useCallback(
+    (style: EntryStyle) => {
+      onEntryStyleChange(style)
+    },
+    [onEntryStyleChange],
+  )
+
   // Ref callbacks for sub-components
   const panelRef = useCallback((_node: HTMLDivElement | null) => {
     // Callback provided for future use (e.g., click-outside detection)
@@ -108,8 +125,9 @@ export function SettingsMenuProvider({
       isOpen,
       viewMode,
       showTasks,
+      entryStyle,
     }),
-    [isOpen, viewMode, showTasks],
+    [isOpen, viewMode, showTasks, entryStyle],
   )
 
   const actions: SettingsMenuActions = useMemo(
@@ -118,8 +136,9 @@ export function SettingsMenuProvider({
       close,
       setViewMode,
       toggleShowTasks,
+      setEntryStyle,
     }),
-    [toggleOpen, close, setViewMode, toggleShowTasks],
+    [toggleOpen, close, setViewMode, toggleShowTasks, setEntryStyle],
   )
 
   const value = useMemo<SettingsMenuContextValue>(

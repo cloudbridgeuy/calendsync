@@ -3,7 +3,7 @@
  * This eliminates props drilling through DayColumn to EntryTile.
  */
 
-import type { ViewMode } from "@core/calendar/settings"
+import type { EntryStyle, ViewMode } from "@core/calendar/settings"
 import type { ServerEntry } from "@core/calendar/types"
 import { createContext, useContext } from "react"
 import type {
@@ -85,7 +85,7 @@ export interface CalendarContextValue {
   addNotification: AddNotificationFn
 
   // Settings state
-  /** Calendar settings (view mode, task visibility) */
+  /** Calendar settings (view mode, task visibility, entry style) */
   settings: CalendarSettingsState
   /** Set the view mode */
   setViewMode: (mode: ViewMode) => void
@@ -93,6 +93,8 @@ export interface CalendarContextValue {
   setShowTasks: (show: boolean) => void
   /** Toggle the showTasks setting */
   toggleShowTasks: () => void
+  /** Set the entry color style */
+  setEntryStyle: (style: EntryStyle) => void
 
   // All-day section toggle states
   /** Whether to show overflow entries in all-day section */

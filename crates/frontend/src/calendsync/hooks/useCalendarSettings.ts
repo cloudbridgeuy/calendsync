@@ -5,10 +5,12 @@
 
 import {
   type CalendarSettings,
+  type EntryStyle,
   getSettingsStorageKey,
   parseSettingsJson,
   serializeSettings,
   toggleShowTasks as toggleShowTasksPure,
+  updateEntryStyle as updateEntryStylePure,
   updateShowTasks as updateShowTasksPure,
   updateViewMode as updateViewModePure,
   type ViewMode,
@@ -27,6 +29,8 @@ export interface CalendarSettingsState {
   viewMode: ViewMode
   /** Whether to show task entries */
   showTasks: boolean
+  /** Entry color style (compact = border, filled = background) */
+  entryStyle: EntryStyle
 }
 
 /** Actions returned by useCalendarSettings */
@@ -37,6 +41,8 @@ export interface CalendarSettingsActions {
   setShowTasks: (show: boolean) => void
   /** Toggle the showTasks setting */
   toggleShowTasks: () => void
+  /** Set the entry style */
+  setEntryStyle: (style: EntryStyle) => void
 }
 
 /**
@@ -52,7 +58,7 @@ export function useCalendarSettings(
   const [settings, setSettings] = useState<CalendarSettings>(() => {
     // Initialize from localStorage if available (SSR-safe)
     if (typeof window === "undefined") {
-      return { viewMode: "compact", showTasks: true }
+      return { viewMode: "compact", showTasks: true, entryStyle: "compact" }
     }
     const storageKey = getSettingsStorageKey(calendarId)
     const stored = localStorage.getItem(storageKey)
@@ -79,15 +85,21 @@ export function useCalendarSettings(
     setSettings((prev) => toggleShowTasksPure(prev))
   }, [])
 
+  const setEntryStyle = useCallback((style: EntryStyle) => {
+    setSettings((prev) => updateEntryStylePure(prev, style))
+  }, [])
+
   const state: CalendarSettingsState = {
     viewMode: settings.viewMode,
     showTasks: settings.showTasks,
+    entryStyle: settings.entryStyle,
   }
 
   const actions: CalendarSettingsActions = {
     setViewMode,
     setShowTasks,
     toggleShowTasks,
+    setEntryStyle,
   }
 
   return [state, actions]
