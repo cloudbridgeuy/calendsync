@@ -149,7 +149,7 @@ export {
   isAnimationComplete,
 } from "./scrollAnimation"
 // Re-export settings functions
-export type { CalendarSettings, ViewMode } from "./settings"
+export type { CalendarSettings, EntryStyle, ViewMode } from "./settings"
 export {
   DEFAULT_SETTINGS,
   getSettingsStorageKey,
@@ -157,6 +157,7 @@ export {
   SETTINGS_STORAGE_PREFIX,
   serializeSettings,
   toggleShowTasks,
+  updateEntryStyle,
   updateShowTasks,
   updateViewMode,
 } from "./settings"

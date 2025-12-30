@@ -10,12 +10,17 @@
 /** View mode for the calendar display */
 export type ViewMode = "compact" | "schedule"
 
+/** Entry color style for rendering */
+export type EntryStyle = "compact" | "filled"
+
 /** Calendar settings stored per calendar */
 export interface CalendarSettings {
   /** Current view mode */
   viewMode: ViewMode
   /** Whether to show task entries */
   showTasks: boolean
+  /** Entry color style (compact = border, filled = background) */
+  entryStyle: EntryStyle
 }
 
 // ============================================================================
@@ -29,6 +34,7 @@ export const SETTINGS_STORAGE_PREFIX = "calendsync_settings_"
 export const DEFAULT_SETTINGS: CalendarSettings = {
   viewMode: "compact",
   showTasks: true,
+  entryStyle: "compact",
 }
 
 // ============================================================================
@@ -67,7 +73,12 @@ export function parseSettingsJson(json: string | null): CalendarSettings {
     const showTasks: boolean =
       typeof parsed.showTasks === "boolean" ? parsed.showTasks : DEFAULT_SETTINGS.showTasks
 
-    return { viewMode, showTasks }
+    const entryStyle: EntryStyle =
+      parsed.entryStyle === "compact" || parsed.entryStyle === "filled"
+        ? parsed.entryStyle
+        : DEFAULT_SETTINGS.entryStyle
+
+    return { viewMode, showTasks, entryStyle }
   } catch {
     return { ...DEFAULT_SETTINGS }
   }
@@ -103,4 +114,14 @@ export function updateShowTasks(settings: CalendarSettings, showTasks: boolean):
  */
 export function toggleShowTasks(settings: CalendarSettings): CalendarSettings {
   return { ...settings, showTasks: !settings.showTasks }
+}
+
+/**
+ * Create new settings with updated entry style.
+ */
+export function updateEntryStyle(
+  settings: CalendarSettings,
+  entryStyle: EntryStyle,
+): CalendarSettings {
+  return { ...settings, entryStyle }
 }
