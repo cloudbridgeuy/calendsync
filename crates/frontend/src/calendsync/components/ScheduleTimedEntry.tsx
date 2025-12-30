@@ -33,7 +33,8 @@ export function ScheduleTimedEntry({
   containerWidth,
   hourHeight = HOUR_HEIGHT_PX,
 }: ScheduleTimedEntryProps) {
-  const { onEntryClick, flashStates } = useCalendarContext()
+  const { onEntryClick, flashStates, settings } = useCalendarContext()
+  const { entryStyle } = settings
 
   const { top, height } = calculateTimePosition(entry.startTime, entry.endTime, hourHeight)
   const { width, left } = calculateEntryWidth(overlapColumn, containerWidth)
@@ -47,16 +48,23 @@ export function ScheduleTimedEntry({
       ? `${entry.startTime.slice(0, 5)} - ${entry.endTime.slice(0, 5)}`
       : ""
 
+  // Apply color based on entry style setting
+  const colorStyle = entry.color
+    ? entryStyle === "filled"
+      ? { backgroundColor: entry.color }
+      : { borderLeftColor: entry.color }
+    : undefined
+
   return (
     // biome-ignore lint/a11y/useSemanticElements: Using div with role="button" for complex layout positioning
     <div
-      className={`schedule-timed-entry${flashClass ? ` ${flashClass}` : ""}`}
+      className={`schedule-timed-entry entry-style-${entryStyle}${flashClass ? ` ${flashClass}` : ""}`}
       style={{
         top,
         height,
         left,
         width,
-        backgroundColor: entry.color || undefined,
+        ...colorStyle,
       }}
       onClick={() => onEntryClick(entry)}
       role="button"

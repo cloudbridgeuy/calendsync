@@ -14,14 +14,21 @@ interface EntryTileProps {
  * Render a single entry tile.
  */
 export function EntryTile({ entry }: EntryTileProps) {
-  const { flashStates, onEntryClick, onEntryToggle } = useCalendarContext()
+  const { flashStates, onEntryClick, onEntryToggle, settings } = useCalendarContext()
   const flashState = flashStates.get(entry.id)
+  const { entryStyle } = settings
 
-  const colorStyle = entry.color ? { borderLeftColor: entry.color } : undefined
+  // Apply color based on entry style setting
+  const colorStyle = entry.color
+    ? entryStyle === "filled"
+      ? { backgroundColor: entry.color }
+      : { borderLeftColor: entry.color }
+    : undefined
 
   // Build CSS classes
   const classes = [
     "entry-tile",
+    `entry-style-${entryStyle}`,
     entry.kind,
     entry.completed ? "completed" : "",
     flashState ? `flash-${flashState}` : "",
