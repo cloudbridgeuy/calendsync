@@ -293,6 +293,7 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
       setViewMode: settingsActions.setViewMode,
       setShowTasks: settingsActions.setShowTasks,
       toggleShowTasks: settingsActions.toggleShowTasks,
+      setEntryStyle: settingsActions.setEntryStyle,
       // All-day section toggle states
       showAllDayOverflow,
       setShowAllDayOverflow,
@@ -351,18 +352,21 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
  * SettingsMenu wrapper sub-component
  */
 function SettingsMenuWrapper() {
-  const { settings, setViewMode, toggleShowTasks } = useCalendarContext()
+  const { settings, setViewMode, toggleShowTasks, setEntryStyle } = useCalendarContext()
 
   return (
     <SettingsMenu
       viewMode={settings.viewMode}
       showTasks={settings.showTasks}
+      entryStyle={settings.entryStyle}
       onViewModeChange={setViewMode}
       onToggleShowTasks={toggleShowTasks}
+      onEntryStyleChange={setEntryStyle}
     >
       <SettingsMenu.Trigger />
       <SettingsMenu.Panel>
         <SettingsMenu.ViewToggle />
+        <SettingsMenu.StyleToggle />
         <SettingsMenu.TaskToggle />
       </SettingsMenu.Panel>
     </SettingsMenu>

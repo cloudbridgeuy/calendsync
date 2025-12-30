@@ -3,7 +3,7 @@
  * Uses context to share state between Trigger, Panel, and toggle sub-components.
  */
 
-import type { ViewMode } from "@core/calendar/settings"
+import type { EntryStyle, ViewMode } from "@core/calendar/settings"
 import { useCallback, useEffect } from "react"
 import { SettingsMenuProvider, useSettingsMenuContext } from "../contexts/SettingsMenuContext"
 
@@ -192,6 +192,54 @@ function TaskToggle() {
 }
 
 // ============================================================================
+// StyleToggle Sub-Component
+// ============================================================================
+
+/**
+ * SettingsMenu.StyleToggle - radio buttons for Compact / Filled entry styles.
+ */
+function StyleToggle() {
+  const { state, actions } = useSettingsMenuContext()
+  const { entryStyle } = state
+  const { setEntryStyle } = actions
+
+  const handleChange = useCallback(
+    (style: EntryStyle) => {
+      setEntryStyle(style)
+    },
+    [setEntryStyle],
+  )
+
+  return (
+    <div className="settings-option">
+      <span className="settings-option-label">Style</span>
+      <div className="settings-radio-group" role="radiogroup" aria-label="Entry style">
+        <label className={`settings-radio${entryStyle === "compact" ? " selected" : ""}`}>
+          <input
+            type="radio"
+            name="entryStyle"
+            value="compact"
+            checked={entryStyle === "compact"}
+            onChange={() => handleChange("compact")}
+          />
+          <span className="settings-radio-text">Compact</span>
+        </label>
+        <label className={`settings-radio${entryStyle === "filled" ? " selected" : ""}`}>
+          <input
+            type="radio"
+            name="entryStyle"
+            value="filled"
+            checked={entryStyle === "filled"}
+            onChange={() => handleChange("filled")}
+          />
+          <span className="settings-radio-text">Filled</span>
+        </label>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================================
 // Main Component + Compound Export
 // ============================================================================
 
@@ -200,10 +248,14 @@ interface SettingsMenuProps {
   viewMode: ViewMode
   /** Current showTasks setting */
   showTasks: boolean
+  /** Current entry style */
+  entryStyle: EntryStyle
   /** Callback to change view mode */
   onViewModeChange: (mode: ViewMode) => void
   /** Callback to toggle showTasks */
   onToggleShowTasks: () => void
+  /** Callback to change entry style */
+  onEntryStyleChange: (style: EntryStyle) => void
   /** Children (sub-components) */
   children: React.ReactNode
 }
@@ -215,12 +267,15 @@ interface SettingsMenuProps {
  * <SettingsMenu
  *   viewMode={settings.viewMode}
  *   showTasks={settings.showTasks}
+ *   entryStyle={settings.entryStyle}
  *   onViewModeChange={setViewMode}
  *   onToggleShowTasks={toggleShowTasks}
+ *   onEntryStyleChange={setEntryStyle}
  * >
  *   <SettingsMenu.Trigger />
  *   <SettingsMenu.Panel>
  *     <SettingsMenu.ViewToggle />
+ *     <SettingsMenu.StyleToggle />
  *     <SettingsMenu.TaskToggle />
  *   </SettingsMenu.Panel>
  * </SettingsMenu>
@@ -228,16 +283,20 @@ interface SettingsMenuProps {
 function SettingsMenuRoot({
   viewMode,
   showTasks,
+  entryStyle,
   onViewModeChange,
   onToggleShowTasks,
+  onEntryStyleChange,
   children,
 }: SettingsMenuProps) {
   return (
     <SettingsMenuProvider
       viewMode={viewMode}
       showTasks={showTasks}
+      entryStyle={entryStyle}
       onViewModeChange={onViewModeChange}
       onToggleShowTasks={onToggleShowTasks}
+      onEntryStyleChange={onEntryStyleChange}
     >
       <div className="settings-menu">{children}</div>
     </SettingsMenuProvider>
@@ -249,5 +308,6 @@ export const SettingsMenu = Object.assign(SettingsMenuRoot, {
   Trigger,
   Panel,
   ViewToggle,
+  StyleToggle,
   TaskToggle,
 })
