@@ -3,7 +3,7 @@
 //! These functions handle the quirks of HTML form submissions where
 //! empty strings should be treated as None for optional fields.
 
-use chrono::{NaiveDate, NaiveTime};
+use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use serde::{Deserialize, Deserializer};
 
 /// Deserialize an optional string, treating empty strings as None.
@@ -46,9 +46,27 @@ where
     }
 }
 
+/// Deserialize an optional DateTime<Utc>, treating empty strings as None.
+/// Accepts ISO 8601 format (RFC 3339): e.g., "2025-01-15T10:30:00Z"
+pub fn deserialize_optional_datetime<'de, D>(
+    deserializer: D,
+) -> Result<Option<DateTime<Utc>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: Option<String> = Option::deserialize(deserializer)?;
+    match s {
+        Some(s) if !s.trim().is_empty() => DateTime::parse_from_rfc3339(&s)
+            .map(|dt| Some(dt.with_timezone(&Utc)))
+            .map_err(serde::de::Error::custom),
+        _ => Ok(None),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Datelike;
 
     /// Test struct that uses the deserializer functions
     #[derive(Debug, Deserialize, PartialEq)]
@@ -59,6 +77,8 @@ mod tests {
         date_field: Option<NaiveDate>,
         #[serde(default, deserialize_with = "deserialize_optional_time")]
         time_field: Option<NaiveTime>,
+        #[serde(default, deserialize_with = "deserialize_optional_datetime")]
+        datetime_field: Option<DateTime<Utc>>,
     }
 
     #[test]
@@ -143,6 +163,31 @@ mod tests {
     #[test]
     fn test_deserialize_optional_time_invalid() {
         let json = r#"{"time_field": "not-a-time"}"#;
+        let result: Result<TestStruct, _> = serde_json::from_str(json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_deserialize_optional_datetime_valid() {
+        let json = r#"{"datetime_field": "2025-01-15T10:30:00Z"}"#;
+        let result: TestStruct = serde_json::from_str(json).unwrap();
+        assert!(result.datetime_field.is_some());
+        let dt = result.datetime_field.unwrap();
+        assert_eq!(dt.year(), 2025);
+        assert_eq!(dt.month(), 1);
+        assert_eq!(dt.day(), 15);
+    }
+
+    #[test]
+    fn test_deserialize_optional_datetime_empty() {
+        let json = r#"{"datetime_field": ""}"#;
+        let result: TestStruct = serde_json::from_str(json).unwrap();
+        assert_eq!(result.datetime_field, None);
+    }
+
+    #[test]
+    fn test_deserialize_optional_datetime_invalid() {
+        let json = r#"{"datetime_field": "not-a-datetime"}"#;
         let result: Result<TestStruct, _> = serde_json::from_str(json);
         assert!(result.is_err());
     }

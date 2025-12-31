@@ -3,7 +3,7 @@
 //! These types are shared between the server and client for type-safe API communication.
 //! Following the Functional Core pattern, these are pure data types with no I/O.
 
-use chrono::{NaiveDate, NaiveTime, Utc};
+use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -297,6 +297,11 @@ pub struct UpdateEntryRequest {
     pub color: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub completed: Option<bool>,
+    /// Client's timestamp for LWW merge conflict resolution.
+    /// If provided, the server will compare this with its own `updated_at`
+    /// and only apply the update if the client's timestamp is newer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<DateTime<Utc>>,
 }
 
 impl UpdateEntryRequest {
@@ -362,6 +367,12 @@ impl UpdateEntryRequest {
     /// Set the task completion status.
     pub fn with_completed(mut self, completed: bool) -> Self {
         self.completed = Some(completed);
+        self
+    }
+
+    /// Set the updated_at timestamp for LWW merge conflict resolution.
+    pub fn with_updated_at(mut self, updated_at: DateTime<Utc>) -> Self {
+        self.updated_at = Some(updated_at);
         self
     }
 

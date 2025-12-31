@@ -211,6 +211,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 end_date,
                                 color,
                                 completed,
+                                updated_at: None, // CLI doesn't use LWW merge
                             },
                         )
                         .await?;

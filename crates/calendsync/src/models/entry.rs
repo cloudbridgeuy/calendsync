@@ -1,10 +1,11 @@
-use chrono::{NaiveDate, NaiveTime, Utc};
+use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use serde::Deserialize;
 use uuid::Uuid;
 
 use calendsync_core::calendar::{CalendarEntry, EntryKind, EntryType};
 use calendsync_core::serde::{
-    deserialize_optional_date, deserialize_optional_string, deserialize_optional_time,
+    deserialize_optional_date, deserialize_optional_datetime, deserialize_optional_string,
+    deserialize_optional_time,
 };
 
 /// Server-side entry type with custom deserialization.
@@ -118,6 +119,11 @@ pub struct UpdateEntry {
     pub color: Option<String>,
     #[serde(default)]
     pub completed: Option<bool>,
+    /// Client's timestamp for LWW merge conflict resolution.
+    /// If provided, the server will compare this with its own `updated_at`
+    /// and only apply the update if the client's timestamp is newer.
+    #[serde(default, deserialize_with = "deserialize_optional_datetime")]
+    pub updated_at: Option<DateTime<Utc>>,
 }
 
 impl UpdateEntry {

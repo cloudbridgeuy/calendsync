@@ -15,7 +15,7 @@ use chrono::NaiveDate;
 use serde::Deserialize;
 use uuid::Uuid;
 
-use calendsync_core::calendar::{CalendarEntry, EntryKind};
+use calendsync_core::calendar::{merge_entry, CalendarEntry, EntryKind, MergeResult};
 use calendsync_core::storage::{DateRange, RepositoryError};
 
 use crate::{
@@ -153,6 +153,10 @@ pub async fn get_entry(
 }
 
 /// Update an entry by ID (PUT /api/entries/{id}).
+///
+/// Uses Last-Write-Wins (LWW) merge strategy when the client provides an `updated_at` timestamp.
+/// If the client's timestamp is newer than the server's, the update is applied.
+/// Otherwise, the server's current entry is returned without modification.
 pub async fn update_entry(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
@@ -166,28 +170,63 @@ pub async fn update_entry(
 
     tracing::debug!(entry_id = %id, payload = ?payload, "Received update entry request");
 
-    // Get existing entry
-    let existing = state
+    // Get existing entry from server
+    let server_entry = state
         .entry_repo
         .get_entry(id)
         .await
         .map_err(|e| error_response(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or_else(|| error_response(StatusCode::NOT_FOUND, format!("Entry {id} not found")))?;
 
-    // Apply updates to a mutable copy
-    let mut updated_entry = existing;
-    payload.apply_to(&mut updated_entry);
+    // Extract client timestamp for LWW merge
+    let client_updated_at = payload.updated_at;
+
+    // Apply updates to create the proposed client entry
+    let mut proposed_entry = server_entry.clone();
+    payload.apply_to(&mut proposed_entry);
+
+    // Perform LWW merge if client provided a timestamp
+    let final_entry = if let Some(client_ts) = client_updated_at {
+        // Create a temporary entry with the client's timestamp for comparison
+        let client_entry = proposed_entry.clone().with_updated_at(client_ts);
+
+        match merge_entry(&server_entry, &client_entry) {
+            MergeResult::ClientWins(_) => {
+                tracing::debug!(
+                    entry_id = %id,
+                    client_ts = %client_ts,
+                    server_ts = %server_entry.updated_at,
+                    "Client wins LWW merge"
+                );
+                // Use the proposed entry (with server-generated updated_at from apply_to)
+                proposed_entry
+            }
+            MergeResult::ServerWins(server) => {
+                tracing::debug!(
+                    entry_id = %id,
+                    client_ts = %client_ts,
+                    server_ts = %server_entry.updated_at,
+                    "Server wins LWW merge"
+                );
+                // Return server's current entry without persisting
+                return Ok(Json(entry_to_server_entry(&server)));
+            }
+        }
+    } else {
+        // No client timestamp provided, apply update unconditionally (legacy behavior)
+        proposed_entry
+    };
 
     // Update via repository (which handles cache invalidation and event publishing)
     state
         .entry_repo
-        .update_entry(&updated_entry)
+        .update_entry(&final_entry)
         .await
         .map_err(|e| error_response(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     tracing::info!(entry_id = %id, "Updated entry");
 
-    Ok(Json(entry_to_server_entry(&updated_entry)))
+    Ok(Json(entry_to_server_entry(&final_entry)))
 }
 
 /// Delete an entry by ID (DELETE /api/entries/{id}).
