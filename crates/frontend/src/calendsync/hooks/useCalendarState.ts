@@ -1,12 +1,22 @@
 /**
- * Calendar state management hook.
- * Manages center date, visible days, entry cache, and SSE updates.
+ * Calendar state management for navigation and visual feedback.
  *
- * With SSR prefetching 365 days in each direction, this hook:
- * - Connects to SSE for real-time entry updates
- * - Only fetches from API if user navigates beyond prefetched range
- * - Updates entry cache in response to SSE events
- * - Shows flash animations and toast notifications for changes
+ * @deprecated PARTIALLY DEPRECATED: The entry caching in this hook should migrate
+ * to useOfflineCalendar for offline-first capabilities. However, this hook still
+ * manages view-layer concerns that are NOT deprecated:
+ * - Navigation state (centerDate, visibleDays)
+ * - Flash animations for entry changes
+ * - Toast notifications
+ * - SSE connection lifecycle
+ *
+ * For new calendars with offline support, use:
+ * - useOfflineCalendar for data persistence
+ * - useSseWithOffline for SSE handling
+ * - useInitialSync for hydration
+ * - This hook for navigation and visual feedback
+ *
+ * @see useOfflineCalendar
+ * @see .claude/context/offline-first.md
  */
 
 import { addDays, formatDateKey, isSameDay } from "@core/calendar/dates"
