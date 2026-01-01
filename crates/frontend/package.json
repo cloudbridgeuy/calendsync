@@ -29,6 +29,8 @@
     "watch": "bun run build:calendsync:dev --watch"
   },
   "dependencies": {
+    "dexie": "^4.0.10",
+    "dexie-react-hooks": "^1.1.7",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
