@@ -1,10 +1,13 @@
 /**
  * Entry tile component - displays a single calendar entry.
  * Consumes CalendarContext for flash states and callbacks.
+ * Supports sync status indicators for offline-first operations.
  */
 
 import type { ServerEntry } from "@core/calendar/types"
 import { useCalendarContext } from "../contexts"
+import { useEntrySyncStatus } from "../hooks/useEntrySyncStatus"
+import { SyncIndicator } from "./SyncIndicator"
 
 interface EntryTileProps {
   entry: ServerEntry
@@ -15,6 +18,7 @@ interface EntryTileProps {
  */
 export function EntryTile({ entry }: EntryTileProps) {
   const { flashStates, onEntryClick, onEntryToggle, settings } = useCalendarContext()
+  const syncStatus = useEntrySyncStatus(entry.id)
   const flashState = flashStates.get(entry.id)
   const { entryStyle } = settings
 
@@ -33,6 +37,9 @@ export function EntryTile({ entry }: EntryTileProps) {
     entry.completed ? "completed" : "",
     flashState ? `flash-${flashState}` : "",
     "clickable",
+    // Sync status classes
+    syncStatus === "pending" ? "entry-tile--pending" : "",
+    syncStatus === "conflict" ? "entry-tile--conflict" : "",
   ]
     .filter(Boolean)
     .join(" ")
@@ -108,6 +115,7 @@ export function EntryTile({ entry }: EntryTileProps) {
   if (entry.isTask) {
     return (
       <div className={classes} style={colorStyle} data-entry-id={entry.id} {...interactiveProps}>
+        <SyncIndicator syncStatus={syncStatus} classPrefix="entry-tile" />
         <div className="task-row">
           <input
             type="checkbox"
@@ -127,6 +135,7 @@ export function EntryTile({ entry }: EntryTileProps) {
   // Regular entry layout
   return (
     <div className={classes} style={colorStyle} data-entry-id={entry.id} {...interactiveProps}>
+      <SyncIndicator syncStatus={syncStatus} classPrefix="entry-tile" />
       {badge}
       {time}
       {content}

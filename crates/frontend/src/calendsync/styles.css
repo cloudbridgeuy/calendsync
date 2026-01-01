@@ -2734,3 +2734,131 @@ body {
 .calendar-container.schedule-mode .schedule-grid {
   /* Grid takes full height of scroll container */
 }
+
+/* ============================================
+   Sync Status Indicators
+   ============================================ */
+
+/* ==========================================================================
+   Sync Indicators (Unified)
+   ========================================================================== */
+
+/* Base sync indicator - shared positioning and size */
+[class*="__sync-indicator"] {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  z-index: 1;
+}
+
+/* Pending state - shared animation */
+[class*="__sync-indicator--pending"] {
+  background-color: var(--accent);
+  animation: indicator-pulse 1.5s ease-in-out infinite;
+}
+
+/* Conflict state - shared warning styling */
+[class*="__sync-indicator--conflict"] {
+  background-color: #f59e0b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+[class*="__sync-indicator--conflict"]::before {
+  content: "!";
+  font-size: 0.5rem;
+  font-weight: 700;
+  color: white;
+  line-height: 1;
+}
+
+@media (prefers-color-scheme: dark) {
+  [class*="__sync-indicator--conflict"] {
+    background-color: #fbbf24;
+  }
+}
+
+/* Pending sync state - subtle pulse animation */
+.entry-tile--pending {
+  opacity: 0.85;
+  position: relative;
+}
+
+.entry-tile--pending::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  animation: sync-pulse 2s ease-in-out infinite;
+}
+
+@keyframes sync-pulse {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 2px transparent;
+  }
+  50% {
+    box-shadow: inset 0 0 0 2px var(--accent);
+  }
+}
+
+/* Conflict state - warning border */
+.entry-tile--conflict {
+  border: 2px solid #f59e0b;
+  border-left-width: 4px;
+}
+
+@keyframes indicator-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 1;
+  }
+}
+
+/* Schedule timed entry sync states */
+.schedule-timed-entry--pending {
+  opacity: 0.85;
+}
+
+.schedule-timed-entry--conflict {
+  border: 2px solid #f59e0b;
+}
+
+/* All-day entry sync states */
+.all-day-entry--pending,
+.schedule-all-day-entry--pending {
+  opacity: 0.85;
+}
+
+.all-day-entry--conflict,
+.schedule-all-day-entry--conflict {
+  border: 2px solid #f59e0b;
+}
+
+/* Dark mode adjustments for conflict state */
+@media (prefers-color-scheme: dark) {
+  .entry-tile--conflict,
+  .schedule-timed-entry--conflict,
+  .all-day-entry--conflict,
+  .schedule-all-day-entry--conflict {
+    border-color: #fbbf24;
+  }
+}
+
+/* All-day entry needs position relative for sync indicator */
+.all-day-entry {
+  position: relative;
+}

@@ -13,6 +13,7 @@ import {
   isSameCalendarDay,
 } from "@core/calendar"
 import type { ServerEntry } from "@core/calendar/types"
+import type { LocalEntry } from "@core/sync/types"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import type { CalendarContextValue } from "../contexts"
 import { CalendarProvider, useCalendarContext } from "../contexts"
@@ -20,8 +21,11 @@ import {
   useCalendarSettings,
   useCalendarState,
   useEntryApi,
+  useInitialSync,
   useModalUrl,
   useNotificationCenter,
+  useOfflineCalendar,
+  useSseWithOffline,
   useVirtualScroll,
 } from "../hooks"
 import type { InitialData } from "../types"
@@ -64,6 +68,55 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
     onNotification: addNotification,
   })
   const { centerDate, entryCache, sseConnectionState, error, flashStates } = state
+
+  // Offline-first hooks for local persistence
+  // useInitialSync handles hydration from SSR data and persistent storage requests
+  const { isReady: offlineReady } = useInitialSync({
+    calendarId: initialData.calendarId,
+    initialDays: initialData.days,
+    bufferDays: 7,
+  })
+
+  // useOfflineCalendar provides reactive queries and local-first operations
+  const {
+    entries: offlineEntries,
+    isOnline,
+    pendingCount,
+    isSyncing,
+  } = useOfflineCalendar({
+    calendarId: initialData.calendarId,
+  })
+
+  // useSseWithOffline handles SSE with Dexie updates
+  // Callbacks trigger flash states and toasts from useCalendarState's SSE handlers
+  useSseWithOffline({
+    calendarId: initialData.calendarId,
+    enabled: typeof window !== "undefined",
+    onEntryAdded: (entry) => {
+      // Flash animation and toast handled by existing useCalendarState SSE handlers
+      // The SSE event was already processed by useSseWithOffline (stored in Dexie)
+      // We still need to trigger the visual feedback
+      actions.addEntryOptimistic(entry)
+    },
+    onEntryUpdated: (entry) => {
+      actions.updateEntryOptimistic(entry)
+    },
+    onEntryDeleted: () => {
+      // Note: deletion is handled by useSseWithOffline removing from Dexie
+      // The entry will disappear from the view via useLiveQuery
+    },
+  })
+
+  // Helper to get a local entry with sync status by ID
+  const getLocalEntry = useCallback(
+    (entryId: string): LocalEntry | undefined => {
+      return offlineEntries?.find((e) => e.id === entryId)
+    },
+    [offlineEntries],
+  )
+
+  // Determine if offline mode is enabled (client-side only with data ready)
+  const offlineEnabled = typeof window !== "undefined" && offlineReady
 
   // Modal URL state management
   const { modalState, openCreateModal, openEditModal, closeModal, closeAfterSave } = useModalUrl({
@@ -299,6 +352,12 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
       setShowAllDayOverflow,
       showAllDayTasks,
       setShowAllDayTasks,
+      // Offline sync state
+      isOnline,
+      pendingCount,
+      isSyncing,
+      offlineEnabled,
+      getLocalEntry,
     }),
     [
       flashStates,
@@ -333,6 +392,11 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
       settingsActions,
       showAllDayOverflow,
       showAllDayTasks,
+      isOnline,
+      pendingCount,
+      isSyncing,
+      offlineEnabled,
+      getLocalEntry,
     ],
   )
 

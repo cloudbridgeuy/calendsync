@@ -5,6 +5,7 @@
 
 import type { EntryStyle, ViewMode } from "@core/calendar/settings"
 import type { ServerEntry } from "@core/calendar/types"
+import type { LocalEntry } from "@core/sync/types"
 import { createContext, useContext } from "react"
 import type {
   AddNotificationFn,
@@ -105,6 +106,18 @@ export interface CalendarContextValue {
   showAllDayTasks: boolean
   /** Toggle task checkboxes visibility */
   setShowAllDayTasks: (show: boolean) => void
+
+  // Offline sync state
+  /** Whether the browser is currently online */
+  isOnline: boolean
+  /** Number of pending operations waiting to sync */
+  pendingCount: number
+  /** Whether sync is currently in progress */
+  isSyncing: boolean
+  /** Whether offline mode is enabled (entries from Dexie) */
+  offlineEnabled: boolean
+  /** Get entry with local sync status (for displaying pending/conflict indicators) */
+  getLocalEntry: (entryId: string) => LocalEntry | undefined
 }
 
 /** CalendarContext - null when not inside provider */

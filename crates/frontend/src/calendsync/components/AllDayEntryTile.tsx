@@ -1,10 +1,13 @@
 /**
  * AllDayEntryTile - renders a single all-day/multi-day/task entry.
  * Used in the all-day section of schedule mode.
+ * Supports sync status indicators for offline-first operations.
  */
 
 import type { ServerEntry } from "@core/calendar/types"
 import { useCalendarContext } from "../contexts"
+import { useEntrySyncStatus } from "../hooks/useEntrySyncStatus"
+import { SyncIndicator } from "./SyncIndicator"
 
 interface AllDayEntryTileProps {
   entry: ServerEntry
@@ -15,6 +18,7 @@ interface AllDayEntryTileProps {
  */
 export function AllDayEntryTile({ entry }: AllDayEntryTileProps) {
   const { onEntryClick, onEntryToggle, flashStates, settings } = useCalendarContext()
+  const syncStatus = useEntrySyncStatus(entry.id)
   const { entryStyle } = settings
 
   const flashState = flashStates.get(entry.id)
@@ -35,12 +39,23 @@ export function AllDayEntryTile({ entry }: AllDayEntryTileProps) {
       : { borderLeftColor: entry.color }
     : undefined
 
+  // Build CSS classes for task entries
+  const taskClasses = [
+    "all-day-entry",
+    `entry-style-${entryStyle}`,
+    "task",
+    entry.completed ? "completed" : "",
+    flashClass,
+    syncStatus === "pending" ? "all-day-entry--pending" : "",
+    syncStatus === "conflict" ? "all-day-entry--conflict" : "",
+  ]
+    .filter(Boolean)
+    .join(" ")
+
   if (entry.isTask) {
     return (
-      <div
-        className={`all-day-entry entry-style-${entryStyle} task${entry.completed ? " completed" : ""}${flashClass ? ` ${flashClass}` : ""}`}
-        style={{ borderLeftColor: entry.color || undefined }}
-      >
+      <div className={taskClasses} style={{ borderLeftColor: entry.color || undefined }}>
+        <SyncIndicator syncStatus={syncStatus} classPrefix="all-day-entry" />
         <label className="all-day-task-checkbox">
           <input type="checkbox" checked={entry.completed} onChange={() => onEntryToggle(entry)} />
           <span className="all-day-task-title">{entry.title}</span>
@@ -49,10 +64,22 @@ export function AllDayEntryTile({ entry }: AllDayEntryTileProps) {
     )
   }
 
+  // Build CSS classes for regular entries
+  const classes = [
+    "all-day-entry",
+    `entry-style-${entryStyle}`,
+    entry.isMultiDay ? "multi-day" : "",
+    flashClass,
+    syncStatus === "pending" ? "all-day-entry--pending" : "",
+    syncStatus === "conflict" ? "all-day-entry--conflict" : "",
+  ]
+    .filter(Boolean)
+    .join(" ")
+
   return (
     // biome-ignore lint/a11y/useSemanticElements: Using div with role="button" for layout consistency with other entry tiles
     <div
-      className={`all-day-entry entry-style-${entryStyle}${entry.isMultiDay ? " multi-day" : ""}${flashClass ? ` ${flashClass}` : ""}`}
+      className={classes}
       style={colorStyle}
       onClick={() => onEntryClick(entry)}
       role="button"
@@ -63,6 +90,7 @@ export function AllDayEntryTile({ entry }: AllDayEntryTileProps) {
         }
       }}
     >
+      <SyncIndicator syncStatus={syncStatus} classPrefix="all-day-entry" />
       {badgeText && <span className="all-day-badge">{badgeText}</span>}
       <span className="all-day-title">{entry.title}</span>
     </div>

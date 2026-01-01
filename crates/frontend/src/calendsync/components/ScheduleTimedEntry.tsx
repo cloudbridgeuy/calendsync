@@ -1,6 +1,7 @@
 /**
  * ScheduleTimedEntry - renders a single timed entry in the schedule view.
  * Positioned absolutely based on start time and duration.
+ * Supports sync status indicators for offline-first operations.
  */
 
 import {
@@ -11,6 +12,8 @@ import {
 } from "@core/calendar"
 import type { ServerEntry } from "@core/calendar/types"
 import { useCalendarContext } from "../contexts"
+import { useEntrySyncStatus } from "../hooks/useEntrySyncStatus"
+import { SyncIndicator } from "./SyncIndicator"
 
 interface ScheduleTimedEntryProps {
   /** The entry to render */
@@ -34,6 +37,7 @@ export function ScheduleTimedEntry({
   hourHeight = HOUR_HEIGHT_PX,
 }: ScheduleTimedEntryProps) {
   const { onEntryClick, flashStates, settings } = useCalendarContext()
+  const syncStatus = useEntrySyncStatus(entry.id)
   const { entryStyle } = settings
 
   const { top, height } = calculateTimePosition(entry.startTime, entry.endTime, hourHeight)
@@ -55,10 +59,21 @@ export function ScheduleTimedEntry({
       : { borderLeftColor: entry.color }
     : undefined
 
+  // Build CSS classes
+  const classes = [
+    "schedule-timed-entry",
+    `entry-style-${entryStyle}`,
+    flashClass,
+    syncStatus === "pending" ? "schedule-timed-entry--pending" : "",
+    syncStatus === "conflict" ? "schedule-timed-entry--conflict" : "",
+  ]
+    .filter(Boolean)
+    .join(" ")
+
   return (
     // biome-ignore lint/a11y/useSemanticElements: Using div with role="button" for complex layout positioning
     <div
-      className={`schedule-timed-entry entry-style-${entryStyle}${flashClass ? ` ${flashClass}` : ""}`}
+      className={classes}
       style={{
         top,
         height,
@@ -75,6 +90,7 @@ export function ScheduleTimedEntry({
         }
       }}
     >
+      <SyncIndicator syncStatus={syncStatus} classPrefix="schedule-timed-entry" />
       <div className="schedule-timed-entry-time">{timeRange}</div>
       <div className="schedule-timed-entry-title">{entry.title}</div>
       {entry.location && <div className="schedule-timed-entry-location">{entry.location}</div>}

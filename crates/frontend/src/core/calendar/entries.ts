@@ -9,9 +9,12 @@ import type { ServerDay, ServerEntry } from "./types"
 /**
  * Group entries by their date key.
  * Returns a Map where keys are YYYY-MM-DD strings.
+ *
+ * This function is generic and preserves the entry type, so if you pass
+ * LocalEntry[], you get Map<string, LocalEntry[]> back.
  */
-export function groupEntriesByDate(entries: ServerEntry[]): Map<string, ServerEntry[]> {
-  const grouped = new Map<string, ServerEntry[]>()
+export function groupEntriesByDate<T extends ServerEntry>(entries: T[]): Map<string, T[]> {
+  const grouped = new Map<string, T[]>()
 
   for (const entry of entries) {
     const existing = grouped.get(entry.startDate) || []
