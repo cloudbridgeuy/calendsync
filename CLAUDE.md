@@ -627,6 +627,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | Schedule Grid        | `.claude/context/schedule-grid.md`     |
 | Multi-Day Entries    | `.claude/context/multi-day-entries.md` |
 | Entry Style Setting  | `.claude/context/entry-style-setting.md` |
+| Offline-First        | `.claude/context/offline-first.md`     |
 
 ### Local Working Directories (gitignored)
 
