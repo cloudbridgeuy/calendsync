@@ -3,8 +3,10 @@ import {
   calculateDuration,
   calculateEntryWidth,
   calculateGridHeight,
+  calculateHourLinePositionPercent,
   calculateScrollToHour,
   calculateTimePosition,
+  calculateTimePositionPercent,
   detectOverlappingEntries,
   formatHourLabel,
   generateHourLabels,
@@ -117,6 +119,72 @@ describe("calculateScrollToHour", () => {
 
   test("uses custom hour height", () => {
     expect(calculateScrollToHour(8, 100)).toBe(800)
+  })
+})
+
+describe("calculateTimePositionPercent", () => {
+  test("calculates position for midnight to 1 AM event", () => {
+    const result = calculateTimePositionPercent("00:00:00", "01:00:00")
+    expect(result.topPercent).toBe(0)
+    // 1 hour = 60 minutes / 1440 minutes * 100 = 4.166...%
+    expect(result.heightPercent).toBeCloseTo(4.1667, 2)
+  })
+
+  test("calculates position for noon to 1 PM event", () => {
+    const result = calculateTimePositionPercent("12:00:00", "13:00:00")
+    // 12 hours = 720 minutes / 1440 minutes * 100 = 50%
+    expect(result.topPercent).toBe(50)
+    expect(result.heightPercent).toBeCloseTo(4.1667, 2)
+  })
+
+  test("calculates position for 9 AM to 9:30 AM event", () => {
+    const result = calculateTimePositionPercent("09:00:00", "09:30:00")
+    // 9 hours = 540 minutes / 1440 minutes * 100 = 37.5%
+    expect(result.topPercent).toBe(37.5)
+    // 30 minutes / 1440 minutes * 100 = 2.083...%
+    expect(result.heightPercent).toBeCloseTo(2.0833, 2)
+  })
+
+  test("calculates position for 11 PM to midnight event", () => {
+    const result = calculateTimePositionPercent("23:00:00", "24:00:00")
+    // 23 hours = 1380 minutes / 1440 minutes * 100 = 95.833...%
+    expect(result.topPercent).toBeCloseTo(95.8333, 2)
+    expect(result.heightPercent).toBeCloseTo(4.1667, 2)
+  })
+
+  test("enforces minimum height for very short events", () => {
+    const result = calculateTimePositionPercent("09:00:00", "09:05:00")
+    // Minimum 15 minutes / 1440 minutes * 100 = 1.0416...%
+    expect(result.heightPercent).toBeCloseTo(1.0417, 2)
+  })
+
+  test("handles null inputs gracefully", () => {
+    const result = calculateTimePositionPercent(null, null)
+    expect(result.topPercent).toBe(0)
+    // Duration is 0 but minimum is 15 minutes
+    expect(result.heightPercent).toBeCloseTo(1.0417, 2)
+  })
+})
+
+describe("calculateHourLinePositionPercent", () => {
+  test("calculates position for midnight (hour 0)", () => {
+    expect(calculateHourLinePositionPercent(0)).toBe(0)
+  })
+
+  test("calculates position for noon (hour 12)", () => {
+    expect(calculateHourLinePositionPercent(12)).toBe(50)
+  })
+
+  test("calculates position for 6 AM", () => {
+    expect(calculateHourLinePositionPercent(6)).toBe(25)
+  })
+
+  test("calculates position for 6 PM (hour 18)", () => {
+    expect(calculateHourLinePositionPercent(18)).toBe(75)
+  })
+
+  test("calculates position for 11 PM (hour 23)", () => {
+    expect(calculateHourLinePositionPercent(23)).toBeCloseTo(95.8333, 2)
   })
 })
 

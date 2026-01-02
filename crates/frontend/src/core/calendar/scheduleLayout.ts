@@ -33,6 +33,14 @@ export interface TimePosition {
   height: number
 }
 
+/** Position information for a timed entry as percentages */
+export interface TimePositionPercent {
+  /** Percentage from top of the time grid (0-100) */
+  topPercent: number
+  /** Height as percentage of grid (0-100) */
+  heightPercent: number
+}
+
 /** Overlap column assignment for an entry */
 export interface OverlapColumn {
   /** Column index (0-based) */
@@ -115,10 +123,38 @@ export function calculateTimePosition(
 }
 
 /**
+ * Calculate the position and height of a timed entry as percentages.
+ * Used for CSS-first layout where the grid fills available space.
+ */
+export function calculateTimePositionPercent(
+  startTime: string | null,
+  endTime: string | null,
+): TimePositionPercent {
+  const startMinutes = parseTimeToMinutes(startTime)
+  const durationMinutes = calculateDuration(startTime, endTime)
+
+  // Minimum duration equivalent to 15 minutes (same as pixel version)
+  const minDurationMinutes = 15
+  const effectiveDuration = Math.max(durationMinutes, minDurationMinutes)
+
+  const topPercent = (startMinutes / MINUTES_IN_DAY) * 100
+  const heightPercent = (effectiveDuration / MINUTES_IN_DAY) * 100
+
+  return { topPercent, heightPercent }
+}
+
+/**
  * Calculate scroll position to center on a specific hour.
  */
 export function calculateScrollToHour(hour: number, hourHeight: number = HOUR_HEIGHT_PX): number {
   return hour * hourHeight
+}
+
+/**
+ * Calculate the top position percentage for an hour line.
+ */
+export function calculateHourLinePositionPercent(hour: number): number {
+  return (hour / HOURS_IN_DAY) * 100
 }
 
 // ============================================================================

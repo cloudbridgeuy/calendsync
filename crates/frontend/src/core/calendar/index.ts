@@ -114,13 +114,20 @@ export {
   serializeNotifications,
 } from "./notifications"
 // Re-export schedule layout functions
-export type { OverlapColumn, SeparatedEntries, TimePosition } from "./scheduleLayout"
+export type {
+  OverlapColumn,
+  SeparatedEntries,
+  TimePosition,
+  TimePositionPercent,
+} from "./scheduleLayout"
 export {
   calculateDuration,
   calculateEntryWidth,
   calculateGridHeight,
+  calculateHourLinePositionPercent,
   calculateScrollToHour,
   calculateTimePosition,
+  calculateTimePositionPercent,
   DEFAULT_SCROLL_HOUR,
   detectOverlappingEntries,
   formatHourLabel,

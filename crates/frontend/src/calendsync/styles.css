@@ -1989,6 +1989,9 @@ body {
   background-color: var(--bg-secondary);
   border-right: 1px solid var(--border);
   z-index: 5;
+  display: flex;
+  flex-direction: column;
+  min-height: 1440px; /* 24 hours × 60px minimum */
 }
 
 .schedule-hour-row {
@@ -1997,6 +2000,7 @@ body {
   justify-content: flex-end;
   padding-right: 0.5rem;
   border-top: 1px solid var(--border);
+  flex: 1 0 60px; /* Grow equally, minimum 60px */
 }
 
 .schedule-hour-row:first-child {
@@ -2282,6 +2286,9 @@ body {
   background-color: var(--bg-secondary);
   border-right: 1px solid var(--border);
   z-index: 5;
+  display: flex;
+  flex-direction: column;
+  min-height: 1440px; /* 24 hours × 60px minimum */
 }
 
 .hour-column-header-spacer {
@@ -2297,6 +2304,7 @@ body {
   justify-content: flex-end;
   padding-right: 0.5rem;
   border-top: 1px solid var(--border);
+  flex: 1 0 60px; /* Grow equally, minimum 60px */
 }
 
 .hour-column-row:first-child {
@@ -2457,7 +2465,7 @@ body {
 /* Schedule Day Content (inside DayColumn) */
 .schedule-day-content {
   position: relative;
-  /* Height set by inline style: 24 * HOUR_HEIGHT_PX */
+  height: 100%; /* Fill parent height, which has min-height: 1440px */
 }
 
 /* Schedule mode: flex row for sticky hour column */
@@ -2706,12 +2714,16 @@ body {
   z-index: 5;
   background-color: var(--bg-secondary);
   border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  min-height: 1440px; /* 24 hours × 60px minimum */
 }
 
 .schedule-timed-grid {
   grid-column: 2;
   grid-row: 3;
   display: flex;
+  min-height: 1440px; /* 24 hours × 60px minimum */
 }
 
 /* Day columns in timed grid need borders */

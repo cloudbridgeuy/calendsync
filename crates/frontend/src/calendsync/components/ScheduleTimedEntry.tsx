@@ -6,8 +6,7 @@
 
 import {
   calculateEntryWidth,
-  calculateTimePosition,
-  HOUR_HEIGHT_PX,
+  calculateTimePositionPercent,
   type OverlapColumn,
 } from "@core/calendar"
 import type { ServerEntry } from "@core/calendar/types"
@@ -22,25 +21,22 @@ interface ScheduleTimedEntryProps {
   overlapColumn: OverlapColumn
   /** Width of the day column container */
   containerWidth: number
-  /** Height of each hour in pixels */
-  hourHeight?: number
 }
 
 /**
  * Renders a timed entry tile in the schedule view.
- * Uses absolute positioning based on time and overlap columns.
+ * Uses percentage-based absolute positioning for CSS-first layout.
  */
 export function ScheduleTimedEntry({
   entry,
   overlapColumn,
   containerWidth,
-  hourHeight = HOUR_HEIGHT_PX,
 }: ScheduleTimedEntryProps) {
   const { onEntryClick, flashStates, settings } = useCalendarContext()
   const syncStatus = useEntrySyncStatus(entry.id)
   const { entryStyle } = settings
 
-  const { top, height } = calculateTimePosition(entry.startTime, entry.endTime, hourHeight)
+  const { topPercent, heightPercent } = calculateTimePositionPercent(entry.startTime, entry.endTime)
   const { width, left } = calculateEntryWidth(overlapColumn, containerWidth)
 
   const flashState = flashStates.get(entry.id)
@@ -75,8 +71,8 @@ export function ScheduleTimedEntry({
     <div
       className={classes}
       style={{
-        top,
-        height,
+        top: `${topPercent}%`,
+        height: `${heightPercent}%`,
         left,
         width,
         ...colorStyle,

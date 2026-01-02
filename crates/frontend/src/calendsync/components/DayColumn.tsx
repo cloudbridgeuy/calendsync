@@ -4,9 +4,8 @@
  */
 
 import {
-  calculateGridHeight,
+  calculateHourLinePositionPercent,
   detectOverlappingEntries,
-  HOUR_HEIGHT_PX,
   HOURS_IN_DAY,
   separateEntriesByType,
   sortDayEntries,
@@ -108,6 +107,7 @@ interface ScheduleDayContentProps {
  * Render the schedule view content for a single day.
  * Shows hour grid lines and absolutely positioned timed entries.
  * All-day, multi-day, and tasks are rendered in the AllDaySection component.
+ * Uses percentage-based positioning for CSS-first layout.
  */
 export function ScheduleDayContent({ entries, dayWidth, dateKey }: ScheduleDayContentProps) {
   // Separate timed entries from all-day/multi-day/tasks
@@ -116,20 +116,18 @@ export function ScheduleDayContent({ entries, dayWidth, dateKey }: ScheduleDayCo
   // Calculate overlap columns for timed entries
   const overlapColumns = useMemo(() => detectOverlappingEntries(timed), [timed])
 
-  const gridHeight = calculateGridHeight()
-
   return (
     <div
       className="schedule-day-content"
       data-date={dateKey}
-      style={{ height: gridHeight, width: dayWidth, minWidth: dayWidth }}
+      style={{ width: dayWidth, minWidth: dayWidth }}
     >
-      {/* Hour grid lines */}
+      {/* Hour grid lines - positioned with percentages */}
       {Array.from({ length: HOURS_IN_DAY }, (_, hour) => (
         <div
           key={`line-${hour}`}
           className="schedule-hour-line"
-          style={{ top: hour * HOUR_HEIGHT_PX }}
+          style={{ top: `${calculateHourLinePositionPercent(hour)}%` }}
         />
       ))}
 

@@ -23,7 +23,6 @@ import {
   formatTasksToggle,
   getDayDisplayInfo,
   getTimezoneAbbreviation,
-  HOUR_HEIGHT_PX,
   HOURS_IN_DAY,
   isSameCalendarDay,
 } from "@core/calendar"
@@ -230,12 +229,13 @@ function AllDayEvents() {
 /**
  * Hour column - left side hour labels.
  * Sticky at left edge.
+ * Uses CSS flexbox for height - rows expand proportionally with the grid.
  */
 function HourColumn() {
   return (
     <div className="schedule-hour-column">
       {Array.from({ length: HOURS_IN_DAY }, (_, hour) => (
-        <div key={`hour-${hour}`} className="schedule-hour-row" style={{ height: HOUR_HEIGHT_PX }}>
+        <div key={`hour-${hour}`} className="schedule-hour-row">
           <span className="schedule-hour-label">{formatHourLabel(hour)}</span>
         </div>
       ))}
