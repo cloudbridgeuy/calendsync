@@ -78,6 +78,20 @@ When the checkbox is clicked:
 2. API call is made in background
 3. On failure, the state reverts to original
 
+## Entry Sorting in Compact View
+
+In Compact view, entries are sorted by the `sortDayEntries()` function in `crates/frontend/src/core/calendar/entries.ts`. The sort order prioritizes tasks near the top for visibility:
+
+1. **Multi-day entries** - Span multiple days
+2. **All-day entries** - Single day, no specific time
+3. **Tasks** - Actionable items with checkboxes
+4. **Timed entries** - Sorted by start time
+5. **Tie-breaker** - Alphabetical by title
+
+This ordering ensures tasks are prominently visible without scrolling past timed events.
+
+**Note:** Schedule view uses a different function (`separateEntriesByType`) that categorizes entries into separate sections rather than a flat sorted list.
+
 ### Key Files
 
 | File | Purpose |
@@ -85,6 +99,7 @@ When the checkbox is clicked:
 | `crates/calendsync/src/handlers/entries.rs` | Toggle endpoint, API responses |
 | `crates/calendsync/src/handlers/events.rs` | SSE event serialization |
 | `crates/calendsync/src/handlers/calendar_react.rs` | `entry_to_server_entry()` transformation |
-| `crates/frontend/src/calendar-react/components/EntryTile.tsx` | Task checkbox UI |
-| `crates/frontend/src/calendar-react/hooks/useEntryApi.ts` | `toggleEntry()` API call |
-| `crates/frontend/src/calendar-react/components/Calendar.tsx` | Toggle handler with optimistic update |
+| `crates/frontend/src/core/calendar/entries.ts` | `sortDayEntries()` for Compact view sorting |
+| `crates/frontend/src/calendsync/components/EntryTile.tsx` | Task checkbox UI |
+| `crates/frontend/src/calendsync/hooks/useEntryApi.ts` | `toggleEntry()` API call |
+| `crates/frontend/src/calendsync/components/Calendar.tsx` | Toggle handler with optimistic update |

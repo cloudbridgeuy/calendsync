@@ -26,26 +26,30 @@ export function groupEntriesByDate<T extends ServerEntry>(entries: T[]): Map<str
 }
 
 /**
- * Sort entries within a single day.
- * Order: all-day events first, then by start time, then by title.
+ * Sort entries within a single day for compact view.
+ * Order: multi-day > all-day > tasks > timed (by start time) > alphabetical by title
  */
 export function sortDayEntries(entries: ServerEntry[]): ServerEntry[] {
   return [...entries].sort((a, b) => {
-    // All-day entries come first
+    // 1. Multi-day entries come first
+    if (a.isMultiDay && !b.isMultiDay) return -1
+    if (!a.isMultiDay && b.isMultiDay) return 1
+
+    // 2. All-day entries come second
     if (a.isAllDay && !b.isAllDay) return -1
     if (!a.isAllDay && b.isAllDay) return 1
 
-    // Multi-day entries come after all-day but before timed
-    if (a.isMultiDay && !b.isMultiDay && !b.isAllDay) return -1
-    if (!a.isMultiDay && b.isMultiDay && !a.isAllDay) return 1
+    // 3. Tasks come third (before timed)
+    if (a.isTask && !b.isTask) return -1
+    if (!a.isTask && b.isTask) return 1
 
-    // Sort by start time if both have times
+    // 4. Timed entries: sort by start time
     if (a.startTime && b.startTime) {
       const comparison = a.startTime.localeCompare(b.startTime)
       if (comparison !== 0) return comparison
     }
 
-    // Finally sort by title
+    // 5. Tie-breaker: alphabetical by title
     return a.title.localeCompare(b.title)
   })
 }

@@ -61,7 +61,26 @@ describe("groupEntriesByDate", () => {
 })
 
 describe("sortDayEntries", () => {
-  test("sorts all-day entries first", () => {
+  test("sorts multi-day entries before all-day", () => {
+    const entries = [
+      createEntry({ id: "1", isAllDay: true, isMultiDay: false, startTime: null }),
+      createEntry({
+        id: "2",
+        isMultiDay: true,
+        isAllDay: false,
+        startDate: "2024-01-15",
+        endDate: "2024-01-17",
+        startTime: null,
+      }),
+    ]
+
+    const sorted = sortDayEntries(entries)
+
+    expect(sorted[0].id).toBe("2") // multi-day first
+    expect(sorted[1].id).toBe("1") // all-day second
+  })
+
+  test("sorts all-day entries before timed", () => {
     const entries = [
       createEntry({ id: "1", isAllDay: false, startTime: "10:00" }),
       createEntry({ id: "2", isAllDay: true, startTime: null }),
@@ -69,11 +88,61 @@ describe("sortDayEntries", () => {
 
     const sorted = sortDayEntries(entries)
 
-    expect(sorted[0].id).toBe("2")
-    expect(sorted[1].id).toBe("1")
+    expect(sorted[0].id).toBe("2") // all-day first
+    expect(sorted[1].id).toBe("1") // timed second
   })
 
-  test("sorts by start time", () => {
+  test("sorts tasks after all-day and before timed", () => {
+    const entries = [
+      createEntry({ id: "1", isTimed: true, startTime: "10:00" }),
+      createEntry({ id: "2", isTask: true, isTimed: false, startTime: null }),
+      createEntry({ id: "3", isAllDay: true, startTime: null }),
+    ]
+
+    const sorted = sortDayEntries(entries)
+
+    expect(sorted[0].id).toBe("3") // all-day first
+    expect(sorted[1].id).toBe("2") // task second
+    expect(sorted[2].id).toBe("1") // timed third
+  })
+
+  test("sorts tasks alphabetically among themselves", () => {
+    const entries = [
+      createEntry({ id: "1", isTask: true, isTimed: false, startTime: null, title: "Zebra task" }),
+      createEntry({ id: "2", isTask: true, isTimed: false, startTime: null, title: "Alpha task" }),
+    ]
+
+    const sorted = sortDayEntries(entries)
+
+    expect(sorted[0].id).toBe("2") // Alpha
+    expect(sorted[1].id).toBe("1") // Zebra
+  })
+
+  test("comprehensive sort order: multi-day > all-day > tasks > timed", () => {
+    const entries = [
+      createEntry({ id: "timed", isTimed: true, startTime: "14:00", title: "Meeting" }),
+      createEntry({ id: "task", isTask: true, isTimed: false, startTime: null, title: "Todo" }),
+      createEntry({ id: "allday", isAllDay: true, startTime: null, title: "Holiday" }),
+      createEntry({
+        id: "multiday",
+        isMultiDay: true,
+        isAllDay: false,
+        startDate: "2024-01-15",
+        endDate: "2024-01-17",
+        startTime: null,
+        title: "Conference",
+      }),
+    ]
+
+    const sorted = sortDayEntries(entries)
+
+    expect(sorted[0].id).toBe("multiday")
+    expect(sorted[1].id).toBe("allday")
+    expect(sorted[2].id).toBe("task")
+    expect(sorted[3].id).toBe("timed")
+  })
+
+  test("sorts timed entries by start time", () => {
     const entries = [
       createEntry({ id: "1", startTime: "14:00" }),
       createEntry({ id: "2", startTime: "09:00" }),
