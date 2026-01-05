@@ -629,6 +629,8 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | Entry Style Setting  | `.claude/context/entry-style-setting.md` |
 | Offline-First        | `.claude/context/offline-first.md`     |
 | Dexie.js Reference   | `.claude/context/DEXIE.md`             |
+| Authentication       | `.claude/context/authentication.md`    |
+| OIDC Setup Guide     | `.claude/context/oidc-setup.md`        |
 
 ### Local Working Directories (gitignored)
 

@@ -15,6 +15,10 @@ crates/core/src/storage/      # Trait definitions (pure)
 
 crates/calendsync/src/storage/ # Implementations (I/O)
 ├── mod.rs                    # Feature-gated exports
+├── inmemory/                 # In-memory backend (default)
+│   ├── mod.rs                # Module exports
+│   ├── repository.rs         # Repository trait implementations
+│   └── session_store.rs      # SessionRepository for auth
 ├── sqlite/                   # SQLite backend
 │   ├── schema.rs             # SQL DDL and queries
 │   ├── conversions.rs        # Row ↔ domain conversions
@@ -33,24 +37,31 @@ Storage backends are mutually exclusive at compile time:
 
 | Feature | Backend | Default | Use Case |
 |---------|---------|---------|----------|
-| `sqlite` | SQLite | Yes | Local development, testing |
+| `inmemory` | In-Memory | Yes | Quick testing, development |
+| `sqlite` | SQLite | No | Local development, persistent testing |
 | `dynamodb` | AWS DynamoDB | No | Production deployments |
 
 ```bash
-# SQLite (default)
+# In-memory (default)
 cargo build -p calendsync
 
+# SQLite
+cargo build -p calendsync --no-default-features --features sqlite,memory
+
 # DynamoDB
-cargo build -p calendsync --no-default-features --features dynamodb
+cargo build -p calendsync --no-default-features --features dynamodb,memory
 ```
 
 The module enforces exclusivity with compile-time checks:
 
 ```rust
 #[cfg(all(feature = "sqlite", feature = "dynamodb"))]
-compile_error!("Features 'sqlite' and 'dynamodb' are mutually exclusive.");
+compile_error!("Cannot enable both 'sqlite' and 'dynamodb' storage features.");
 
-#[cfg(not(any(feature = "sqlite", feature = "dynamodb")))]
+#[cfg(all(feature = "sqlite", feature = "inmemory"))]
+compile_error!("Cannot enable both 'sqlite' and 'inmemory' storage features.");
+
+#[cfg(not(any(feature = "sqlite", feature = "dynamodb", feature = "inmemory")))]
 compile_error!("No storage backend selected.");
 ```
 
@@ -100,10 +111,13 @@ pub trait CalendarRepository: Send + Sync {
 pub trait UserRepository: Send + Sync {
     async fn get_user(&self, id: Uuid) -> Result<Option<User>>;
     async fn get_user_by_email(&self, email: &str) -> Result<Option<User>>;
+    async fn get_user_by_provider(&self, provider: &str, subject: &str) -> Result<Option<User>>;
     async fn create_user(&self, user: &User) -> Result<()>;
     async fn update_user(&self, user: &User) -> Result<()>;
 }
 ```
+
+The `get_user_by_provider` method is used by OIDC authentication to find existing users by their provider-specific ID (e.g., Google's subject claim).
 
 ### MembershipRepository
 
@@ -175,9 +189,15 @@ CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
+    provider TEXT,           -- OIDC provider (google, apple)
+    provider_subject TEXT,   -- Provider's unique user ID
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+-- Partial unique index for provider lookup (OIDC auth)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_provider
+    ON users(provider, provider_subject) WHERE provider IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS memberships (
     calendar_id TEXT NOT NULL REFERENCES calendars(id),
@@ -205,12 +225,12 @@ let repo = SqliteRepository::new_in_memory().await?;
 
 Single-table design with composite keys:
 
-| Entity | PK | SK | GSI1 PK | GSI1 SK | GSI2 PK |
-|--------|----|----|---------|---------|---------|
-| Calendar | `CALENDAR#{id}` | `#METADATA` | - | - | - |
-| Entry | `CALENDAR#{calendar_id}` | `ENTRY#{start_date}#{id}` | `CALENDAR#{calendar_id}` | `ENTRY#{start_date}#{id}` | - |
-| User | `USER#{id}` | `#METADATA` | - | - | `EMAIL#{email}` |
-| Membership | `CALENDAR#{calendar_id}` | `MEMBER#{user_id}` | `USER#{user_id}` | `CALENDAR#{calendar_id}` | - |
+| Entity | PK | SK | GSI1 PK | GSI1 SK | GSI2 PK | GSI3 PK |
+|--------|----|----|---------|---------|---------|---------|
+| Calendar | `CALENDAR#{id}` | `#METADATA` | - | - | - | - |
+| Entry | `CALENDAR#{calendar_id}` | `ENTRY#{start_date}#{id}` | `CALENDAR#{calendar_id}` | `ENTRY#{start_date}#{id}` | - | - |
+| User | `USER#{id}` | `#METADATA` | - | - | `EMAIL#{email}` | `PROV#{provider}#{subject}` |
+| Membership | `CALENDAR#{calendar_id}` | `MEMBER#{user_id}` | `USER#{user_id}` | `CALENDAR#{calendar_id}` | - | - |
 
 **Entry Overlap Query Strategy**
 
@@ -225,6 +245,7 @@ This over-fetches slightly but ensures correctness for multi-day entries.
 
 - **GSI1**: User's calendar memberships (`get_calendars_for_user`), Entry date-sorted queries
 - **GSI2**: User lookup by email (`get_user_by_email`)
+- **GSI3**: User lookup by OIDC provider (`get_user_by_provider`) - only populated for users with provider set
 
 ### Usage
 
@@ -386,4 +407,87 @@ cargo xtask integration --sqlite --redis
 
 # Full integration (all combinations)
 cargo xtask integration --redis
+```
+
+## In-Memory Implementation
+
+The in-memory backend uses `Arc<RwLock<HashMap>>` for thread-safe storage. It's the default backend for quick testing and development.
+
+```
+crates/calendsync/src/storage/inmemory/
+├── mod.rs              # Module exports
+├── repository.rs       # Repository trait implementations
+└── session_store.rs    # SessionRepository for auth (feature-gated)
+```
+
+### Usage
+
+```rust
+// All repositories share the same in-memory storage
+let repo = InMemoryRepository::new();
+```
+
+### InMemorySessionStore
+
+When using `auth-mock` feature, an in-memory session store is available:
+
+```rust
+use crate::storage::inmemory::InMemorySessionStore;
+
+let session_store = InMemorySessionStore::new();
+```
+
+Implements `SessionRepository` trait for auth flow state and sessions.
+
+## Auth Session Storage
+
+Auth session storage is separate from entity repositories and is feature-gated:
+
+| Feature | Session Store | Use Case |
+|---------|--------------|----------|
+| `auth-sqlite` | SQLite via `calendsync_auth::SessionStore` | Development, small deployments |
+| `auth-redis` | Redis via `calendsync_auth::SessionStore` | Production, distributed |
+| `auth-mock` | In-memory `InMemorySessionStore` | Testing, development |
+
+### SessionRepository Trait
+
+Defined in `calendsync_core::auth`:
+
+```rust
+#[async_trait]
+pub trait SessionRepository: Send + Sync {
+    async fn create_session(&self, session: &Session) -> Result<()>;
+    async fn get_session(&self, id: &SessionId) -> Result<Option<Session>>;
+    async fn delete_session(&self, id: &SessionId) -> Result<()>;
+    async fn delete_user_sessions(&self, user_id: &str) -> Result<()>;
+    async fn store_auth_flow(&self, state: &str, flow: &AuthFlowState) -> Result<()>;
+    async fn take_auth_flow(&self, state: &str) -> Result<Option<AuthFlowState>>;
+}
+```
+
+### Wiring Auth in main.rs
+
+```rust
+// Create session store based on feature flags
+#[cfg(feature = "auth-sqlite")]
+let session_store = {
+    let pool = SqlitePoolOptions::new()
+        .connect(&format!("sqlite:{}?mode=rwc", config.auth_sqlite_path))
+        .await?;
+    let store = SessionStore::new(pool);
+    store.migrate().await?;
+    Arc::new(store) as Arc<dyn SessionRepository>
+};
+
+#[cfg(feature = "auth-mock")]
+let session_store = Arc::new(InMemorySessionStore::new()) as Arc<dyn SessionRepository>;
+
+// Initialize auth with repositories from AppState
+let auth_state = AuthState::new(
+    session_store,
+    state.user_repo.clone(),
+    state.calendar_repo.clone(),
+    state.membership_repo.clone(),
+    auth_config,
+).await?;
 ```
