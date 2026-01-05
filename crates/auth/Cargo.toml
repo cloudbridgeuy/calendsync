@@ -1,0 +1,64 @@
+[package]
+name = "calendsync_auth"
+version = "0.1.0"
+homepage = "https://github.com/cloudbridgeuy/calendsync"
+description = "Authentication for calendsync using OIDC"
+autobins = false
+
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "calendsync_auth"
+path = "src/lib.rs"
+
+[features]
+default = []
+sqlite = ["sqlx"]
+redis = ["fred"]
+mock = ["base64", "urlencoding"]
+
+[dependencies]
+calendsync_core = { workspace = true, features = ["auth"] }
+
+# Async
+async-trait = { workspace = true }
+tokio = { workspace = true }
+
+# Web
+axum = { workspace = true }
+axum-extra = { workspace = true }
+tower = { workspace = true }
+tower-cookies = { workspace = true }
+
+# OIDC
+openidconnect = { workspace = true }
+oauth2 = { workspace = true }
+url = { workspace = true }
+jsonwebtoken = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Time
+chrono = { workspace = true }
+time = { workspace = true }
+
+# ID generation
+uuid = { workspace = true }
+
+# Errors
+thiserror = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Storage (feature-gated)
+sqlx = { workspace = true, features = ["sqlite", "runtime-tokio"], optional = true }
+fred = { workspace = true, optional = true }
+
+# Mock IdP (feature-gated)
+base64 = { workspace = true, optional = true }
+urlencoding = { workspace = true, optional = true }
