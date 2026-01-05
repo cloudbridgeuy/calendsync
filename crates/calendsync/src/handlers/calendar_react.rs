@@ -131,6 +131,75 @@ fn entries_to_server_days(
         .collect()
 }
 
+/// Generate simple HTML page for service unavailable states (e.g., SSR initializing).
+/// Includes auto-refresh hint to encourage user to retry.
+fn initializing_html(title: &str, message: &str) -> String {
+    format!(
+        r#"<!DOCTYPE html>
+<html>
+<head>
+    <title>{title}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background: #f9fafb;
+        }}
+        .container {{
+            text-align: center;
+            padding: 2rem;
+        }}
+        h1 {{
+            color: #374151;
+            margin-bottom: 0.5rem;
+        }}
+        p {{
+            color: #6b7280;
+            margin-bottom: 1.5rem;
+        }}
+        .spinner {{
+            width: 40px;
+            height: 40px;
+            border: 3px solid #e5e7eb;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }}
+        @keyframes spin {{
+            to {{ transform: rotate(360deg); }}
+        }}
+        .retry-button {{
+            padding: 0.75rem 1.5rem;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-size: 1rem;
+        }}
+        .retry-button:hover {{
+            background: #2563eb;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="spinner"></div>
+        <h1>{title}</h1>
+        <p>{message}</p>
+        <button class="retry-button" onclick="location.reload()">Refresh</button>
+    </div>
+</body>
+</html>"#
+    )
+}
+
 /// Generate error HTML with client-side fallback.
 /// When dev_mode is true, includes auto-refresh script with retry logic for self-healing.
 fn error_html(
@@ -363,17 +432,19 @@ async fn calendar_react_ssr_impl(state: AppState, calendar_id: Uuid) -> Response
         }
     };
 
-    // Check if SSR pool is available (async for hot-reload support)
+    // Check if SSR pool is available (async for lazy initialization support)
     let Some(ssr_pool) = state.get_ssr_pool().await else {
-        tracing::error!("SSR pool not initialized");
-        return Html(error_html(
-            "SSR not available",
-            &calendar_id.to_string(),
-            &urls.client_js,
-            &urls.css,
-            dev_mode,
-        ))
-        .into_response();
+        // SSR still initializing - return 503 with retry hint
+        tracing::info!("SSR pool still initializing, returning 503");
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            [("Retry-After", "5")],
+            Html(initializing_html(
+                "Calendar Loading",
+                "The calendar view is initializing. Please refresh in a few seconds.",
+            )),
+        )
+            .into_response();
     };
 
     // Get today's date as the highlighted day
@@ -560,17 +631,19 @@ async fn calendar_react_ssr_entry_impl(
         }
     };
 
-    // Check if SSR pool is available (async for hot-reload support)
+    // Check if SSR pool is available (async for lazy initialization support)
     let Some(ssr_pool) = state.get_ssr_pool().await else {
-        tracing::error!("SSR pool not initialized");
-        return Html(error_html(
-            "SSR not available",
-            &calendar_id.to_string(),
-            &urls.client_js,
-            &urls.css,
-            dev_mode,
-        ))
-        .into_response();
+        // SSR still initializing - return 503 with retry hint
+        tracing::info!("SSR pool still initializing, returning 503");
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            [("Retry-After", "5")],
+            Html(initializing_html(
+                "Calendar Loading",
+                "The calendar view is initializing. Please refresh in a few seconds.",
+            )),
+        )
+            .into_response();
     };
 
     // Get today's date as the highlighted day
