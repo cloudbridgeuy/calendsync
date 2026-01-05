@@ -150,7 +150,7 @@ pub fn generate_entries_for_seeding(
 /// Returns `DevError::ServerNotHealthy` if the server doesn't respond within the timeout.
 pub async fn wait_for_server(base_url: &str, timeout: Duration) -> Result<()> {
     let client = reqwest::Client::new();
-    let health_url = format!("{base_url}/healthz");
+    let health_url = format!("{base_url}/livez");
     let poll_interval = Duration::from_millis(500);
     let start = std::time::Instant::now();
 
