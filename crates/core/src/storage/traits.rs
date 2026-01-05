@@ -53,6 +53,13 @@ pub trait UserRepository: Send + Sync {
     /// Gets a user by their email address.
     async fn get_user_by_email(&self, email: &str) -> Result<Option<User>>;
 
+    /// Gets a user by their OIDC provider and subject (unique ID from provider).
+    async fn get_user_by_provider(
+        &self,
+        provider: &str,
+        provider_subject: &str,
+    ) -> Result<Option<User>>;
+
     /// Creates a new user.
     async fn create_user(&self, user: &User) -> Result<()>;
 

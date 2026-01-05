@@ -8,6 +8,10 @@ pub struct User {
     pub id: Uuid,
     pub name: String,
     pub email: String,
+    /// OIDC provider that authenticated this user ("google" or "apple").
+    pub provider: Option<String>,
+    /// Provider's unique user identifier (subject claim from ID token).
+    pub provider_subject: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -20,9 +24,23 @@ impl User {
             id: Uuid::new_v4(),
             name: name.into(),
             email: email.into(),
+            provider: None,
+            provider_subject: None,
             created_at: now,
             updated_at: now,
         }
+    }
+
+    /// Sets the OIDC provider for this user.
+    pub fn with_provider(mut self, provider: impl Into<String>) -> Self {
+        self.provider = Some(provider.into());
+        self
+    }
+
+    /// Sets the provider subject (unique ID from the OIDC provider).
+    pub fn with_provider_subject(mut self, subject: impl Into<String>) -> Self {
+        self.provider_subject = Some(subject.into());
+        self
     }
 
     /// Sets a specific ID for this user (useful for testing).
@@ -137,6 +155,9 @@ pub struct Calendar {
     /// Default color for entries in this calendar (CSS color value).
     pub color: String,
     pub description: Option<String>,
+    /// Whether this is the user's default personal calendar (cannot be deleted).
+    #[serde(default)]
+    pub is_default: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -150,6 +171,7 @@ impl Calendar {
             name: name.into(),
             color: color.into(),
             description: None,
+            is_default: false,
             created_at: now,
             updated_at: now,
         }
@@ -158,6 +180,12 @@ impl Calendar {
     /// Sets the description for this calendar.
     pub fn with_description(mut self, description: impl Into<String>) -> Self {
         self.description = Some(description.into());
+        self
+    }
+
+    /// Marks this calendar as the user's default calendar.
+    pub fn as_default(mut self) -> Self {
+        self.is_default = true;
         self
     }
 
