@@ -15,4 +15,18 @@
 
 mod repository;
 
+#[cfg(all(
+    feature = "auth-mock",
+    not(feature = "auth-sqlite"),
+    not(feature = "auth-redis")
+))]
+mod session_store;
+
 pub use repository::InMemoryRepository;
+
+#[cfg(all(
+    feature = "auth-mock",
+    not(feature = "auth-sqlite"),
+    not(feature = "auth-redis")
+))]
+pub use session_store::InMemorySessionStore;

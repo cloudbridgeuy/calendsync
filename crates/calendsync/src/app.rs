@@ -11,6 +11,9 @@ use tower_http::{
     trace::TraceLayer,
 };
 
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+use calendsync_auth::auth_routes;
+
 use crate::{
     handlers::{
         calendar_react::{calendar_react_ssr, calendar_react_ssr_entry},
@@ -24,6 +27,9 @@ use crate::{
     },
     state::AppState,
 };
+
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+use crate::handlers::{login::login_page, root::root_redirect};
 
 /// Create the application router with all routes and middleware.
 pub fn create_app(state: AppState) -> Router {
@@ -84,6 +90,23 @@ pub fn create_app(state: AppState) -> Router {
         tracing::info!(
             "Dev mode enabled: /_dev/reload, /_dev/events, /_dev/error endpoints available"
         );
+    }
+
+    // Add auth routes if auth is configured
+    // We need to convert auth routes to use AppState by extracting AuthState via AsRef
+    #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+    if state.auth.is_some() {
+        // auth_routes() returns Router<AuthState>, but our app uses Router<AppState>
+        // Since AppState implements AsRef<AuthState>, we can use with_state() to adapt
+        let auth_router = auth_routes().with_state(state.auth.clone().unwrap());
+        router = router.merge(auth_router);
+
+        // Add login and root redirect routes
+        router = router
+            .route("/", get(root_redirect))
+            .route("/login", get(login_page));
+
+        tracing::info!("Auth routes enabled: /auth/*, /, /login endpoints available");
     }
 
     router

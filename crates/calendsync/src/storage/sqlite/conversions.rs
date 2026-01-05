@@ -17,18 +17,22 @@ use uuid::Uuid;
 
 /// Convert a SQLite row to a User.
 ///
-/// Expected columns: id, name, email, created_at, updated_at
+/// Expected columns: id, name, email, provider, provider_subject, created_at, updated_at
 pub fn row_to_user(row: &Row) -> rusqlite::Result<User> {
     let id: String = row.get(0)?;
     let name: String = row.get(1)?;
     let email: String = row.get(2)?;
-    let created_at: String = row.get(3)?;
-    let updated_at: String = row.get(4)?;
+    let provider: Option<String> = row.get(3)?;
+    let provider_subject: Option<String> = row.get(4)?;
+    let created_at: String = row.get(5)?;
+    let updated_at: String = row.get(6)?;
 
     Ok(User {
         id: parse_uuid(&id)?,
         name,
         email,
+        provider,
+        provider_subject,
         created_at: parse_datetime(&created_at)?,
         updated_at: parse_datetime(&updated_at)?,
     })
@@ -54,6 +58,7 @@ pub fn row_to_calendar(row: &Row) -> rusqlite::Result<Calendar> {
         name,
         color,
         description,
+        is_default: false,
         created_at: parse_datetime(&created_at)?,
         updated_at: parse_datetime(&updated_at)?,
     })
@@ -76,6 +81,7 @@ pub fn row_to_calendar_with_role(row: &Row) -> rusqlite::Result<(Calendar, Calen
         name,
         color,
         description,
+        is_default: false,
         created_at: parse_datetime(&created_at)?,
         updated_at: parse_datetime(&updated_at)?,
     };
@@ -161,19 +167,23 @@ pub fn row_to_membership(row: &Row) -> rusqlite::Result<CalendarMembership> {
 
 /// Convert a row to User with role (from JOIN query).
 ///
-/// Expected columns: id, name, email, created_at, updated_at, role
+/// Expected columns: id, name, email, provider, provider_subject, created_at, updated_at, role
 pub fn row_to_user_with_role(row: &Row) -> rusqlite::Result<(User, CalendarRole)> {
     let id: String = row.get(0)?;
     let name: String = row.get(1)?;
     let email: String = row.get(2)?;
-    let created_at: String = row.get(3)?;
-    let updated_at: String = row.get(4)?;
-    let role_str: String = row.get(5)?;
+    let provider: Option<String> = row.get(3)?;
+    let provider_subject: Option<String> = row.get(4)?;
+    let created_at: String = row.get(5)?;
+    let updated_at: String = row.get(6)?;
+    let role_str: String = row.get(7)?;
 
     let user = User {
         id: parse_uuid(&id)?,
         name,
         email,
+        provider,
+        provider_subject,
         created_at: parse_datetime(&created_at)?,
         updated_at: parse_datetime(&updated_at)?,
     };
@@ -380,5 +390,162 @@ mod tests {
     fn test_parse_datetime_invalid() {
         let result = parse_datetime("not-a-datetime");
         assert!(result.is_err());
+    }
+
+    // Tests for row_to_user with provider fields require an actual rusqlite connection
+    // These are integration-level tests using in-memory SQLite
+
+    #[test]
+    fn test_row_to_user_with_provider() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE users (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                provider TEXT,
+                provider_subject TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+            [],
+        )
+        .unwrap();
+
+        conn.execute(
+            "INSERT INTO users (id, name, email, provider, provider_subject, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            [
+                "550e8400-e29b-41d4-a716-446655440000",
+                "Test User",
+                "test@example.com",
+                "google",
+                "google-123456",
+                "2024-06-15T10:30:00Z",
+                "2024-06-15T10:30:00Z",
+            ],
+        )
+        .unwrap();
+
+        let mut stmt = conn
+            .prepare("SELECT id, name, email, provider, provider_subject, created_at, updated_at FROM users")
+            .unwrap();
+        let user = stmt.query_row([], row_to_user).unwrap();
+
+        assert_eq!(user.name, "Test User");
+        assert_eq!(user.email, "test@example.com");
+        assert_eq!(user.provider, Some("google".to_string()));
+        assert_eq!(user.provider_subject, Some("google-123456".to_string()));
+    }
+
+    #[test]
+    fn test_row_to_user_without_provider() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE users (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                provider TEXT,
+                provider_subject TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+            [],
+        )
+        .unwrap();
+
+        conn.execute(
+            "INSERT INTO users (id, name, email, provider, provider_subject, created_at, updated_at)
+             VALUES (?1, ?2, ?3, NULL, NULL, ?4, ?5)",
+            [
+                "550e8400-e29b-41d4-a716-446655440000",
+                "Local User",
+                "local@example.com",
+                "2024-06-15T10:30:00Z",
+                "2024-06-15T10:30:00Z",
+            ],
+        )
+        .unwrap();
+
+        let mut stmt = conn
+            .prepare("SELECT id, name, email, provider, provider_subject, created_at, updated_at FROM users")
+            .unwrap();
+        let user = stmt.query_row([], row_to_user).unwrap();
+
+        assert_eq!(user.name, "Local User");
+        assert_eq!(user.email, "local@example.com");
+        assert_eq!(user.provider, None);
+        assert_eq!(user.provider_subject, None);
+    }
+
+    #[test]
+    fn test_row_to_user_with_role_with_provider() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute(
+            "CREATE TABLE users (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                provider TEXT,
+                provider_subject TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+            [],
+        )
+        .unwrap();
+
+        conn.execute(
+            "CREATE TABLE memberships (
+                calendar_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                PRIMARY KEY (calendar_id, user_id)
+            )",
+            [],
+        )
+        .unwrap();
+
+        conn.execute(
+            "INSERT INTO users (id, name, email, provider, provider_subject, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            [
+                "550e8400-e29b-41d4-a716-446655440000",
+                "Test User",
+                "test@example.com",
+                "apple",
+                "apple-subject-123",
+                "2024-06-15T10:30:00Z",
+                "2024-06-15T10:30:00Z",
+            ],
+        )
+        .unwrap();
+
+        conn.execute(
+            "INSERT INTO memberships (calendar_id, user_id, role)
+             VALUES (?1, ?2, ?3)",
+            [
+                "660e8400-e29b-41d4-a716-446655440000",
+                "550e8400-e29b-41d4-a716-446655440000",
+                "owner",
+            ],
+        )
+        .unwrap();
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT u.id, u.name, u.email, u.provider, u.provider_subject, u.created_at, u.updated_at, m.role
+                 FROM users u
+                 INNER JOIN memberships m ON u.id = m.user_id",
+            )
+            .unwrap();
+        let (user, role) = stmt.query_row([], row_to_user_with_role).unwrap();
+
+        assert_eq!(user.name, "Test User");
+        assert_eq!(user.email, "test@example.com");
+        assert_eq!(user.provider, Some("apple".to_string()));
+        assert_eq!(user.provider_subject, Some("apple-subject-123".to_string()));
+        assert_eq!(role, CalendarRole::Owner);
     }
 }

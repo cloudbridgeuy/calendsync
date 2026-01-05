@@ -17,6 +17,10 @@ pub struct Config {
     /// Note: Only used when the `redis` feature is enabled.
     #[allow(dead_code)]
     pub redis_url: String,
+    /// Path to SQLite database for auth sessions (default: "data/sessions.db")
+    /// Note: Only used when the `auth-sqlite` feature is enabled.
+    #[allow(dead_code)]
+    pub auth_sqlite_path: String,
 }
 
 impl Config {
@@ -28,6 +32,7 @@ impl Config {
     /// - `EVENT_HISTORY_MAX_SIZE` - SSE event history size (default: 1,000)
     /// - `SQLITE_PATH` - SQLite database path (default: "calendsync.db")
     /// - `REDIS_URL` - Redis connection URL (default: "redis://localhost:6379")
+    /// - `AUTH_SQLITE_PATH` - Auth sessions SQLite path (default: "data/sessions.db")
     pub fn from_env() -> Self {
         Self {
             cache_ttl_seconds: env::var("CACHE_TTL_SECONDS")
@@ -45,6 +50,8 @@ impl Config {
             sqlite_path: env::var("SQLITE_PATH").unwrap_or_else(|_| "calendsync.db".to_string()),
             redis_url: env::var("REDIS_URL")
                 .unwrap_or_else(|_| "redis://localhost:6379".to_string()),
+            auth_sqlite_path: env::var("AUTH_SQLITE_PATH")
+                .unwrap_or_else(|_| "data/sessions.db".to_string()),
         }
     }
 
@@ -72,6 +79,7 @@ mod tests {
             event_history_max_size: 1_000,
             sqlite_path: "test.db".to_string(),
             redis_url: "redis://localhost:6379".to_string(),
+            auth_sqlite_path: "data/sessions.db".to_string(),
         };
 
         assert_eq!(config.cache_ttl(), Duration::from_secs(600));
@@ -85,6 +93,7 @@ mod tests {
         env::remove_var("EVENT_HISTORY_MAX_SIZE");
         env::remove_var("SQLITE_PATH");
         env::remove_var("REDIS_URL");
+        env::remove_var("AUTH_SQLITE_PATH");
 
         let config = Config::from_env();
 
@@ -93,5 +102,6 @@ mod tests {
         assert_eq!(config.event_history_max_size, 1_000);
         assert_eq!(config.sqlite_path, "calendsync.db");
         assert_eq!(config.redis_url, "redis://localhost:6379");
+        assert_eq!(config.auth_sqlite_path, "data/sessions.db");
     }
 }

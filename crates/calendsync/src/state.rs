@@ -15,8 +15,13 @@ use tokio::sync::{broadcast, RwLock as TokioRwLock};
 use uuid::Uuid;
 
 use calendsync_core::cache::CachePubSub;
-use calendsync_core::storage::{CalendarRepository, EntryRepository};
+use calendsync_core::storage::{
+    CalendarRepository, EntryRepository, MembershipRepository, UserRepository,
+};
 use calendsync_ssr::SsrPool;
+
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+use calendsync_auth::AuthState;
 
 use crate::config::Config;
 
@@ -77,6 +82,14 @@ pub struct AppState {
     pub entry_repo: Arc<dyn EntryRepository>,
     /// Calendar repository (cached, wraps underlying storage).
     pub calendar_repo: Arc<dyn CalendarRepository>,
+    /// User repository (uncached, auth lookups should hit source of truth).
+    /// Note: Only used when auth features are enabled.
+    #[allow(dead_code)]
+    pub user_repo: Arc<dyn UserRepository>,
+    /// Membership repository (uncached, auth lookups should hit source of truth).
+    /// Note: Only used when auth features are enabled.
+    #[allow(dead_code)]
+    pub membership_repo: Arc<dyn MembershipRepository>,
     /// Cache pub/sub for cross-instance event propagation.
     pub cache_pubsub: Arc<dyn CachePubSub>,
 
@@ -104,6 +117,10 @@ pub struct AppState {
     /// Dev mode CSS reload sender (for CSS hot-swap without full reload).
     /// Only used when DEV_MODE is set.
     pub dev_css_reload_tx: broadcast::Sender<CssReload>,
+
+    /// Authentication state (optional, enabled via auth-* features).
+    #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+    pub auth: Option<AuthState>,
 }
 
 impl AppState {
@@ -111,6 +128,8 @@ impl AppState {
     fn build(
         entry_repo: Arc<dyn EntryRepository>,
         calendar_repo: Arc<dyn CalendarRepository>,
+        user_repo: Arc<dyn UserRepository>,
+        membership_repo: Arc<dyn MembershipRepository>,
         cache_pubsub: Arc<dyn CachePubSub>,
         config: &Config,
     ) -> Self {
@@ -122,6 +141,8 @@ impl AppState {
         Self {
             entry_repo,
             calendar_repo,
+            user_repo,
+            membership_repo,
             cache_pubsub,
             event_counter: Arc::new(AtomicU64::new(1)),
             event_history: Arc::new(RwLock::new(VecDeque::new())),
@@ -132,6 +153,8 @@ impl AppState {
             dev_reload_tx,
             dev_error_tx,
             dev_css_reload_tx,
+            #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+            auth: None,
         }
     }
 
@@ -147,6 +170,19 @@ impl AppState {
             .expect("SSR pool lock should be available during initialization");
         *guard = Some(Arc::new(pool));
         drop(guard);
+        self
+    }
+
+    /// Set the auth state.
+    ///
+    /// This is called during initialization before any handlers run.
+    ///
+    /// Note: This method is prepared for future integration when the storage layer
+    /// exposes the required repositories for auth initialization.
+    #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+    #[allow(dead_code)]
+    pub fn with_auth(mut self, auth: AuthState) -> Self {
+        self.auth = Some(auth);
         self
     }
 
@@ -341,6 +377,19 @@ impl AppState {
 }
 
 // ============================================================================
+// AsRef<AuthState> implementation for auth extractors
+// ============================================================================
+
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+impl AsRef<AuthState> for AppState {
+    fn as_ref(&self) -> &AuthState {
+        self.auth
+            .as_ref()
+            .expect("Auth state must be set before using auth routes")
+    }
+}
+
+// ============================================================================
 // Factory functions for different backend combinations
 // ============================================================================
 
@@ -366,7 +415,7 @@ mod sqlite_memory {
             ));
 
             let cached_calendar_repo = Arc::new(CachedCalendarRepository::new(
-                sqlite_repo,
+                sqlite_repo.clone(),
                 memory_cache,
                 config.cache_ttl(),
             ));
@@ -374,6 +423,8 @@ mod sqlite_memory {
             Ok(Self::build(
                 cached_entry_repo,
                 cached_calendar_repo,
+                sqlite_repo.clone(),
+                sqlite_repo,
                 memory_pubsub,
                 config,
             ))
@@ -403,7 +454,7 @@ mod sqlite_redis {
             ));
 
             let cached_calendar_repo = Arc::new(CachedCalendarRepository::new(
-                sqlite_repo,
+                sqlite_repo.clone(),
                 redis_cache,
                 config.cache_ttl(),
             ));
@@ -411,6 +462,8 @@ mod sqlite_redis {
             Ok(Self::build(
                 cached_entry_repo,
                 cached_calendar_repo,
+                sqlite_repo.clone(),
+                sqlite_repo,
                 redis_pubsub,
                 config,
             ))
@@ -441,7 +494,7 @@ mod inmemory_memory {
             ));
 
             let cached_calendar_repo = Arc::new(CachedCalendarRepository::new(
-                inmemory_repo,
+                inmemory_repo.clone(),
                 memory_cache,
                 config.cache_ttl(),
             ));
@@ -449,6 +502,8 @@ mod inmemory_memory {
             Ok(Self::build(
                 cached_entry_repo,
                 cached_calendar_repo,
+                inmemory_repo.clone(),
+                inmemory_repo,
                 memory_pubsub,
                 config,
             ))
@@ -484,7 +539,7 @@ mod dynamodb_memory {
             ));
 
             let cached_calendar_repo = Arc::new(CachedCalendarRepository::new(
-                dynamodb_repo,
+                dynamodb_repo.clone(),
                 memory_cache,
                 config.cache_ttl(),
             ));
@@ -492,6 +547,8 @@ mod dynamodb_memory {
             Ok(Self::build(
                 cached_entry_repo,
                 cached_calendar_repo,
+                dynamodb_repo.clone(),
+                dynamodb_repo,
                 memory_pubsub,
                 config,
             ))
@@ -527,7 +584,7 @@ mod dynamodb_redis {
             ));
 
             let cached_calendar_repo = Arc::new(CachedCalendarRepository::new(
-                dynamodb_repo,
+                dynamodb_repo.clone(),
                 redis_cache,
                 config.cache_ttl(),
             ));
@@ -535,6 +592,8 @@ mod dynamodb_redis {
             Ok(Self::build(
                 cached_entry_repo,
                 cached_calendar_repo,
+                dynamodb_repo.clone(),
+                dynamodb_repo,
                 redis_pubsub,
                 config,
             ))
@@ -556,8 +615,13 @@ mod test_support {
     use async_trait::async_trait;
     use tokio::sync::RwLock;
 
-    use calendsync_core::calendar::{Calendar, CalendarEntry};
-    use calendsync_core::storage::{CalendarRepository, DateRange, EntryRepository, Result};
+    use calendsync_core::calendar::{
+        Calendar, CalendarEntry, CalendarMembership, CalendarRole, User,
+    };
+    use calendsync_core::storage::{
+        CalendarRepository, DateRange, EntryRepository, MembershipRepository, Result,
+        UserRepository,
+    };
 
     /// Minimal in-memory repository for tests.
     /// This is a simplified version that only implements the traits needed for testing.
@@ -565,6 +629,8 @@ mod test_support {
     struct TestRepository {
         entries: RwLock<HashMap<Uuid, CalendarEntry>>,
         calendars: RwLock<HashMap<Uuid, Calendar>>,
+        users: RwLock<HashMap<Uuid, User>>,
+        memberships: RwLock<HashMap<(Uuid, Uuid), CalendarMembership>>,
     }
 
     #[async_trait]
@@ -637,6 +703,101 @@ mod test_support {
         }
     }
 
+    #[async_trait]
+    impl UserRepository for TestRepository {
+        async fn get_user(&self, id: Uuid) -> Result<Option<User>> {
+            let users = self.users.read().await;
+            Ok(users.get(&id).cloned())
+        }
+
+        async fn get_user_by_email(&self, email: &str) -> Result<Option<User>> {
+            let users = self.users.read().await;
+            Ok(users.values().find(|u| u.email == email).cloned())
+        }
+
+        async fn get_user_by_provider(
+            &self,
+            provider: &str,
+            provider_subject: &str,
+        ) -> Result<Option<User>> {
+            let users = self.users.read().await;
+            Ok(users
+                .values()
+                .find(|u| {
+                    u.provider.as_deref() == Some(provider)
+                        && u.provider_subject.as_deref() == Some(provider_subject)
+                })
+                .cloned())
+        }
+
+        async fn create_user(&self, user: &User) -> Result<()> {
+            let mut users = self.users.write().await;
+            users.insert(user.id, user.clone());
+            Ok(())
+        }
+
+        async fn update_user(&self, user: &User) -> Result<()> {
+            let mut users = self.users.write().await;
+            users.insert(user.id, user.clone());
+            Ok(())
+        }
+    }
+
+    #[async_trait]
+    impl MembershipRepository for TestRepository {
+        async fn get_membership(
+            &self,
+            calendar_id: Uuid,
+            user_id: Uuid,
+        ) -> Result<Option<CalendarMembership>> {
+            let memberships = self.memberships.read().await;
+            Ok(memberships.get(&(calendar_id, user_id)).cloned())
+        }
+
+        async fn get_calendars_for_user(
+            &self,
+            user_id: Uuid,
+        ) -> Result<Vec<(Calendar, CalendarRole)>> {
+            let memberships = self.memberships.read().await;
+            let calendars = self.calendars.read().await;
+            let result: Vec<(Calendar, CalendarRole)> = memberships
+                .iter()
+                .filter(|((_, uid), _)| *uid == user_id)
+                .filter_map(|((cal_id, _), m)| calendars.get(cal_id).cloned().map(|c| (c, m.role)))
+                .collect();
+            Ok(result)
+        }
+
+        async fn get_users_for_calendar(
+            &self,
+            calendar_id: Uuid,
+        ) -> Result<Vec<(User, CalendarRole)>> {
+            let memberships = self.memberships.read().await;
+            let users = self.users.read().await;
+            let result: Vec<(User, CalendarRole)> = memberships
+                .iter()
+                .filter(|((cid, _), _)| *cid == calendar_id)
+                .filter_map(|((_, uid), m)| users.get(uid).cloned().map(|u| (u, m.role)))
+                .collect();
+            Ok(result)
+        }
+
+        async fn create_membership(&self, membership: &CalendarMembership) -> Result<()> {
+            let mut memberships = self.memberships.write().await;
+            memberships.insert(
+                (membership.calendar_id, membership.user_id),
+                membership.clone(),
+            );
+            Ok(())
+        }
+
+        async fn delete_membership(&self, calendar_id: Uuid, user_id: Uuid) -> Result<()> {
+            let mut memberships = self.memberships.write().await;
+            memberships.remove(&(calendar_id, user_id));
+            Ok(())
+        }
+    }
+
     impl Default for AppState {
         /// Creates an AppState with in-memory storage for testing.
         ///
@@ -648,7 +809,14 @@ mod test_support {
             let memory_pubsub = Arc::new(MemoryPubSub::new());
 
             // For tests, we use the test repository without caching
-            Self::build(test_repo.clone(), test_repo, memory_pubsub, &config)
+            Self::build(
+                test_repo.clone(),
+                test_repo.clone(),
+                test_repo.clone(),
+                test_repo,
+                memory_pubsub,
+                &config,
+            )
         }
     }
 }

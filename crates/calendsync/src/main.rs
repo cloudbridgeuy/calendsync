@@ -15,6 +15,15 @@ use listenfd::ListenFd;
 use tokio::{net::TcpListener, signal};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+use std::sync::Arc;
+
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+use calendsync_auth::{AuthConfig, AuthState};
+
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+use calendsync_core::auth::SessionRepository;
+
 use crate::{app::create_app, config::Config, state::AppState};
 
 /// CalendSync - Create calendars to sync with your friends
@@ -52,6 +61,38 @@ async fn main() -> Result<()> {
 
     // Create application state with SSR pool
     let state = AppState::new(&config).await?.with_ssr_pool(ssr_pool);
+
+    // Spawn Mock IdP server when auth-mock feature is enabled
+    #[cfg(feature = "auth-mock")]
+    {
+        use calendsync_auth::mock_idp::MockIdpServer;
+
+        let mock_server = MockIdpServer::new(3001);
+        tokio::spawn(async move {
+            if let Err(e) = mock_server.run().await {
+                tracing::error!(error = %e, "Mock IdP server failed");
+            }
+        });
+        tracing::info!("Mock IdP server started on port 3001");
+    }
+
+    // Initialize auth if configured
+    #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+    let state = {
+        match create_session_store(&config).await {
+            Ok(session_store) => {
+                if let Some(auth_state) = setup_auth(&state, session_store).await {
+                    state.with_auth(auth_state)
+                } else {
+                    state
+                }
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "Failed to create session store, running without auth");
+                state
+            }
+        }
+    };
 
     // Build the application router
     let app = create_app(state.clone());
@@ -148,6 +189,109 @@ fn resolve_bundle_path_compiled() -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../frontend/dist")
         .join(server_bundle_name)
+}
+
+// ============================================================================
+// Auth setup (feature-gated)
+// ============================================================================
+
+/// Creates a SQLite-backed session store.
+#[cfg(feature = "auth-sqlite")]
+async fn create_session_store(config: &Config) -> anyhow::Result<Arc<dyn SessionRepository>> {
+    use calendsync_auth::SessionStore;
+    use sqlx::sqlite::SqlitePoolOptions;
+    use std::path::Path;
+
+    // Ensure parent directory exists
+    if let Some(parent) = Path::new(&config.auth_sqlite_path).parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent)?;
+        }
+    }
+
+    // Create SQLite connection pool
+    let pool = SqlitePoolOptions::new()
+        .max_connections(5)
+        .connect(&format!("sqlite:{}?mode=rwc", config.auth_sqlite_path))
+        .await?;
+
+    let store = SessionStore::new(pool);
+    store.migrate().await?;
+
+    tracing::info!(path = %config.auth_sqlite_path, "SQLite session store initialized");
+    Ok(Arc::new(store))
+}
+
+/// Creates a Redis-backed session store.
+#[cfg(all(feature = "auth-redis", not(feature = "auth-sqlite")))]
+async fn create_session_store(config: &Config) -> anyhow::Result<Arc<dyn SessionRepository>> {
+    use calendsync_auth::SessionStore;
+    use fred::prelude::*;
+    use std::time::Duration;
+
+    // Create Redis pool configuration
+    let redis_config = Config::from_url(&config.redis_url)?;
+    let pool = Builder::from_config(redis_config)
+        .build_pool(5)
+        .expect("Failed to create Redis pool");
+
+    pool.init().await?;
+
+    // Default session TTL of 24 hours
+    let session_ttl = Duration::from_secs(24 * 60 * 60);
+    let store = SessionStore::new(pool, session_ttl);
+
+    tracing::info!(url = %config.redis_url, "Redis session store initialized");
+    Ok(Arc::new(store))
+}
+
+/// Creates an in-memory session store for testing/development.
+#[cfg(all(
+    feature = "auth-mock",
+    not(feature = "auth-sqlite"),
+    not(feature = "auth-redis")
+))]
+async fn create_session_store(_config: &Config) -> anyhow::Result<Arc<dyn SessionRepository>> {
+    use crate::storage::inmemory::InMemorySessionStore;
+
+    tracing::info!("In-memory session store initialized (auth-mock mode)");
+    Ok(Arc::new(InMemorySessionStore::new()))
+}
+
+/// Sets up authentication if configured via environment variables.
+///
+/// Returns `None` if auth environment variables are not set (running without auth).
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+async fn setup_auth(
+    state: &AppState,
+    session_store: Arc<dyn SessionRepository>,
+) -> Option<AuthState> {
+    let config = match AuthConfig::from_env() {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::info!(error = %e, "Auth not configured, skipping");
+            return None;
+        }
+    };
+
+    match AuthState::new(
+        session_store,
+        state.user_repo.clone(),
+        state.calendar_repo.clone(),
+        state.membership_repo.clone(),
+        config,
+    )
+    .await
+    {
+        Ok(auth_state) => {
+            tracing::info!("Auth initialized successfully");
+            Some(auth_state)
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to initialize auth");
+            None
+        }
+    }
 }
 
 /// Wait for shutdown signals (Ctrl+C or SIGTERM) and notify SSE handlers.

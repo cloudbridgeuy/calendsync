@@ -268,6 +268,32 @@ impl UserRepository for DynamoDbRepository {
         }
     }
 
+    async fn get_user_by_provider(
+        &self,
+        provider: &str,
+        provider_subject: &str,
+    ) -> Result<Option<User>> {
+        let result = self
+            .client
+            .query()
+            .table_name(&self.table_name)
+            .index_name("GSI3")
+            .key_condition_expression("GSI3PK = :pk")
+            .expression_attribute_values(
+                ":pk",
+                AttributeValue::S(keys::user_gsi3_pk(provider, provider_subject)),
+            )
+            .send()
+            .await
+            .map_err(map_query_error)?;
+
+        let items = result.items.unwrap_or_default();
+        match items.first() {
+            Some(item) => Ok(Some(item_to_user(item)?)),
+            None => Ok(None),
+        }
+    }
+
     async fn create_user(&self, user: &User) -> Result<()> {
         let item = user_to_item(user);
 

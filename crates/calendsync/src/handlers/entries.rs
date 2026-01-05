@@ -18,6 +18,9 @@ use uuid::Uuid;
 use calendsync_core::calendar::{merge_entry, CalendarEntry, EntryKind, MergeResult};
 use calendsync_core::storage::{DateRange, RepositoryError};
 
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+use calendsync_auth::CurrentUser;
+
 use crate::{
     handlers::AppError,
     models::{CreateEntry, UpdateEntry},
@@ -282,6 +285,92 @@ pub async fn toggle_entry(
         .map_err(|e| error_response(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(entry_to_server_entry(&updated_entry)))
+}
+
+// ============================================================================
+// Protected handlers (auth-enabled builds)
+// ============================================================================
+
+/// Create a new entry with authentication (POST /api/entries).
+///
+/// This is an example of a protected handler that requires authentication.
+/// The `CurrentUser` extractor automatically validates the session and
+/// returns 401 if the user is not authenticated.
+///
+/// Note: This handler is only available when auth features are enabled.
+/// The actual authorization logic (checking user has access to the calendar)
+/// should be implemented based on the application's requirements.
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+#[allow(dead_code)]
+pub async fn create_entry_protected(
+    CurrentUser(user): CurrentUser,
+    State(state): State<AppState>,
+    form_result: Result<Form<CreateEntry>, FormRejection>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let Form(payload) = form_result.map_err(|e| {
+        let msg = format!("Failed to parse form: {e}");
+        error_response(StatusCode::BAD_REQUEST, msg)
+    })?;
+
+    tracing::debug!(
+        user_id = %user.id,
+        user_name = %user.name,
+        payload = ?payload,
+        "Received authenticated create entry request"
+    );
+
+    // TODO: Check that the user has write access to the calendar
+    // This would involve:
+    // 1. Looking up the user's membership for the calendar
+    // 2. Verifying they have writer or owner role
+    //
+    // Example:
+    // ```
+    // let membership = state.membership_repo
+    //     .get_membership(payload.calendar_id, user.id)
+    //     .await?
+    //     .ok_or_else(|| error_response(StatusCode::FORBIDDEN, "No access to calendar"))?;
+    //
+    // if membership.role == CalendarRole::Reader {
+    //     return Err(error_response(StatusCode::FORBIDDEN, "Read-only access"));
+    // }
+    // ```
+
+    // Verify the calendar exists
+    let calendar = state
+        .calendar_repo
+        .get_calendar(payload.calendar_id)
+        .await
+        .map_err(|e| error_response(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if calendar.is_none() {
+        return Err(error_response(
+            StatusCode::BAD_REQUEST,
+            format!("Calendar {} not found", payload.calendar_id),
+        ));
+    }
+
+    let entry = payload.into_entry().ok_or_else(|| {
+        error_response(
+            StatusCode::BAD_REQUEST,
+            "Invalid entry data: missing required fields for entry type",
+        )
+    })?;
+
+    state
+        .entry_repo
+        .create_entry(&entry)
+        .await
+        .map_err(|e| error_response(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    tracing::info!(
+        entry_id = %entry.id,
+        user_id = %user.id,
+        title = %entry.title,
+        "Created new entry (authenticated)"
+    );
+
+    Ok((StatusCode::CREATED, Json(entry_to_server_entry(&entry))))
 }
 
 // ============================================================================

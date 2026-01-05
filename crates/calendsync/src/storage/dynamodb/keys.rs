@@ -15,6 +15,7 @@ pub const CALENDAR_PREFIX: &str = "CAL#";
 pub const ENTRY_PREFIX: &str = "ENTRY#";
 pub const MEMBER_PREFIX: &str = "MEMBER#";
 pub const EMAIL_PREFIX: &str = "EMAIL#";
+pub const PROVIDER_PREFIX: &str = "PROV#";
 
 // ============================================================================
 // User keys
@@ -45,6 +46,20 @@ pub fn user_gsi2_pk(email: &str) -> String {
 ///
 /// Pattern: `USER#<user_id>`
 pub fn user_gsi2_sk(user_id: Uuid) -> String {
+    format!("{USER_PREFIX}{user_id}")
+}
+
+/// Generate GSI3 partition key for User provider lookup.
+///
+/// Pattern: `PROV#<provider>#<provider_subject>`
+pub fn user_gsi3_pk(provider: &str, provider_subject: &str) -> String {
+    format!("{PROVIDER_PREFIX}{}#{}", provider, provider_subject)
+}
+
+/// Generate GSI3 sort key for User provider lookup.
+///
+/// Pattern: `USER#<user_id>`
+pub fn user_gsi3_sk(user_id: Uuid) -> String {
     format!("{USER_PREFIX}{user_id}")
 }
 
@@ -187,6 +202,20 @@ mod tests {
     #[test]
     fn test_user_gsi2_pk() {
         assert_eq!(user_gsi2_pk("john@example.com"), "EMAIL#john@example.com");
+    }
+
+    #[test]
+    fn test_user_gsi3_pk() {
+        assert_eq!(user_gsi3_pk("google", "123456789"), "PROV#google#123456789");
+    }
+
+    #[test]
+    fn test_user_gsi3_sk() {
+        let id = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440001").unwrap();
+        assert_eq!(
+            user_gsi3_sk(id),
+            "USER#550e8400-e29b-41d4-a716-446655440001"
+        );
     }
 
     #[test]

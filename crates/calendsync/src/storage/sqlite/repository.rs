@@ -352,10 +352,35 @@ impl UserRepository for SqliteRepository {
             .map_err(|e| RepositoryError::QueryFailed(e.to_string()))
     }
 
+    async fn get_user_by_provider(
+        &self,
+        provider: &str,
+        provider_subject: &str,
+    ) -> Result<Option<User>> {
+        let provider = provider.to_string();
+        let provider_subject = provider_subject.to_string();
+
+        self.conn
+            .call(move |conn| {
+                let mut stmt = conn
+                    .prepare(schema::SELECT_USER_BY_PROVIDER)
+                    .map_err(wrap_err)?;
+                match stmt.query_row([&provider, &provider_subject], row_to_user) {
+                    Ok(user) => Ok(Some(user)),
+                    Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+                    Err(e) => Err(wrap_err(e)),
+                }
+            })
+            .await
+            .map_err(|e| RepositoryError::QueryFailed(e.to_string()))
+    }
+
     async fn create_user(&self, user: &User) -> Result<()> {
         let id = user.id.to_string();
         let name = user.name.clone();
         let email = user.email.clone();
+        let provider = user.provider.clone();
+        let provider_subject = user.provider_subject.clone();
         let created_at = format_datetime(&user.created_at);
         let updated_at = format_datetime(&user.updated_at);
         let user_id = user.id.to_string();
@@ -364,7 +389,15 @@ impl UserRepository for SqliteRepository {
             .call(move |conn| {
                 conn.execute(
                     schema::INSERT_USER,
-                    rusqlite::params![id, name, email, created_at, updated_at],
+                    rusqlite::params![
+                        id,
+                        name,
+                        email,
+                        provider,
+                        provider_subject,
+                        created_at,
+                        updated_at
+                    ],
                 )
                 .map_err(wrap_err)?;
                 Ok(())
@@ -377,6 +410,8 @@ impl UserRepository for SqliteRepository {
         let id = user.id.to_string();
         let name = user.name.clone();
         let email = user.email.clone();
+        let provider = user.provider.clone();
+        let provider_subject = user.provider_subject.clone();
         let updated_at = format_datetime(&user.updated_at);
         let user_id = user.id.to_string();
 
@@ -385,7 +420,7 @@ impl UserRepository for SqliteRepository {
                 let rows = conn
                     .execute(
                         schema::UPDATE_USER,
-                        rusqlite::params![name, email, updated_at, id],
+                        rusqlite::params![id, name, email, provider, provider_subject, updated_at],
                     )
                     .map_err(wrap_err)?;
                 if rows == 0 {

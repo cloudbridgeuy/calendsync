@@ -155,6 +155,21 @@ impl UserRepository for InMemoryRepository {
         Ok(users.values().find(|user| user.email == email).cloned())
     }
 
+    async fn get_user_by_provider(
+        &self,
+        provider: &str,
+        provider_subject: &str,
+    ) -> Result<Option<User>> {
+        let users = self.users.read().await;
+        Ok(users
+            .values()
+            .find(|user| {
+                user.provider.as_deref() == Some(provider)
+                    && user.provider_subject.as_deref() == Some(provider_subject)
+            })
+            .cloned())
+    }
+
     async fn create_user(&self, user: &User) -> Result<()> {
         let mut users = self.users.write().await;
         if users.contains_key(&user.id) {

@@ -28,11 +28,17 @@ redis = ["dep:redis", "dep:futures-util"]
 # In-memory storage backend (for testing)
 inmemory = []
 
+# Auth feature flags
+auth-sqlite = ["dep:calendsync_auth", "calendsync_auth/sqlite", "dep:sqlx", "dep:urlencoding"]
+auth-redis = ["dep:calendsync_auth", "calendsync_auth/redis", "dep:fred", "dep:urlencoding"]
+auth-mock = ["dep:calendsync_auth", "calendsync_auth/mock", "dep:urlencoding"]
+
 [dependencies]
 # Internal dependencies
 calendsync_core = { workspace = true }
 calendsync_frontend = { workspace = true }
 calendsync_ssr = { workspace = true }
+calendsync_auth = { workspace = true, optional = true }
 
 # External dependencies
 anyhow = { workspace = true }
@@ -64,6 +70,13 @@ aws-config = { workspace = true, optional = true }
 # Redis (optional)
 redis = { workspace = true, optional = true }
 futures-util = { workspace = true, optional = true }
+
+# Auth session storage (optional)
+sqlx = { workspace = true, features = ["sqlite", "runtime-tokio"], optional = true }
+fred = { workspace = true, optional = true }
+
+# URL encoding for auth redirects (optional)
+urlencoding = { workspace = true, optional = true }
 
 # LRU cache
 lru = { workspace = true }

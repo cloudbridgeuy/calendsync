@@ -12,6 +12,15 @@ use axum::{
     http::StatusCode,
     response::{Html, IntoResponse, Response},
 };
+
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+use axum::response::Redirect;
+
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+use calendsync_auth::OptionalUser;
+
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+use super::flash::{redirect_with_flash, FlashMessage};
 use chrono::Local;
 use uuid::Uuid;
 
@@ -228,15 +237,101 @@ fn error_html(
     )
 }
 
-/// SSR handler for `/calendar/{calendar_id}`.
+/// SSR handler for `/calendar/{calendar_id}` (with auth check).
 ///
 /// Renders the React calendar server-side using the SSR worker pool.
-/// If the calendar doesn't exist, redirects to the default calendar.
+/// Redirects to login if not authenticated.
+/// Redirects to user's first calendar with flash message if no access.
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+#[axum::debug_handler]
+pub async fn calendar_react_ssr(
+    State(state): State<AppState>,
+    Path(calendar_id): Path<Uuid>,
+    OptionalUser(user): OptionalUser,
+) -> Response {
+    // Auth check: redirect to login if not authenticated
+    let user = match user {
+        Some(u) => u,
+        None => {
+            let path = format!("/calendar/{}", calendar_id);
+            let return_to = urlencoding::encode(&path);
+            return Redirect::to(&format!("/login?return_to={}", return_to)).into_response();
+        }
+    };
+
+    // Membership check: verify user has access to this calendar
+    if let Some(auth) = &state.auth {
+        match auth.memberships.get_membership(calendar_id, user.id).await {
+            Ok(Some(_membership)) => {
+                // User has access, continue to render
+            }
+            Ok(None) => {
+                // No membership - redirect to user's first calendar with flash message
+                tracing::warn!(
+                    user_id = %user.id,
+                    calendar_id = %calendar_id,
+                    "User attempted to access calendar without membership"
+                );
+                return redirect_to_first_calendar_with_flash(&state, user.id).await;
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "Failed to check calendar membership");
+                // On error, still try to redirect to user's calendar
+                return redirect_to_first_calendar_with_flash(&state, user.id).await;
+            }
+        }
+    }
+
+    calendar_react_ssr_impl(state, calendar_id).await
+}
+
+/// SSR handler for `/calendar/{calendar_id}` (no auth).
+///
+/// Renders the React calendar server-side using the SSR worker pool.
+#[cfg(not(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock")))]
 #[axum::debug_handler]
 pub async fn calendar_react_ssr(
     State(state): State<AppState>,
     Path(calendar_id): Path<Uuid>,
 ) -> Response {
+    calendar_react_ssr_impl(state, calendar_id).await
+}
+
+/// Redirect user to their first calendar with a flash message about no access.
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+async fn redirect_to_first_calendar_with_flash(state: &AppState, user_id: Uuid) -> Response {
+    let flash = FlashMessage::error("You don't have access to the requested calendar");
+
+    let auth = match &state.auth {
+        Some(auth) => auth,
+        None => {
+            tracing::error!("Auth state not initialized");
+            return redirect_with_flash("/login", flash);
+        }
+    };
+
+    match auth.memberships.get_calendars_for_user(user_id).await {
+        Ok(calendars) if !calendars.is_empty() => {
+            let first_calendar_id = calendars[0].0.id;
+            redirect_with_flash(&format!("/calendar/{}", first_calendar_id), flash)
+        }
+        Ok(_) => {
+            // No calendars found - redirect to login
+            tracing::warn!(user_id = %user_id, "User has no calendars");
+            redirect_with_flash("/login", flash)
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to get user calendars");
+            redirect_with_flash("/login", flash)
+        }
+    }
+}
+
+/// Implementation of SSR handler for `/calendar/{calendar_id}`.
+///
+/// Renders the React calendar server-side using the SSR worker pool.
+/// If the calendar doesn't exist, shows an error page.
+async fn calendar_react_ssr_impl(state: AppState, calendar_id: Uuid) -> Response {
     // Get bundle URLs and dev mode early (needed for error pages)
     let urls = get_bundle_urls();
     let dev_mode = is_dev_mode();
@@ -358,17 +453,81 @@ pub async fn calendar_react_ssr(
     render_with_ssr_pool(&ssr_pool, config, &calendar_id.to_string(), &urls, dev_mode).await
 }
 
-/// SSR handler for `/calendar/{calendar_id}/entry`.
+/// SSR handler for `/calendar/{calendar_id}/entry` (with auth check).
 ///
 /// Renders the React calendar with entry modal open for creating or editing.
-/// - Without `entry_id` query param: Create mode (modal open with highlighted day)
-/// - With `entry_id=uuid` query param: Edit mode (modal open with entry data)
-/// If the calendar doesn't exist, redirects to the default calendar.
+/// Redirects to login if not authenticated.
+/// Redirects to user's first calendar with flash message if no access.
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
 #[axum::debug_handler]
 pub async fn calendar_react_ssr_entry(
     State(state): State<AppState>,
     Path(calendar_id): Path<Uuid>,
     Query(query): Query<EntryModalQuery>,
+    OptionalUser(user): OptionalUser,
+) -> Response {
+    // Auth check: redirect to login if not authenticated
+    let user = match user {
+        Some(u) => u,
+        None => {
+            // Include entry_id in return_to if present (for edit mode)
+            let return_to = match query.entry_id {
+                Some(entry_id) => format!("/calendar/{}/entry?entry_id={}", calendar_id, entry_id),
+                None => format!("/calendar/{}/entry", calendar_id),
+            };
+            let return_to_encoded = urlencoding::encode(&return_to);
+            return Redirect::to(&format!("/login?return_to={}", return_to_encoded))
+                .into_response();
+        }
+    };
+
+    // Membership check: verify user has access to this calendar
+    if let Some(auth) = &state.auth {
+        match auth.memberships.get_membership(calendar_id, user.id).await {
+            Ok(Some(_membership)) => {
+                // User has access, continue to render
+            }
+            Ok(None) => {
+                // No membership - redirect to user's first calendar with flash message
+                tracing::warn!(
+                    user_id = %user.id,
+                    calendar_id = %calendar_id,
+                    "User attempted to access calendar entry without membership"
+                );
+                return redirect_to_first_calendar_with_flash(&state, user.id).await;
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "Failed to check calendar membership");
+                return redirect_to_first_calendar_with_flash(&state, user.id).await;
+            }
+        }
+    }
+
+    calendar_react_ssr_entry_impl(state, calendar_id, query).await
+}
+
+/// SSR handler for `/calendar/{calendar_id}/entry` (no auth).
+///
+/// Renders the React calendar with entry modal open for creating or editing.
+#[cfg(not(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock")))]
+#[axum::debug_handler]
+pub async fn calendar_react_ssr_entry(
+    State(state): State<AppState>,
+    Path(calendar_id): Path<Uuid>,
+    Query(query): Query<EntryModalQuery>,
+) -> Response {
+    calendar_react_ssr_entry_impl(state, calendar_id, query).await
+}
+
+/// Implementation of SSR handler for `/calendar/{calendar_id}/entry`.
+///
+/// Renders the React calendar with entry modal open for creating or editing.
+/// - Without `entry_id` query param: Create mode (modal open with highlighted day)
+/// - With `entry_id=uuid` query param: Edit mode (modal open with entry data)
+async fn calendar_react_ssr_entry_impl(
+    state: AppState,
+    calendar_id: Uuid,
+    query: EntryModalQuery,
 ) -> Response {
     // Get bundle URLs and dev mode early (needed for error pages)
     let urls = get_bundle_urls();

@@ -63,6 +63,29 @@ pub fn user_to_item(user: &User) -> HashMap<String, AttributeValue> {
         AttributeValue::S(user.updated_at.to_rfc3339()),
     );
 
+    // Provider fields (optional)
+    if let Some(provider) = &user.provider {
+        item.insert("provider".to_string(), AttributeValue::S(provider.clone()));
+    }
+    if let Some(provider_subject) = &user.provider_subject {
+        item.insert(
+            "providerSubject".to_string(),
+            AttributeValue::S(provider_subject.clone()),
+        );
+    }
+
+    // GSI3 keys for provider lookup (only when both provider fields are set)
+    if let (Some(provider), Some(provider_subject)) = (&user.provider, &user.provider_subject) {
+        item.insert(
+            "GSI3PK".to_string(),
+            AttributeValue::S(keys::user_gsi3_pk(provider, provider_subject)),
+        );
+        item.insert(
+            "GSI3SK".to_string(),
+            AttributeValue::S(keys::user_gsi3_sk(user.id)),
+        );
+    }
+
     item
 }
 
@@ -72,6 +95,8 @@ pub fn item_to_user(item: &HashMap<String, AttributeValue>) -> Result<User, Repo
         id: get_uuid(item, "id")?,
         name: get_string(item, "name")?,
         email: get_string(item, "email")?,
+        provider: get_optional_string(item, "provider"),
+        provider_subject: get_optional_string(item, "providerSubject"),
         created_at: get_datetime(item, "createdAt")?,
         updated_at: get_datetime(item, "updatedAt")?,
     })
@@ -112,6 +137,10 @@ pub fn calendar_to_item(calendar: &Calendar) -> HashMap<String, AttributeValue> 
         item.insert("description".to_string(), AttributeValue::S(desc.clone()));
     }
     item.insert(
+        "isDefault".to_string(),
+        AttributeValue::Bool(calendar.is_default),
+    );
+    item.insert(
         "createdAt".to_string(),
         AttributeValue::S(calendar.created_at.to_rfc3339()),
     );
@@ -132,6 +161,7 @@ pub fn item_to_calendar(
         name: get_string(item, "name")?,
         color: get_string(item, "color")?,
         description: get_optional_string(item, "description"),
+        is_default: get_optional_bool(item, "isDefault").unwrap_or(false),
         created_at: get_datetime(item, "createdAt")?,
         updated_at: get_datetime(item, "updatedAt")?,
     })
@@ -355,6 +385,11 @@ fn get_optional_string(item: &HashMap<String, AttributeValue>, key: &str) -> Opt
         .map(|s| s.to_string())
 }
 
+/// Get an optional boolean attribute.
+fn get_optional_bool(item: &HashMap<String, AttributeValue>, key: &str) -> Option<bool> {
+    item.get(key).and_then(|v| v.as_bool().ok()).copied()
+}
+
 /// Get a required UUID attribute.
 fn get_uuid(item: &HashMap<String, AttributeValue>, key: &str) -> Result<Uuid, RepositoryError> {
     let s = get_string(item, key)?;
@@ -393,6 +428,8 @@ mod tests {
             id: Uuid::parse_str("550e8400-e29b-41d4-a716-446655440001").unwrap(),
             name: "John Doe".to_string(),
             email: "john@example.com".to_string(),
+            provider: None,
+            provider_subject: None,
             created_at: DateTime::parse_from_rfc3339("2024-01-15T10:30:00Z")
                 .unwrap()
                 .with_timezone(&Utc),
@@ -408,6 +445,7 @@ mod tests {
             name: "Personal".to_string(),
             color: "#3B82F6".to_string(),
             description: Some("My personal calendar".to_string()),
+            is_default: false,
             created_at: DateTime::parse_from_rfc3339("2024-01-15T10:30:00Z")
                 .unwrap()
                 .with_timezone(&Utc),
@@ -484,6 +522,26 @@ mod tests {
             "EMAIL#john@example.com"
         );
         assert_eq!(item.get("entityType").unwrap().as_s().unwrap(), "USER");
+        // GSI3 keys should not be present when provider is not set
+        assert!(item.get("GSI3PK").is_none());
+        assert!(item.get("GSI3SK").is_none());
+    }
+
+    #[test]
+    fn test_user_item_has_gsi3_keys_when_provider_set() {
+        let mut user = sample_user();
+        user.provider = Some("google".to_string());
+        user.provider_subject = Some("123456789".to_string());
+        let item = user_to_item(&user);
+
+        assert_eq!(
+            item.get("GSI3PK").unwrap().as_s().unwrap(),
+            "PROV#google#123456789"
+        );
+        assert_eq!(
+            item.get("GSI3SK").unwrap().as_s().unwrap(),
+            "USER#550e8400-e29b-41d4-a716-446655440001"
+        );
     }
 
     #[test]

@@ -10,9 +10,15 @@ CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
+    provider TEXT,
+    provider_subject TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+-- Partial unique index for provider lookups (only for users with a provider)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_provider
+    ON users(provider, provider_subject) WHERE provider IS NOT NULL;
 
 -- Calendars table
 CREATE TABLE IF NOT EXISTS calendars (
@@ -61,25 +67,31 @@ CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 
 // User queries
 pub const INSERT_USER: &str = r#"
-INSERT INTO users (id, name, email, created_at, updated_at)
-VALUES (?1, ?2, ?3, ?4, ?5)
+INSERT INTO users (id, name, email, provider, provider_subject, created_at, updated_at)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
 "#;
 
 pub const SELECT_USER_BY_ID: &str = r#"
-SELECT id, name, email, created_at, updated_at
+SELECT id, name, email, provider, provider_subject, created_at, updated_at
 FROM users
 WHERE id = ?1
 "#;
 
 pub const SELECT_USER_BY_EMAIL: &str = r#"
-SELECT id, name, email, created_at, updated_at
+SELECT id, name, email, provider, provider_subject, created_at, updated_at
 FROM users
 WHERE email = ?1
 "#;
 
+pub const SELECT_USER_BY_PROVIDER: &str = r#"
+SELECT id, name, email, provider, provider_subject, created_at, updated_at
+FROM users
+WHERE provider = ?1 AND provider_subject = ?2
+"#;
+
 pub const UPDATE_USER: &str = r#"
 UPDATE users
-SET name = ?2, email = ?3, updated_at = ?4
+SET name = ?2, email = ?3, provider = ?4, provider_subject = ?5, updated_at = ?6
 WHERE id = ?1
 "#;
 
@@ -158,7 +170,7 @@ WHERE m.user_id = ?1
 "#;
 
 pub const SELECT_USERS_FOR_CALENDAR: &str = r#"
-SELECT u.id, u.name, u.email, u.created_at, u.updated_at, m.role
+SELECT u.id, u.name, u.email, u.provider, u.provider_subject, u.created_at, u.updated_at, m.role
 FROM users u
 INNER JOIN memberships m ON u.id = m.user_id
 WHERE m.calendar_id = ?1
@@ -186,9 +198,16 @@ mod tests {
     fn test_queries_contain_expected_keywords() {
         // User queries
         assert!(INSERT_USER.contains("INSERT"));
+        assert!(INSERT_USER.contains("provider"));
+        assert!(INSERT_USER.contains("provider_subject"));
         assert!(SELECT_USER_BY_ID.contains("SELECT"));
+        assert!(SELECT_USER_BY_ID.contains("provider"));
         assert!(SELECT_USER_BY_EMAIL.contains("email"));
+        assert!(SELECT_USER_BY_EMAIL.contains("provider"));
+        assert!(SELECT_USER_BY_PROVIDER.contains("provider = ?1"));
+        assert!(SELECT_USER_BY_PROVIDER.contains("provider_subject = ?2"));
         assert!(UPDATE_USER.contains("UPDATE"));
+        assert!(UPDATE_USER.contains("provider"));
 
         // Calendar queries
         assert!(INSERT_CALENDAR.contains("INSERT"));
