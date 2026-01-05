@@ -157,20 +157,14 @@ impl AppState {
             auth: None,
         }
     }
-
-    /// Set the SSR pool.
+    /// Set the SSR pool asynchronously (for background initialization).
     ///
-    /// This is called during initialization before any handlers run,
-    /// so there's no contention - use try_write which doesn't block.
-    pub fn with_ssr_pool(self, pool: SsrPool) -> Self {
-        // At initialization, no contention exists - try_write always succeeds
-        let mut guard = self
-            .ssr_pool
-            .try_write()
-            .expect("SSR pool lock should be available during initialization");
+    /// Called from a background task after the server starts listening.
+    /// Uses async write lock since other tasks may be reading the pool state.
+    pub async fn set_ssr_pool(&self, pool: SsrPool) {
+        let mut guard = self.ssr_pool.write().await;
         *guard = Some(Arc::new(pool));
-        drop(guard);
-        self
+        tracing::info!("SSR pool set");
     }
 
     /// Set the auth state.
