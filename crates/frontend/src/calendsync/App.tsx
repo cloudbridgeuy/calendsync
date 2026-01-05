@@ -4,6 +4,7 @@
  */
 
 import { Calendar } from "./components"
+import { FlashMessage } from "./components/FlashMessage"
 import type { InitialData } from "./types"
 
 interface AppProps {
@@ -24,6 +25,9 @@ export function App({ initialData }: AppProps) {
         <link rel="stylesheet" href={initialData.cssBundleUrl ?? "/dist/calendsync.css"} />
       </head>
       <body>
+        {/* Flash message for server-to-client notifications */}
+        <FlashMessage />
+
         {/* Dev mode indicator badge */}
         {initialData.devMode && (
           <div
