@@ -53,14 +53,11 @@ async fn main() -> Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    // Initialize SSR pool
-    let ssr_pool = init_ssr_pool()?;
-
     // Load configuration from environment
     let config = Config::from_env();
 
-    // Create application state with SSR pool
-    let state = AppState::new(&config).await?.with_ssr_pool(ssr_pool);
+    // Create application state WITHOUT SSR pool (starts as None, initialized in background)
+    let state = AppState::new(&config).await?;
 
     // Spawn Mock IdP server when auth-mock feature is enabled
     #[cfg(feature = "auth-mock")]
@@ -113,6 +110,20 @@ async fn main() -> Result<()> {
     };
 
     tracing::info!("listening on {}", listener.local_addr()?);
+
+    // Spawn SSR pool initialization in background AFTER server starts
+    let ssr_state = state.clone();
+    tokio::spawn(async move {
+        match init_ssr_pool() {
+            Ok(pool) => {
+                ssr_state.set_ssr_pool(pool).await;
+                tracing::info!("SSR pool initialized (background)");
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "SSR pool initialization failed");
+            }
+        }
+    });
 
     // Run the server with graceful shutdown
     axum::serve(listener, app)
