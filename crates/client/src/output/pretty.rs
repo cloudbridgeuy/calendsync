@@ -93,6 +93,8 @@ mod tests {
             id: Uuid::new_v4(),
             name: name.to_string(),
             email: email.to_string(),
+            provider: None,
+            provider_subject: None,
             created_at: now,
             updated_at: now,
         }
@@ -105,6 +107,7 @@ mod tests {
             name: name.to_string(),
             color: color.to_string(),
             description: None,
+            is_default: false,
             created_at: now,
             updated_at: now,
         }

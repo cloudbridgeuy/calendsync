@@ -45,6 +45,18 @@ Used for:
 Used for:
 - Get user by email address
 
+### Global Secondary Index (GSI3)
+
+| Property | Value |
+|----------|-------|
+| Index Name | `GSI3` |
+| Partition Key | `GSI3PK` (String) |
+| Sort Key | `GSI3SK` (String) |
+| Projection | `ALL` |
+
+Used for:
+- Get user by OAuth provider (e.g., Google, GitHub)
+
 ### Billing Mode
 
 PAY_PER_REQUEST (on-demand capacity)
@@ -63,8 +75,12 @@ PAY_PER_REQUEST (on-demand capacity)
 | `GSI1SK` | (not used) | - |
 | `GSI2PK` | `EMAIL#<email>` | `EMAIL#john@example.com` |
 | `GSI2SK` | `USER#<user_id>` | `USER#550e8400-e29b-41d4-a716-446655440001` |
+| `GSI3PK` | `PROV#<provider>#<subject>` | `PROV#google#123456789` (optional) |
+| `GSI3SK` | `USER#<user_id>` | `USER#550e8400-e29b-41d4-a716-446655440001` (optional) |
 
-**Attributes**:
+**Note:** GSI3 keys are only present when the user has OAuth provider information (`provider` and `providerSubject` fields).
+
+**Attributes (without OAuth)**:
 ```json
 {
   "PK": "USER#550e8400-e29b-41d4-a716-446655440001",
@@ -75,6 +91,26 @@ PAY_PER_REQUEST (on-demand capacity)
   "id": "550e8400-e29b-41d4-a716-446655440001",
   "name": "John Doe",
   "email": "john@example.com",
+  "createdAt": "2024-01-15T10:30:00Z",
+  "updatedAt": "2024-01-15T10:30:00Z"
+}
+```
+
+**Attributes (with OAuth)**:
+```json
+{
+  "PK": "USER#550e8400-e29b-41d4-a716-446655440001",
+  "SK": "USER#550e8400-e29b-41d4-a716-446655440001",
+  "GSI2PK": "EMAIL#john@example.com",
+  "GSI2SK": "USER#550e8400-e29b-41d4-a716-446655440001",
+  "GSI3PK": "PROV#google#123456789",
+  "GSI3SK": "USER#550e8400-e29b-41d4-a716-446655440001",
+  "entityType": "USER",
+  "id": "550e8400-e29b-41d4-a716-446655440001",
+  "name": "John Doe",
+  "email": "john@example.com",
+  "provider": "google",
+  "providerSubject": "123456789",
   "createdAt": "2024-01-15T10:30:00Z",
   "updatedAt": "2024-01-15T10:30:00Z"
 }
@@ -283,6 +319,19 @@ Query:
 ```
 
 Returns the user item matching the email address. This is a unique lookup since emails are unique per user.
+
+### 8. Get User by OAuth Provider
+
+```
+Query:
+  TableName: calendsync
+  IndexName: GSI3
+  KeyConditionExpression: GSI3PK = :pk
+  ExpressionAttributeValues:
+    :pk = "PROV#google#123456789"
+```
+
+Returns the user item matching the OAuth provider and subject ID. Used during OAuth authentication to find existing users. The `provider` identifies the OAuth provider (e.g., "google", "github") and `provider_subject` is the unique identifier from that provider.
 
 ---
 

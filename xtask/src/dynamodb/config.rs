@@ -90,6 +90,18 @@ pub fn calendsync_table_config() -> TableConfig {
                 }),
                 projection: ProjectionType::All,
             },
+            GsiConfig {
+                name: "GSI3".to_string(),
+                partition_key: KeyAttribute {
+                    name: "GSI3PK".to_string(),
+                    attribute_type: AttributeType::String,
+                },
+                sort_key: Some(KeyAttribute {
+                    name: "GSI3SK".to_string(),
+                    attribute_type: AttributeType::String,
+                }),
+                projection: ProjectionType::All,
+            },
         ],
         billing_mode: BillingMode::PayPerRequest,
     }
