@@ -9,6 +9,7 @@
 //! - **I/O functions** execute container commands, check health, and manage
 //!   container lifecycle.
 
+use std::path::PathBuf;
 use std::time::Duration;
 
 use tokio::process::Command;
@@ -51,7 +52,8 @@ pub struct ContainerSpec {
     pub name: &'static str,
     pub image: &'static str,
     pub port: u16,
-    pub volume_name: &'static str,
+    /// Subdirectory within `.local/volumes/` for bind mount
+    pub volume_subdir: &'static str,
     pub volume_path: &'static str,
     pub command: Option<&'static str>,
     pub health_check: HealthCheck,
@@ -75,7 +77,7 @@ pub const DYNAMODB_SPEC: ContainerSpec = ContainerSpec {
     name: "calendsync-dynamodb",
     image: "amazon/dynamodb-local:latest",
     port: 8000,
-    volume_name: "calendsync-dynamodb-data",
+    volume_subdir: "dynamodb",
     volume_path: "/data",
     command: Some("-jar DynamoDBLocal.jar -sharedDb -dbPath /data"),
     health_check: HealthCheck::Http {
@@ -88,7 +90,7 @@ pub const REDIS_SPEC: ContainerSpec = ContainerSpec {
     name: "calendsync-redis",
     image: "redis:7-alpine",
     port: 6379,
-    volume_name: "calendsync-redis-data",
+    volume_subdir: "redis",
     volume_path: "/data",
     command: Some("redis-server --appendonly yes"),
     health_check: HealthCheck::Redis,
@@ -98,20 +100,40 @@ pub const REDIS_SPEC: ContainerSpec = ContainerSpec {
 // Pure Functions (Functional Core)
 // ============================================================================
 
+/// Returns the project root directory.
+///
+/// Uses CARGO_MANIFEST_DIR (xtask crate) and navigates to parent.
+fn get_project_root() -> PathBuf {
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    std::path::Path::new(manifest_dir)
+        .parent()
+        .expect("xtask should be in project root")
+        .to_path_buf()
+}
+
+/// Returns the bind mount path for a container's volume.
+///
+/// Format: `{project_root}/.local/volumes/{volume_subdir}`
+pub fn get_volume_bind_path(spec: &ContainerSpec) -> PathBuf {
+    get_project_root()
+        .join(".local/volumes")
+        .join(spec.volume_subdir)
+}
+
 /// Builds arguments for `docker run` / `podman run`.
 ///
 /// Returns a vector of command arguments including:
 /// - `--name {name}`
 /// - `-d` (detached mode)
 /// - `-p :{port}` (dynamic host port mapping to container port)
-/// - `-v {volume_name}:{volume_path}` (volume mount)
+/// - `-v {bind_path}:{volume_path}` (bind mount)
 /// - `{image}`
 /// - Command args if present (split by whitespace)
 ///
+/// The `bind_path` must be an absolute path to the local directory.
 /// The host port is omitted (`:8000` syntax) so Docker/Podman assigns an available port.
-/// This syntax works for both Docker and Podman.
 /// Use `get_container_port()` after starting to discover the actual port.
-pub fn container_run_args(spec: &ContainerSpec) -> Vec<String> {
+pub fn container_run_args(spec: &ContainerSpec, bind_path: &std::path::Path) -> Vec<String> {
     let mut args = vec![
         "run".to_string(),
         "--name".to_string(),
@@ -120,7 +142,7 @@ pub fn container_run_args(spec: &ContainerSpec) -> Vec<String> {
         "-p".to_string(),
         format!(":{}", spec.port), // Dynamic host port (empty = auto-assign)
         "-v".to_string(),
-        format!("{}:{}", spec.volume_name, spec.volume_path),
+        format!("{}:{}", bind_path.display(), spec.volume_path),
         spec.image.to_string(),
     ];
 
@@ -152,8 +174,8 @@ pub fn required_containers(storage: Storage, cache: Cache) -> Vec<&'static Conta
 
 /// Returns the cargo feature string for the given storage and cache configuration.
 ///
-/// Format: `"{storage},{cache}"` where storage is "inmemory", "sqlite", or "dynamodb"
-/// and cache is "memory" or "redis".
+/// Format: `"{storage},{cache},auth-mock"` where storage is "inmemory", "sqlite", or "dynamodb"
+/// and cache is "memory" or "redis". Always includes `auth-mock` for development.
 pub fn cargo_features(storage: Storage, cache: Cache) -> String {
     let storage_str = match storage {
         Storage::Inmemory => "inmemory",
@@ -166,7 +188,7 @@ pub fn cargo_features(storage: Storage, cache: Cache) -> String {
         Cache::Redis => "redis",
     };
 
-    format!("{},{}", storage_str, cache_str)
+    format!("{},{},auth-mock", storage_str, cache_str)
 }
 
 /// Discovered container ports after startup.
@@ -185,6 +207,7 @@ pub struct ContainerPorts {
 /// Always includes:
 /// - `PORT` - server port
 /// - `DEV_MODE` - set to "1"
+/// - Mock auth credentials for Google and Apple (enables both providers in dev)
 ///
 /// Storage-specific:
 /// - DynamoDB: AWS endpoint and credentials for local development
@@ -204,6 +227,18 @@ pub fn environment_variables(
     let mut vars = vec![
         ("PORT", server_port.to_string()),
         ("DEV_MODE", "1".to_string()),
+        // Mock auth credentials - enables both Google and Apple in dev mode
+        ("AUTH_BASE_URL", format!("http://localhost:{}", server_port)),
+        ("COOKIE_SECURE", "false".to_string()),
+        ("GOOGLE_CLIENT_ID", "mock-google-client-id".to_string()),
+        (
+            "GOOGLE_CLIENT_SECRET",
+            "mock-google-client-secret".to_string(),
+        ),
+        ("APPLE_CLIENT_ID", "mock-apple-client-id".to_string()),
+        ("APPLE_TEAM_ID", "mock-team-id".to_string()),
+        ("APPLE_KEY_ID", "mock-key-id".to_string()),
+        ("APPLE_PRIVATE_KEY", "mock-private-key".to_string()),
     ];
 
     match storage {
@@ -327,25 +362,27 @@ pub async fn stop_container(runtime: ContainerRuntime, name: &str, verbose: bool
     Ok(())
 }
 
-/// Removes a volume.
+/// Flushes (removes and recreates) a container's volume directory.
 ///
-/// If `verbose` is true, prints command output with color coding.
-pub async fn remove_volume(runtime: ContainerRuntime, name: &str, verbose: bool) -> Result<()> {
-    let cmd = runtime_command(runtime);
-    let args = ["volume", "rm", name];
-
-    let output = Command::new(cmd).args(args).output().await?;
+/// Removes all data in `.local/volumes/{volume_subdir}/` and recreates it empty.
+/// If `verbose` is true, prints the action being taken.
+pub fn flush_volume_directory(spec: &ContainerSpec, verbose: bool) -> Result<()> {
+    let bind_path = get_volume_bind_path(spec);
 
     if verbose {
-        print_verbose_output(cmd, &args, &output);
+        aprintln!("   {} rm -rf {}", p_m("$"), bind_path.display());
     }
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(DevError::Io(std::io::Error::other(format!(
-            "Failed to remove volume '{}': {}",
-            name, stderr
-        ))));
+    // Remove directory if it exists (ignore errors if it doesn't exist)
+    if bind_path.exists() {
+        std::fs::remove_dir_all(&bind_path)?;
+    }
+
+    // Recreate empty directory
+    std::fs::create_dir_all(&bind_path)?;
+
+    if verbose {
+        aprintln!("   {} mkdir -p {}", p_m("$"), bind_path.display());
     }
 
     Ok(())
@@ -408,7 +445,7 @@ pub async fn get_container_port(
 /// Starts a container with the given specification.
 ///
 /// First stops and removes any existing container with the same name,
-/// then starts a new container.
+/// then creates the bind mount directory if needed, and starts a new container.
 /// If `verbose` is true, prints command output with color coding.
 pub async fn start_container(
     runtime: ContainerRuntime,
@@ -420,8 +457,12 @@ pub async fn start_container(
     // Clean up any existing container
     stop_container(runtime, spec.name, verbose).await?;
 
-    // Build run arguments
-    let args = container_run_args(spec);
+    // Ensure bind mount directory exists
+    let bind_path = get_volume_bind_path(spec);
+    std::fs::create_dir_all(&bind_path)?;
+
+    // Build run arguments with bind path
+    let args = container_run_args(spec, &bind_path);
     let args_ref: Vec<&str> = args.iter().map(String::as_str).collect();
 
     // Start container
@@ -516,7 +557,8 @@ mod tests {
 
     #[test]
     fn test_container_run_args_with_command() {
-        let args = container_run_args(&DYNAMODB_SPEC);
+        let bind_path = std::path::Path::new("/tmp/test/dynamodb");
+        let args = container_run_args(&DYNAMODB_SPEC, bind_path);
 
         assert!(args.contains(&"run".to_string()));
         assert!(args.contains(&"--name".to_string()));
@@ -526,7 +568,8 @@ mod tests {
         // Dynamic host port (empty) mapped to container port
         assert!(args.contains(&":8000".to_string()));
         assert!(args.contains(&"-v".to_string()));
-        assert!(args.contains(&"calendsync-dynamodb-data:/data".to_string()));
+        // Bind mount format: absolute_path:/data
+        assert!(args.contains(&"/tmp/test/dynamodb:/data".to_string()));
         assert!(args.contains(&"amazon/dynamodb-local:latest".to_string()));
         // Command args should be split
         assert!(args.contains(&"-jar".to_string()));
@@ -535,15 +578,27 @@ mod tests {
 
     #[test]
     fn test_container_run_args_redis() {
-        let args = container_run_args(&REDIS_SPEC);
+        let bind_path = std::path::Path::new("/tmp/test/redis");
+        let args = container_run_args(&REDIS_SPEC, bind_path);
 
         assert!(args.contains(&"calendsync-redis".to_string()));
         // Dynamic host port (empty) mapped to container port
         assert!(args.contains(&":6379".to_string()));
+        // Bind mount format
+        assert!(args.contains(&"/tmp/test/redis:/data".to_string()));
         assert!(args.contains(&"redis:7-alpine".to_string()));
         assert!(args.contains(&"redis-server".to_string()));
         assert!(args.contains(&"--appendonly".to_string()));
         assert!(args.contains(&"yes".to_string()));
+    }
+
+    #[test]
+    fn test_get_volume_bind_path() {
+        let dynamodb_path = get_volume_bind_path(&DYNAMODB_SPEC);
+        assert!(dynamodb_path.ends_with(".local/volumes/dynamodb"));
+
+        let redis_path = get_volume_bind_path(&REDIS_SPEC);
+        assert!(redis_path.ends_with(".local/volumes/redis"));
     }
 
     #[test]
@@ -584,27 +639,27 @@ mod tests {
     fn test_cargo_features() {
         assert_eq!(
             cargo_features(Storage::Inmemory, Cache::Memory),
-            "inmemory,memory"
+            "inmemory,memory,auth-mock"
         );
         assert_eq!(
             cargo_features(Storage::Sqlite, Cache::Memory),
-            "sqlite,memory"
+            "sqlite,memory,auth-mock"
         );
         assert_eq!(
             cargo_features(Storage::Dynamodb, Cache::Memory),
-            "dynamodb,memory"
+            "dynamodb,memory,auth-mock"
         );
         assert_eq!(
             cargo_features(Storage::Inmemory, Cache::Redis),
-            "inmemory,redis"
+            "inmemory,redis,auth-mock"
         );
         assert_eq!(
             cargo_features(Storage::Sqlite, Cache::Redis),
-            "sqlite,redis"
+            "sqlite,redis,auth-mock"
         );
         assert_eq!(
             cargo_features(Storage::Dynamodb, Cache::Redis),
-            "dynamodb,redis"
+            "dynamodb,redis,auth-mock"
         );
     }
 
@@ -615,7 +670,13 @@ mod tests {
 
         assert!(vars.contains(&("PORT", "3000".to_string())));
         assert!(vars.contains(&("DEV_MODE", "1".to_string())));
-        assert_eq!(vars.len(), 2);
+        // Auth vars should always be present
+        assert!(vars.contains(&("AUTH_BASE_URL", "http://localhost:3000".to_string())));
+        assert!(vars.contains(&("COOKIE_SECURE", "false".to_string())));
+        assert!(vars.contains(&("GOOGLE_CLIENT_ID", "mock-google-client-id".to_string())));
+        assert!(vars.contains(&("APPLE_CLIENT_ID", "mock-apple-client-id".to_string())));
+        // 10 base vars (PORT, DEV_MODE, AUTH_BASE_URL, COOKIE_SECURE, 6 auth vars)
+        assert_eq!(vars.len(), 10);
     }
 
     #[test]

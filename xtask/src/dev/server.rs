@@ -115,14 +115,17 @@ pub async fn run(opts: ServerOptions, global: crate::Global) -> Result<()> {
     if let Some(runtime) = runtime {
         let verbose = global.is_verbose();
 
-        // Handle --flush: remove volumes before starting
+        // Handle --flush: remove and recreate volume directories
         if opts.flush {
             for spec in &required {
                 if !global.is_silent() {
-                    aprintln!("{} Removing volume {}...", p_y("🗑"), spec.volume_name);
+                    aprintln!(
+                        "{} Flushing volume directory for {}...",
+                        p_y("🗑"),
+                        spec.name
+                    );
                 }
-                // Ignore errors - volume might not exist
-                let _ = containers::remove_volume(runtime, spec.volume_name, verbose).await;
+                containers::flush_volume_directory(spec, verbose)?;
             }
         }
 
