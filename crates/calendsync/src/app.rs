@@ -22,7 +22,7 @@ use crate::{
             create_entry, delete_entry, get_entry, list_entries, toggle_entry, update_entry,
         },
         events::events_sse,
-        health::{healthz, readyz},
+        health::{healthz, livez, readyz},
         static_files::serve_static,
     },
     state::AppState,
@@ -75,6 +75,7 @@ pub fn create_app(state: AppState) -> Router {
         )
         .route("/dist/{*filename}", get(serve_static))
         // Health check routes (Kubernetes-style)
+        .route("/livez", get(livez))
         .route("/healthz", get(healthz))
         .route("/readyz", get(readyz))
         .nest("/api", api_routes);
@@ -127,6 +128,25 @@ mod tests {
     };
     use http_body_util::BodyExt;
     use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn test_livez_returns_200_immediately() {
+        let state = AppState::default();
+        let app = create_app(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/livez")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        // Should return 200 immediately without checking SSR pool
+        assert_eq!(response.status(), StatusCode::OK);
+    }
 
     #[tokio::test]
     async fn test_healthz_without_ssr_pool() {

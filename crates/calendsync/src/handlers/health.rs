@@ -1,6 +1,7 @@
 //! Health check endpoints for Kubernetes-style probes.
 //!
-//! - `/healthz` - Liveness probe (fast, passive stats)
+//! - `/livez` - Basic liveness probe (immediate 200, no checks)
+//! - `/healthz` - SSR pool stats (fast, passive stats)
 //! - `/readyz` - Readiness probe (active SSR render check)
 
 use axum::{
@@ -14,7 +15,16 @@ use calendsync_ssr::{HealthStatus, SsrPoolStats};
 
 use crate::state::AppState;
 
-/// GET /healthz - Liveness probe (passive stats, no render).
+/// GET /livez - Basic liveness probe.
+///
+/// Returns 200 immediately. Used to check if the server is accepting connections.
+/// Does NOT wait for SSR initialization.
+#[axum::debug_handler]
+pub async fn livez() -> StatusCode {
+    StatusCode::OK
+}
+
+/// GET /healthz - SSR pool stats (passive stats, no render).
 ///
 /// Returns pool statistics without sending a render request.
 /// Fast endpoint suitable for frequent liveness checks.
