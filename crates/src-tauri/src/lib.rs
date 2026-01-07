@@ -8,6 +8,8 @@ use tauri_plugin_deep_link::DeepLinkExt;
 use tracing::info;
 
 pub mod auth;
+mod commands;
+mod http;
 
 /// Main application entry point.
 ///
@@ -20,6 +22,26 @@ pub fn run() {
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_store::Builder::default().build())
+        .invoke_handler(tauri::generate_handler![
+            // Storage commands
+            commands::get_session,
+            commands::set_session,
+            commands::clear_session,
+            commands::get_last_calendar,
+            commands::set_last_calendar,
+            commands::clear_last_calendar,
+            commands::open_oauth_login,
+            // HTTP proxy commands
+            commands::exchange_auth_code,
+            commands::validate_session,
+            commands::logout,
+            commands::fetch_my_calendars,
+            commands::fetch_entries,
+            commands::create_entry,
+            commands::update_entry,
+            commands::delete_entry,
+            commands::toggle_entry,
+        ])
         .setup(|app| {
             // Open devtools automatically in debug builds for easier debugging
             #[cfg(debug_assertions)]
@@ -47,11 +69,20 @@ pub fn run() {
                 }
             });
 
-            // Register deep link schemes at runtime (needed for development on Windows/Linux)
+            // Register deep link schemes at runtime
+            // - Windows/Linux: Always needed (no native bundle registration)
+            // - macOS: Only needed in debug builds (production uses Info.plist)
             #[cfg(any(windows, target_os = "linux"))]
             {
                 if let Err(e) = app.deep_link().register_all() {
                     tracing::warn!("Failed to register deep link schemes: {}", e);
+                }
+            }
+
+            #[cfg(all(target_os = "macos", debug_assertions))]
+            {
+                if let Err(e) = app.deep_link().register_all() {
+                    tracing::warn!("Failed to register deep link schemes on macOS dev: {}", e);
                 }
             }
 

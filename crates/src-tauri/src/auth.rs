@@ -5,13 +5,16 @@
 //! - Exchange authorization codes for session tokens
 //! - Persist and retrieve session data using tauri-plugin-store
 
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 use tauri_plugin_store::StoreExt;
 use tracing::{error, info, warn};
 use url::Url;
 
 /// Key used to store the session ID in the auth store.
 const SESSION_KEY: &str = "session_id";
+
+/// Key used to store the last-used calendar ID in the auth store.
+const LAST_CALENDAR_KEY: &str = "last_calendar_id";
 
 /// Store filename for auth data.
 const AUTH_STORE: &str = "auth.json";
@@ -58,19 +61,15 @@ pub fn handle_deep_link(app: &AppHandle, url: &str) {
 
     match (code, state) {
         (Some(code), Some(state)) => {
-            info!("Extracted auth callback parameters, exchanging code for session");
-            let app = app.clone();
-            tauri::async_runtime::spawn(async move {
-                match exchange_code(&code, &state).await {
-                    Ok(session_id) => {
-                        info!("Successfully exchanged code for session");
-                        save_session(&app, &session_id);
-                    }
-                    Err(e) => {
-                        error!("Failed to exchange code for session: {}", e);
-                    }
-                }
-            });
+            info!("Extracted auth callback parameters, emitting to frontend for exchange");
+            // Emit auth-code-received event to frontend
+            // JavaScript will call /auth/exchange with credentials: include to set the cookie
+            if let Err(e) = app.emit(
+                "auth-code-received",
+                serde_json::json!({ "code": code, "state": state }),
+            ) {
+                error!("Failed to emit auth-code-received event: {}", e);
+            }
         }
         (None, _) => {
             warn!("Auth callback missing 'code' parameter");
@@ -86,6 +85,10 @@ pub fn handle_deep_link(app: &AppHandle, url: &str) {
 /// Makes an HTTP POST request to the backend `/auth/exchange` endpoint
 /// with the authorization code and state.
 ///
+/// Note: This is kept for debugging purposes but is not currently used.
+/// The normal flow has JavaScript call /auth/exchange with credentials: include
+/// so the cookie is set in the webview.
+///
 /// # Arguments
 ///
 /// * `code` - The authorization code from the OAuth provider
@@ -94,11 +97,7 @@ pub fn handle_deep_link(app: &AppHandle, url: &str) {
 /// # Returns
 ///
 /// The session ID on success, or an error.
-///
-/// # Note
-///
-/// The `/auth/exchange` endpoint does not exist yet - this will be
-/// implemented in the integration phase (Phase 7).
+#[allow(dead_code)]
 async fn exchange_code(
     code: &str,
     state: &str,
@@ -139,7 +138,7 @@ async fn exchange_code(
 ///
 /// * `app` - The Tauri AppHandle
 /// * `session_id` - The session ID to save
-fn save_session(app: &AppHandle, session_id: &str) {
+pub fn save_session(app: &AppHandle, session_id: &str) {
     match app.store(AUTH_STORE) {
         Ok(store) => {
             store.set(SESSION_KEY, serde_json::json!(session_id));
@@ -181,6 +180,54 @@ pub fn clear_session(app: &AppHandle) {
             error!("Failed to save auth store after clearing session: {}", e);
         } else {
             info!("Session cleared successfully");
+        }
+    }
+}
+
+/// Retrieve the last-used calendar ID from storage.
+///
+/// # Arguments
+///
+/// * `app` - The Tauri AppHandle
+///
+/// # Returns
+///
+/// The calendar ID if one exists, or `None`.
+pub fn get_last_calendar(app: &AppHandle) -> Option<String> {
+    let store = app.store(AUTH_STORE).ok()?;
+    store.get(LAST_CALENDAR_KEY)?.as_str().map(String::from)
+}
+
+/// Save the last-used calendar ID to persistent storage.
+///
+/// # Arguments
+///
+/// * `app` - The Tauri AppHandle
+/// * `calendar_id` - The calendar ID to save
+pub fn save_last_calendar(app: &AppHandle, calendar_id: &str) {
+    match app.store(AUTH_STORE) {
+        Ok(store) => {
+            store.set(LAST_CALENDAR_KEY, serde_json::json!(calendar_id));
+            if let Err(e) = store.save() {
+                error!("Failed to save auth store after saving calendar: {}", e);
+            }
+        }
+        Err(e) => {
+            error!("Failed to get auth store for saving calendar: {}", e);
+        }
+    }
+}
+
+/// Clear the last-used calendar ID from storage.
+///
+/// # Arguments
+///
+/// * `app` - The Tauri AppHandle
+pub fn clear_last_calendar(app: &AppHandle) {
+    if let Ok(store) = app.store(AUTH_STORE) {
+        let _ = store.delete(LAST_CALENDAR_KEY);
+        if let Err(e) = store.save() {
+            error!("Failed to save auth store after clearing calendar: {}", e);
         }
     }
 }

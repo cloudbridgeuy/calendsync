@@ -2,17 +2,17 @@
     "$schema": "https://schema.tauri.app/config/2",
     "productName": "CalendSync",
     "version": "0.1.0",
-    "identifier": "com.calendsync.app",
+    "identifier": "com.calendsync.desktop",
     "build": {
         "beforeDevCommand": "cd ../frontend && bun run dev:tauri",
-        "beforeBuildCommand": "cd ../frontend && bun run build:tauri",
+        "beforeBuildCommand": "cd ../frontend && bun run build:tauri:dev",
         "devUrl": "http://localhost:5173",
         "frontendDist": "../frontend/dist"
     },
     "app": {
         "withGlobalTauri": false,
         "security": {
-            "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:3000 ws://localhost:5174 https://*.calendsync.app; img-src 'self' data:",
+            "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: tauri: http://localhost:3000 ws://localhost:5174 https://*.calendsync.app; img-src 'self' data:",
             "capabilities": ["default"]
         },
         "windows": [
@@ -54,9 +54,6 @@
     "plugins": {
         "deep-link": {
             "desktop": {
-                "schemes": ["calendsync"]
-            },
-            "mobile": {
                 "schemes": ["calendsync"]
             }
         }
