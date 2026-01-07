@@ -7,13 +7,13 @@
  * - Navigation state (centerDate, visibleDays)
  * - Flash animations for entry changes
  * - Toast notifications
- * - SSE connection lifecycle
+ * - SSE event handlers (visual feedback only - connection managed by useSseWithOffline)
  *
  * For new calendars with offline support, use:
  * - useOfflineCalendar for data persistence
- * - useSseWithOffline for SSE handling
+ * - useSseWithOffline for SSE handling (data updates)
  * - useInitialSync for hydration
- * - This hook for navigation and visual feedback
+ * - This hook for navigation, visual feedback, and SSE event handlers
  *
  * @see useOfflineCalendar
  * @see .claude/context/offline-first.md
@@ -35,7 +35,6 @@ import type {
   ToastData,
 } from "../types"
 import { fetchEntries } from "./useApi"
-import { useSse } from "./useSse"
 
 /** Number of days prefetched from server (before and after highlighted day) */
 const PREFETCH_DAYS = 365
@@ -310,15 +309,6 @@ export function useCalendarState(config: UseCalendarStateConfig): [CalendarState
     setSseConnectionState(state)
   }, [])
 
-  // Setup SSE connection
-  const { reconnect: reconnectSse } = useSse({
-    calendarId: initialData.calendarId,
-    onEntryAdded: handleEntryAdded,
-    onEntryUpdated: handleEntryUpdated,
-    onEntryDeleted: handleEntryDeleted,
-    onConnectionChange: handleConnectionChange,
-  })
-
   /**
    * Check if a date is within any fetched range.
    */
@@ -342,13 +332,13 @@ export function useCalendarState(config: UseCalendarStateConfig): [CalendarState
       setError(null)
 
       try {
-        const days = await fetchEntries(
-          initialData.calendarId,
+        const days = await fetchEntries({
+          calendarId: initialData.calendarId,
           highlightedDay,
           before,
           after,
-          controller.signal,
-        )
+          signal: controller.signal,
+        })
 
         if (!controller.signal.aborted) {
           setEntryCache((prev) => mergeEntryCache(prev, days))
@@ -437,11 +427,13 @@ export function useCalendarState(config: UseCalendarStateConfig): [CalendarState
   )
 
   /**
-   * Refresh - reconnect SSE to get latest events.
+   * Refresh - currently a no-op since SSE is handled by useSseWithOffline.
+   * @deprecated This function is kept for API compatibility but does nothing.
    */
   const refresh = useCallback(async () => {
-    reconnectSse()
-  }, [reconnectSse])
+    // SSE reconnect is now handled by useSseWithOffline in Calendar.tsx
+    // This function is kept for API compatibility
+  }, [])
 
   /**
    * Add entry to cache optimistically (before SSE confirmation).
@@ -539,6 +531,11 @@ export function useCalendarState(config: UseCalendarStateConfig): [CalendarState
     removeToast,
     addEntryOptimistic,
     updateEntryOptimistic,
+    // SSE event handlers with visual feedback (flash, toast, notification)
+    onSseEntryAdded: handleEntryAdded,
+    onSseEntryUpdated: handleEntryUpdated,
+    onSseEntryDeleted: handleEntryDeleted,
+    onSseConnectionChange: handleConnectionChange,
   }
 
   return [state, actions]

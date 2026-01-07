@@ -55,6 +55,8 @@ export interface InitialData {
   modal?: ModalState
   /** Whether dev mode is enabled (for hot-reload auto-refresh) */
   devMode?: boolean
+  /** Whether SSE real-time updates are enabled (default: true, false for Tauri) */
+  sseEnabled?: boolean
 }
 
 /**
@@ -151,6 +153,14 @@ export interface CalendarActions {
   addEntryOptimistic: (entry: import("@core/calendar/types").ServerEntry) => void
   /** Update entry in cache optimistically (before SSE confirmation) */
   updateEntryOptimistic: (entry: import("@core/calendar/types").ServerEntry) => void
+  /** Handle SSE entry_added event with visual feedback (flash, toast, notification) */
+  onSseEntryAdded: (entry: import("@core/calendar/types").ServerEntry, date: string) => void
+  /** Handle SSE entry_updated event with visual feedback (flash, toast, notification) */
+  onSseEntryUpdated: (entry: import("@core/calendar/types").ServerEntry, date: string) => void
+  /** Handle SSE entry_deleted event with visual feedback (flash, toast, notification) */
+  onSseEntryDeleted: (entryId: string, date: string) => void
+  /** Handle SSE connection state change */
+  onSseConnectionChange: (state: SseConnectionState) => void
 }
 
 /**

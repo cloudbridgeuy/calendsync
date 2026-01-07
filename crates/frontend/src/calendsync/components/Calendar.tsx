@@ -88,22 +88,26 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
   })
 
   // useSseWithOffline handles SSE with Dexie updates
-  // Callbacks trigger flash states and toasts from useCalendarState's SSE handlers
+  // Callbacks trigger flash states, toasts, and notifications via useCalendarState's SSE handlers
+  // SSE is disabled in Tauri (initialData.sseEnabled === false) because EventSource
+  // makes direct HTTP requests that bypass the transport layer
   useSseWithOffline({
     calendarId: initialData.calendarId,
-    enabled: typeof window !== "undefined",
-    onEntryAdded: (entry) => {
-      // Flash animation and toast handled by existing useCalendarState SSE handlers
+    enabled: typeof window !== "undefined" && initialData.sseEnabled !== false,
+    onEntryAdded: (entry, date) => {
+      // Trigger visual feedback (flash animation, toast, notification)
       // The SSE event was already processed by useSseWithOffline (stored in Dexie)
-      // We still need to trigger the visual feedback
-      actions.addEntryOptimistic(entry)
+      actions.onSseEntryAdded(entry, date)
     },
-    onEntryUpdated: (entry) => {
-      actions.updateEntryOptimistic(entry)
+    onEntryUpdated: (entry, date) => {
+      actions.onSseEntryUpdated(entry, date)
     },
-    onEntryDeleted: () => {
-      // Note: deletion is handled by useSseWithOffline removing from Dexie
-      // The entry will disappear from the view via useLiveQuery
+    onEntryDeleted: (entryId, date) => {
+      // Trigger visual feedback - entry is also removed from Dexie by useSseWithOffline
+      actions.onSseEntryDeleted(entryId, date)
+    },
+    onConnectionChange: (state) => {
+      actions.onSseConnectionChange(state)
     },
   })
 
