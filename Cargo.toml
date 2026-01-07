@@ -70,7 +70,7 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 
 # Tauri dependencies
-tauri = { version = "2.4", features = [] }
+tauri = { version = "2.9", features = [] }
 tauri-build = { version = "2.4", features = [] }
 tauri-plugin-deep-link = { version = "2" }
 tauri-plugin-http = { version = "2.1" }
