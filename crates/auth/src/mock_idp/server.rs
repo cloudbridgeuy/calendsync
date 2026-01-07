@@ -104,8 +104,9 @@ async fn authorize_submit(Form(form): Form<LoginForm>) -> Response {
     let encoded_state = urlencoding::encode(&form.state);
 
     // Apple uses form_post response mode - return auto-submitting form
+    // Note: Don't URL-encode for form POST - browser sends values as-is
     if form.provider == "apple" {
-        let html = templates::form_post_page(&form.redirect_uri, &encoded_code, &encoded_state);
+        let html = templates::form_post_page(&form.redirect_uri, &mock_code, &form.state);
         return Html(html).into_response();
     }
 

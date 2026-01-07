@@ -20,7 +20,7 @@ pub use handlers::auth_routes;
 #[cfg(feature = "mock")]
 pub use providers::MockProvider;
 pub use providers::{AppleProvider, GoogleProvider};
-#[cfg(any(feature = "sqlite", feature = "redis"))]
+#[cfg(any(feature = "sqlite", feature = "redis", feature = "mock"))]
 pub use sessions::SessionStore;
 pub use state::AuthState;
 

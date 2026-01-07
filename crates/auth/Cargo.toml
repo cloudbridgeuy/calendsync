@@ -17,7 +17,7 @@ path = "src/lib.rs"
 default = []
 sqlite = ["sqlx"]
 redis = ["fred"]
-mock = ["base64", "urlencoding"]
+mock = ["base64"]
 
 [dependencies]
 calendsync_core = { workspace = true, features = ["auth"] }
@@ -55,10 +55,12 @@ thiserror = { workspace = true }
 # Logging
 tracing = { workspace = true }
 
+# URL encoding for native app redirects
+urlencoding = { workspace = true }
+
 # Storage (feature-gated)
 sqlx = { workspace = true, features = ["sqlite", "runtime-tokio"], optional = true }
 fred = { workspace = true, optional = true }
 
 # Mock IdP (feature-gated)
 base64 = { workspace = true, optional = true }
-urlencoding = { workspace = true, optional = true }

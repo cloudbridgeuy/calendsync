@@ -146,6 +146,24 @@ impl SessionRepository for SessionStore {
         Ok(())
     }
 
+    async fn peek_auth_flow(&self, state: &str) -> Result<Option<AuthFlowState>> {
+        let key = Self::flow_key(state);
+        let value: Option<String> = self
+            .pool
+            .get(&key)
+            .await
+            .map_err(|e| AuthError::Storage(e.to_string()))?;
+
+        match value {
+            Some(json) => {
+                let flow: AuthFlowState =
+                    serde_json::from_str(&json).map_err(|e| AuthError::Storage(e.to_string()))?;
+                Ok(Some(flow))
+            }
+            None => Ok(None),
+        }
+    }
+
     async fn take_auth_flow(&self, state: &str) -> Result<Option<AuthFlowState>> {
         let key = Self::flow_key(state);
 

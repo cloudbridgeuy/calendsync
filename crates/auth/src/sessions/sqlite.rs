@@ -36,7 +36,9 @@ impl SessionStore {
                 state TEXT PRIMARY KEY,
                 pkce_verifier TEXT NOT NULL,
                 provider TEXT NOT NULL,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                return_to TEXT,
+                redirect_uri TEXT
             );
             "#,
         )
@@ -126,17 +128,55 @@ impl SessionRepository for SessionStore {
 
     async fn store_auth_flow(&self, state: &str, flow: &AuthFlowState) -> Result<()> {
         sqlx::query(
-            "INSERT OR REPLACE INTO auth_flows (state, pkce_verifier, provider, created_at) VALUES (?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO auth_flows (state, pkce_verifier, provider, created_at, return_to, redirect_uri) VALUES (?, ?, ?, ?, ?, ?)",
         )
         .bind(state)
         .bind(&flow.pkce_verifier)
         .bind(flow.provider.to_string())
         .bind(flow.created_at.to_rfc3339())
+        .bind(&flow.return_to)
+        .bind(&flow.redirect_uri)
         .execute(&self.pool)
         .await
         .map_err(|e| AuthError::Storage(e.to_string()))?;
 
         Ok(())
+    }
+
+    async fn peek_auth_flow(&self, state: &str) -> Result<Option<AuthFlowState>> {
+        let row = sqlx::query_as::<_, (String, String, String, Option<String>, Option<String>)>(
+            "SELECT pkce_verifier, provider, created_at, return_to, redirect_uri FROM auth_flows WHERE state = ?",
+        )
+        .bind(state)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| AuthError::Storage(e.to_string()))?;
+
+        match row {
+            Some((pkce_verifier, provider, created_at, return_to, redirect_uri)) => {
+                let provider = match provider.as_str() {
+                    "google" => OidcProvider::Google,
+                    "apple" => OidcProvider::Apple,
+                    _ => {
+                        return Err(AuthError::Storage(format!(
+                            "Unknown provider: {}",
+                            provider
+                        )))
+                    }
+                };
+
+                Ok(Some(AuthFlowState {
+                    pkce_verifier,
+                    provider,
+                    created_at: DateTime::parse_from_rfc3339(&created_at)
+                        .map_err(|e| AuthError::Storage(e.to_string()))?
+                        .with_timezone(&Utc),
+                    return_to,
+                    redirect_uri,
+                }))
+            }
+            None => Ok(None),
+        }
     }
 
     async fn take_auth_flow(&self, state: &str) -> Result<Option<AuthFlowState>> {
@@ -148,8 +188,8 @@ impl SessionRepository for SessionStore {
             .map_err(|e| AuthError::Storage(e.to_string()))?;
 
         // Fetch the auth flow
-        let row = sqlx::query_as::<_, (String, String, String)>(
-            "SELECT pkce_verifier, provider, created_at FROM auth_flows WHERE state = ?",
+        let row = sqlx::query_as::<_, (String, String, String, Option<String>, Option<String>)>(
+            "SELECT pkce_verifier, provider, created_at, return_to, redirect_uri FROM auth_flows WHERE state = ?",
         )
         .bind(state)
         .fetch_optional(&mut *tx)
@@ -172,7 +212,7 @@ impl SessionRepository for SessionStore {
 
         // Process the result
         match row {
-            Some((pkce_verifier, provider, created_at)) => {
+            Some((pkce_verifier, provider, created_at, return_to, redirect_uri)) => {
                 let provider = match provider.as_str() {
                     "google" => OidcProvider::Google,
                     "apple" => OidcProvider::Apple,
@@ -190,7 +230,8 @@ impl SessionRepository for SessionStore {
                     created_at: DateTime::parse_from_rfc3339(&created_at)
                         .map_err(|e| AuthError::Storage(e.to_string()))?
                         .with_timezone(&Utc),
-                    return_to: None, // TODO: Read from database when column is added
+                    return_to,
+                    redirect_uri,
                 }))
             }
             None => Ok(None),
