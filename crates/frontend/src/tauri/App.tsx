@@ -1,70 +1,77 @@
-/**
- * Tauri App wrapper - fetches initial data and renders Calendar.
- * Unlike web App.tsx, this does NOT render full HTML document.
- * It fetches data on mount since there's no SSR to embed it.
- */
-
 import { Calendar } from "@calendsync/components"
-import { initControlPlaneUrl } from "@calendsync/hooks/useApi"
 import type { InitialData } from "@calendsync/types"
 import { formatDateKey } from "@core/calendar/dates"
-import type { ServerDay } from "@core/calendar/types"
+import { useTransport } from "@core/transport"
 import { useEffect, useState } from "react"
+import { TauriLoginPage } from "./components"
+import { useAppInit, useAuthState } from "./hooks"
 
-interface AppProps {
-  apiUrl: string
-  calendarId: string
-}
-
-/**
- * Tauri App component.
- * Fetches initial calendar data on mount and renders the Calendar.
- */
-export function App({ apiUrl, calendarId }: AppProps) {
+export function App() {
+  const transport = useTransport()
+  const { state, setView, setSession, setCalendar, setError } = useAuthState()
   const [initialData, setInitialData] = useState<InitialData | null>(null)
-  const [error, setError] = useState<string | null>(null)
 
+  useAppInit({ setView, setSession, setCalendar, setError })
+
+  // Fetch calendar data when calendarId is set
   useEffect(() => {
-    // Initialize API URL for all hooks
-    initControlPlaneUrl(apiUrl)
+    if (!state.calendarId || !state.sessionId) return
 
-    // Fetch initial data
-    const highlightedDay = formatDateKey(new Date())
-    const url = `${apiUrl}/api/entries/calendar?calendar_id=${calendarId}&highlighted_day=${highlightedDay}&before=3&after=3`
+    // Capture non-null values for use in async function
+    const calendarId = state.calendarId
 
-    console.log(`[Tauri] Fetching initial data from: ${url}`)
+    const fetchCalendarData = async () => {
+      const highlightedDay = formatDateKey(new Date())
 
-    fetch(url)
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}: ${res.statusText}`)
-        }
-        return res.json() as Promise<ServerDay[]>
-      })
-      .then((days) => {
-        console.log(`[Tauri] Received ${days.length} days of data`)
+      try {
+        const days = await transport.fetchEntries({
+          calendarId,
+          highlightedDay,
+        })
+
         setInitialData({
           calendarId,
           highlightedDay,
           days,
-          clientBundleUrl: "", // Not needed for CSR
-          controlPlaneUrl: apiUrl,
+          clientBundleUrl: "",
+          controlPlaneUrl: "", // Not needed for Tauri - transport handles it
+          sseEnabled: false, // Disabled in Tauri - EventSource bypasses transport layer
         })
-      })
-      .catch((err) => {
-        console.error("[Tauri] Failed to fetch initial data:", err)
-        setError(err.message)
-      })
-  }, [apiUrl, calendarId])
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e)
+        if (message.includes("401") || message === "UNAUTHORIZED") {
+          await transport.clearSession()
+          setSession(null)
+          setView("login")
+          return
+        }
+        setError(`Failed to load calendar: ${message}`)
+      }
+    }
 
-  if (error) {
+    fetchCalendarData()
+  }, [state.calendarId, state.sessionId, transport, setSession, setView, setError])
+
+  // Render based on view state
+  if (state.view === "loading") {
+    return (
+      <div className="tauri-loading">
+        <p>Loading...</p>
+      </div>
+    )
+  }
+
+  if (state.view === "login") {
+    return <TauriLoginPage onError={setError} />
+  }
+
+  if (state.error) {
     return (
       <div className="tauri-error">
-        <h1>Failed to load calendar</h1>
-        <p>{error}</p>
-        <p>Make sure the calendsync server is running at {apiUrl}</p>
-        <button type="button" onClick={() => window.location.reload()}>
-          Retry
+        <h1>Error</h1>
+        <p>{state.error}</p>
+        <button type="button" onClick={() => setError(null)}>
+          Dismiss
         </button>
       </div>
     )
