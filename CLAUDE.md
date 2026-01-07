@@ -610,6 +610,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | SSR Worker Pool      | `.claude/context/ssr-worker-pool.md`   |
 | Axum Reference       | `.claude/context/AXUM.md`              |
 | Tauri                | `.claude/context/tauri.md`             |
+| Tauri Desktop Setup  | `.claude/context/tauri-desktop-setup.md` |
 | Tauri iOS            | `.claude/context/tauri-ios.md`         |
 | xtask dev Command    | `.claude/context/xtask-dev.md`         |
 | Dev Server           | `.claude/context/dev-server.md`        |
@@ -631,6 +632,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | Dexie.js Reference   | `.claude/context/DEXIE.md`             |
 | Authentication       | `.claude/context/authentication.md`    |
 | OIDC Setup Guide     | `.claude/context/oidc-setup.md`        |
+| Lazy SSR Init        | `.claude/context/lazy-ssr-init.md`     |
 
 ### Local Working Directories (gitignored)
 
