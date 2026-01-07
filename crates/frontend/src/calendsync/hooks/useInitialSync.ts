@@ -65,7 +65,12 @@ async function performFullSync(
   bufferDays: number,
 ): Promise<void> {
   // Fetch entries from server
-  const days = await fetchEntries(calendarId, highlightedDay, bufferDays, bufferDays)
+  const days = await fetchEntries({
+    calendarId,
+    highlightedDay,
+    before: bufferDays,
+    after: bufferDays,
+  })
 
   // Store all entries locally
   await db.transaction("rw", [db.entries, db.sync_state], async () => {

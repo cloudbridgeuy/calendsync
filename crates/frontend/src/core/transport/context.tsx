@@ -6,7 +6,7 @@
  * the underlying implementation (web fetch vs Tauri invoke).
  */
 
-import { createContext, useContext, type ReactNode } from "react"
+import { createContext, type ReactNode, useContext } from "react"
 import type { Transport } from "./types"
 
 const TransportContext = createContext<Transport | null>(null)

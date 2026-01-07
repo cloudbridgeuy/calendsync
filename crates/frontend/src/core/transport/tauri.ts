@@ -6,8 +6,8 @@
  */
 
 import { invoke } from "@tauri-apps/api/core"
-import type { CalendarWithRole, Transport } from "./types"
 import type { ServerDay, ServerEntry } from "../calendar/types"
+import type { CalendarWithRole, Transport } from "./types"
 
 /**
  * Create a Tauri transport that routes all HTTP through Rust backend.
