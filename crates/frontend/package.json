@@ -15,12 +15,12 @@
     "build:calendsync:client:dev": "bun build ./src/calendsync/client.tsx --outdir ./dist --entry-naming calendsync-client-[hash].js --format esm --target browser --sourcemap=external --define:process.env.NODE_ENV='\"development\"'",
     "build:tauri": "bun run build:tauri:client && bun run build:tauri:css && bun run build:tauri:html",
     "build:tauri:dev": "bun run build:tauri:client:dev && bun run build:tauri:css && bun run build:tauri:html",
-    "build:tauri:client": "bun build ./src/tauri/client.tsx --outdir ./dist --entry-naming calendsync-tauri.js --format esm --target browser --minify --define:process.env.NODE_ENV='\"production\"'",
-    "build:tauri:client:dev": "bun build ./src/tauri/client.tsx --outdir ./dist --entry-naming calendsync-tauri.js --format esm --target browser --sourcemap=external --define:process.env.NODE_ENV='\"development\"'",
+    "build:tauri:client": "bun build ./src/tauri/client.tsx --outdir ./dist --entry-naming calendsync-tauri.js --format esm --target browser --minify --define:process.env.NODE_ENV='\"production\"' --define 'API_URL=\"https://server.calendsync.app\"'",
+    "build:tauri:client:dev": "bun build ./src/tauri/client.tsx --outdir ./dist --entry-naming calendsync-tauri.js --format esm --target browser --sourcemap=external --define:process.env.NODE_ENV='\"development\"' --define 'API_URL=\"http://localhost:3000\"'",
     "build:tauri:css": "cp ./src/calendsync/styles.css ./dist/calendsync.css",
     "build:tauri:html": "cp ./src/tauri/index.html ./dist/index.html",
     "build:tauri:dev:live": "bun run build:tauri:client:dev:live && bun run build:tauri:css:live && bun run build:tauri:html:live",
-    "build:tauri:client:dev:live": "bun build ./src/tauri/client.tsx --outdir ./dist-dev --entry-naming calendsync-tauri.js --format esm --target browser --sourcemap=external --define:process.env.NODE_ENV='\"development\"'",
+    "build:tauri:client:dev:live": "bun build ./src/tauri/client.tsx --outdir ./dist-dev --entry-naming calendsync-tauri.js --format esm --target browser --sourcemap=external --define:process.env.NODE_ENV='\"development\"' --define 'API_URL=\"http://localhost:3000\"'",
     "build:tauri:css:live": "cp ./src/calendsync/styles.css ./dist-dev/calendsync.css",
     "build:tauri:html:live": "cp ./src/tauri/index.html ./dist-dev/index.html",
     "dev:tauri": "bun run build:tauri:dev:live && bun run ./dev-server.ts",
@@ -29,6 +29,7 @@
     "watch": "bun run build:calendsync:dev --watch"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.9.1",
     "dexie": "^4.0.10",
     "dexie-react-hooks": "^1.1.7",
     "react": "^19.0.0",
