@@ -6,6 +6,7 @@ pub struct Config {
     /// Cache TTL in seconds (default: 300)
     pub cache_ttl_seconds: u64,
     /// Maximum number of cache entries (default: 10,000)
+    #[cfg(feature = "memory")]
     pub cache_max_entries: usize,
     /// Maximum size of event history for SSE (default: 1,000)
     pub event_history_max_size: usize,
@@ -21,6 +22,9 @@ pub struct Config {
     /// Note: Only used when the `auth-sqlite` feature is enabled.
     #[allow(dead_code)]
     pub auth_sqlite_path: String,
+    /// Allowed CORS origins (comma-separated, default: "http://localhost:5173,tauri://localhost")
+    /// Used when credentials are needed (cookies for auth).
+    pub cors_origins: Vec<String>,
 }
 
 impl Config {
@@ -33,12 +37,14 @@ impl Config {
     /// - `SQLITE_PATH` - SQLite database path (default: "calendsync.db")
     /// - `REDIS_URL` - Redis connection URL (default: "redis://localhost:6379")
     /// - `AUTH_SQLITE_PATH` - Auth sessions SQLite path (default: "data/sessions.db")
+    /// - `CORS_ORIGINS` - Comma-separated allowed origins (default: "http://localhost:5173,tauri://localhost")
     pub fn from_env() -> Self {
         Self {
             cache_ttl_seconds: env::var("CACHE_TTL_SECONDS")
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(300),
+            #[cfg(feature = "memory")]
             cache_max_entries: env::var("CACHE_MAX_ENTRIES")
                 .ok()
                 .and_then(|v| v.parse().ok())
@@ -52,6 +58,14 @@ impl Config {
                 .unwrap_or_else(|_| "redis://localhost:6379".to_string()),
             auth_sqlite_path: env::var("AUTH_SQLITE_PATH")
                 .unwrap_or_else(|_| "data/sessions.db".to_string()),
+            cors_origins: env::var("CORS_ORIGINS")
+                .map(|v| v.split(',').map(|s| s.trim().to_string()).collect())
+                .unwrap_or_else(|_| {
+                    vec![
+                        "http://localhost:5173".to_string(),
+                        "tauri://localhost".to_string(),
+                    ]
+                }),
         }
     }
 
@@ -75,11 +89,13 @@ mod tests {
     fn test_cache_ttl_conversion() {
         let config = Config {
             cache_ttl_seconds: 600,
+            #[cfg(feature = "memory")]
             cache_max_entries: 10_000,
             event_history_max_size: 1_000,
             sqlite_path: "test.db".to_string(),
             redis_url: "redis://localhost:6379".to_string(),
             auth_sqlite_path: "data/sessions.db".to_string(),
+            cors_origins: vec!["http://localhost:5173".to_string()],
         };
 
         assert_eq!(config.cache_ttl(), Duration::from_secs(600));
@@ -89,19 +105,29 @@ mod tests {
     fn test_default_values() {
         // Clear environment variables to test defaults
         env::remove_var("CACHE_TTL_SECONDS");
+        #[cfg(feature = "memory")]
         env::remove_var("CACHE_MAX_ENTRIES");
         env::remove_var("EVENT_HISTORY_MAX_SIZE");
         env::remove_var("SQLITE_PATH");
         env::remove_var("REDIS_URL");
         env::remove_var("AUTH_SQLITE_PATH");
+        env::remove_var("CORS_ORIGINS");
 
         let config = Config::from_env();
 
         assert_eq!(config.cache_ttl_seconds, 300);
+        #[cfg(feature = "memory")]
         assert_eq!(config.cache_max_entries, 10_000);
         assert_eq!(config.event_history_max_size, 1_000);
         assert_eq!(config.sqlite_path, "calendsync.db");
         assert_eq!(config.redis_url, "redis://localhost:6379");
         assert_eq!(config.auth_sqlite_path, "data/sessions.db");
+        assert_eq!(
+            config.cors_origins,
+            vec![
+                "http://localhost:5173".to_string(),
+                "tauri://localhost".to_string()
+            ]
+        );
     }
 }

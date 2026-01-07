@@ -19,7 +19,13 @@ use calendsync_core::calendar::{merge_entry, CalendarEntry, EntryKind, MergeResu
 use calendsync_core::storage::{DateRange, RepositoryError};
 
 #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+use axum::response::Response;
+
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
 use calendsync_auth::CurrentUser;
+
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+use super::authz::{require_read_access, require_write_access};
 
 use crate::{
     handlers::AppError,
@@ -57,19 +63,39 @@ fn default_after() -> i64 {
     365
 }
 
-/// List entries for a calendar (GET /api/entries).
-///
-/// Returns entries in ServerDay[] format for the React calendar.
-///
-/// Query parameters:
-/// - `calendar_id`: Calendar ID (required)
-/// - `highlighted_day`: Center date (defaults to today)
-/// - `before`: Days before highlighted_day (default: 365)
-/// - `after`: Days after highlighted_day (default: 365)
-#[axum::debug_handler]
+// ============================================================================
+// List Entries
+// ============================================================================
+
+/// List entries for a calendar (GET /api/entries) - with auth.
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+pub async fn list_entries(
+    CurrentUser(user): CurrentUser,
+    State(state): State<AppState>,
+    Query(query): Query<ListEntriesQuery>,
+) -> Result<Json<Vec<serde_json::Value>>, Response> {
+    let auth = state.auth.as_ref().expect("Auth state required");
+    require_read_access(auth, query.calendar_id, user.id)
+        .await
+        .map_err(IntoResponse::into_response)?;
+
+    list_entries_impl(&state, query)
+        .await
+        .map_err(IntoResponse::into_response)
+}
+
+/// List entries for a calendar (GET /api/entries) - no auth.
+#[cfg(not(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock")))]
 pub async fn list_entries(
     State(state): State<AppState>,
     Query(query): Query<ListEntriesQuery>,
+) -> Result<Json<Vec<serde_json::Value>>, AppError> {
+    list_entries_impl(&state, query).await
+}
+
+async fn list_entries_impl(
+    state: &AppState,
+    query: ListEntriesQuery,
 ) -> Result<Json<Vec<serde_json::Value>>, AppError> {
     let highlighted = query
         .highlighted_day
@@ -91,18 +117,56 @@ pub async fn list_entries(
     Ok(Json(days))
 }
 
-/// Create a new entry (POST /api/entries).
+// ============================================================================
+// Create Entry
+// ============================================================================
+
+/// Create a new entry (POST /api/entries) - with auth.
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+pub async fn create_entry(
+    CurrentUser(user): CurrentUser,
+    State(state): State<AppState>,
+    form_result: Result<Form<CreateEntry>, FormRejection>,
+) -> Result<impl IntoResponse, Response> {
+    let Form(payload) = form_result.map_err(|e| {
+        error_response(
+            StatusCode::BAD_REQUEST,
+            format!("Failed to parse form: {e}"),
+        )
+        .into_response()
+    })?;
+
+    // Check write access on the calendar BEFORE creating entry
+    let auth = state.auth.as_ref().expect("Auth state required");
+    require_write_access(auth, payload.calendar_id, user.id)
+        .await
+        .map_err(IntoResponse::into_response)?;
+
+    create_entry_impl(&state, payload)
+        .await
+        .map_err(IntoResponse::into_response)
+}
+
+/// Create a new entry (POST /api/entries) - no auth.
+#[cfg(not(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock")))]
 pub async fn create_entry(
     State(state): State<AppState>,
     form_result: Result<Form<CreateEntry>, FormRejection>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // Handle form parsing errors
     let Form(payload) = form_result.map_err(|e| {
-        let msg = format!("Failed to parse form: {e}");
-        tracing::error!(error = %e, "Form parsing failed");
-        error_response(StatusCode::BAD_REQUEST, msg)
+        error_response(
+            StatusCode::BAD_REQUEST,
+            format!("Failed to parse form: {e}"),
+        )
     })?;
 
+    create_entry_impl(&state, payload).await
+}
+
+async fn create_entry_impl(
+    state: &AppState,
+    payload: CreateEntry,
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, String)> {
     tracing::debug!(payload = ?payload, "Received create entry request");
 
     // Verify the calendar exists
@@ -138,7 +202,42 @@ pub async fn create_entry(
     Ok((StatusCode::CREATED, Json(entry_to_server_entry(&entry))))
 }
 
-/// Get a single entry by ID (GET /api/entries/{id}).
+// ============================================================================
+// Get Entry
+// ============================================================================
+
+/// Get a single entry by ID (GET /api/entries/{id}) - with auth.
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+pub async fn get_entry(
+    CurrentUser(user): CurrentUser,
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<CalendarEntry>, Response> {
+    // First fetch the entry to get its calendar_id
+    let entry = state
+        .entry_repo
+        .get_entry(id)
+        .await
+        .map_err(|e| AppError::from(e).into_response())?
+        .ok_or_else(|| {
+            AppError::from(RepositoryError::NotFound {
+                entity_type: "CalendarEntry",
+                id: id.to_string(),
+            })
+            .into_response()
+        })?;
+
+    // Check read access on the entry's calendar
+    let auth = state.auth.as_ref().expect("Auth state required");
+    require_read_access(auth, entry.calendar_id, user.id)
+        .await
+        .map_err(IntoResponse::into_response)?;
+
+    Ok(Json(entry))
+}
+
+/// Get a single entry by ID (GET /api/entries/{id}) - no auth.
+#[cfg(not(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock")))]
 pub async fn get_entry(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
@@ -155,31 +254,85 @@ pub async fn get_entry(
     }
 }
 
-/// Update an entry by ID (PUT /api/entries/{id}).
-///
-/// Uses Last-Write-Wins (LWW) merge strategy when the client provides an `updated_at` timestamp.
-/// If the client's timestamp is newer than the server's, the update is applied.
-/// Otherwise, the server's current entry is returned without modification.
+// ============================================================================
+// Update Entry
+// ============================================================================
+
+/// Update an entry by ID (PUT /api/entries/{id}) - with auth.
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+pub async fn update_entry(
+    CurrentUser(user): CurrentUser,
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+    form_result: Result<Form<UpdateEntry>, FormRejection>,
+) -> Result<Json<serde_json::Value>, Response> {
+    let Form(payload) = form_result.map_err(|e| {
+        error_response(
+            StatusCode::BAD_REQUEST,
+            format!("Failed to parse form: {e}"),
+        )
+        .into_response()
+    })?;
+
+    // First fetch entry to get its calendar_id
+    let server_entry = state
+        .entry_repo
+        .get_entry(id)
+        .await
+        .map_err(|e| {
+            error_response(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
+        })?
+        .ok_or_else(|| {
+            error_response(StatusCode::NOT_FOUND, format!("Entry {id} not found")).into_response()
+        })?;
+
+    // Check write access on the entry's calendar
+    let auth = state.auth.as_ref().expect("Auth state required");
+    require_write_access(auth, server_entry.calendar_id, user.id)
+        .await
+        .map_err(IntoResponse::into_response)?;
+
+    update_entry_impl(&state, id, payload, server_entry)
+        .await
+        .map_err(IntoResponse::into_response)
+}
+
+/// Update an entry by ID (PUT /api/entries/{id}) - no auth.
+#[cfg(not(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock")))]
 pub async fn update_entry(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
     form_result: Result<Form<UpdateEntry>, FormRejection>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let Form(payload) = form_result.map_err(|e| {
-        let msg = format!("Failed to parse form: {e}");
-        tracing::error!(error = %e, "Form parsing failed");
-        error_response(StatusCode::BAD_REQUEST, msg)
+        error_response(
+            StatusCode::BAD_REQUEST,
+            format!("Failed to parse form: {e}"),
+        )
     })?;
 
-    tracing::debug!(entry_id = %id, payload = ?payload, "Received update entry request");
-
-    // Get existing entry from server
     let server_entry = state
         .entry_repo
         .get_entry(id)
         .await
         .map_err(|e| error_response(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or_else(|| error_response(StatusCode::NOT_FOUND, format!("Entry {id} not found")))?;
+
+    update_entry_impl(&state, id, payload, server_entry).await
+}
+
+/// Update an entry by ID (PUT /api/entries/{id}).
+///
+/// Uses Last-Write-Wins (LWW) merge strategy when the client provides an `updated_at` timestamp.
+/// If the client's timestamp is newer than the server's, the update is applied.
+/// Otherwise, the server's current entry is returned without modification.
+async fn update_entry_impl(
+    state: &AppState,
+    id: Uuid,
+    payload: UpdateEntry,
+    server_entry: CalendarEntry,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    tracing::debug!(entry_id = %id, payload = ?payload, "Received update entry request");
 
     // Extract client timestamp for LWW merge
     let client_updated_at = payload.updated_at;
@@ -232,7 +385,53 @@ pub async fn update_entry(
     Ok(Json(entry_to_server_entry(&final_entry)))
 }
 
-/// Delete an entry by ID (DELETE /api/entries/{id}).
+// ============================================================================
+// Delete Entry
+// ============================================================================
+
+/// Delete an entry by ID (DELETE /api/entries/{id}) - with auth.
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+pub async fn delete_entry(
+    CurrentUser(user): CurrentUser,
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, Response> {
+    tracing::debug!(entry_id = %id, "Received delete entry request");
+
+    // First fetch entry to get its calendar_id
+    let entry = state
+        .entry_repo
+        .get_entry(id)
+        .await
+        .map_err(|e| AppError::from(e).into_response())?
+        .ok_or_else(|| {
+            AppError::from(RepositoryError::NotFound {
+                entity_type: "CalendarEntry",
+                id: id.to_string(),
+            })
+            .into_response()
+        })?;
+
+    // Check write access on the entry's calendar
+    let auth = state.auth.as_ref().expect("Auth state required");
+    require_write_access(auth, entry.calendar_id, user.id)
+        .await
+        .map_err(IntoResponse::into_response)?;
+
+    // Delete via repository (which handles cache invalidation and event publishing)
+    state
+        .entry_repo
+        .delete_entry(id)
+        .await
+        .map_err(|e| AppError::from(e).into_response())?;
+
+    tracing::info!(entry_id = %id, "Deleted entry");
+
+    Ok(StatusCode::OK)
+}
+
+/// Delete an entry by ID (DELETE /api/entries/{id}) - no auth.
+#[cfg(not(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock")))]
 pub async fn delete_entry(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
@@ -247,14 +446,50 @@ pub async fn delete_entry(
     Ok(StatusCode::OK)
 }
 
-/// Toggle a task's completion status (PATCH /api/entries/{id}/toggle).
+// ============================================================================
+// Toggle Entry
+// ============================================================================
+
+/// Toggle a task's completion status (PATCH /api/entries/{id}/toggle) - with auth.
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+pub async fn toggle_entry(
+    CurrentUser(user): CurrentUser,
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, Response> {
+    tracing::debug!(entry_id = %id, "Received toggle entry request");
+
+    // First fetch entry to get its calendar_id
+    let existing = state
+        .entry_repo
+        .get_entry(id)
+        .await
+        .map_err(|e| {
+            error_response(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
+        })?
+        .ok_or_else(|| {
+            error_response(StatusCode::NOT_FOUND, format!("Entry {id} not found")).into_response()
+        })?;
+
+    // Check write access on the entry's calendar
+    let auth = state.auth.as_ref().expect("Auth state required");
+    require_write_access(auth, existing.calendar_id, user.id)
+        .await
+        .map_err(IntoResponse::into_response)?;
+
+    toggle_entry_impl(&state, id, existing)
+        .await
+        .map_err(IntoResponse::into_response)
+}
+
+/// Toggle a task's completion status (PATCH /api/entries/{id}/toggle) - no auth.
+#[cfg(not(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock")))]
 pub async fn toggle_entry(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     tracing::debug!(entry_id = %id, "Received toggle entry request");
 
-    // Get existing entry
     let existing = state
         .entry_repo
         .get_entry(id)
@@ -262,6 +497,14 @@ pub async fn toggle_entry(
         .map_err(|e| error_response(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or_else(|| error_response(StatusCode::NOT_FOUND, format!("Entry {id} not found")))?;
 
+    toggle_entry_impl(&state, id, existing).await
+}
+
+async fn toggle_entry_impl(
+    state: &AppState,
+    id: Uuid,
+    existing: CalendarEntry,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     // Toggle if it's a task
     let mut updated_entry = existing;
     match &mut updated_entry.kind {
@@ -285,92 +528,6 @@ pub async fn toggle_entry(
         .map_err(|e| error_response(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(entry_to_server_entry(&updated_entry)))
-}
-
-// ============================================================================
-// Protected handlers (auth-enabled builds)
-// ============================================================================
-
-/// Create a new entry with authentication (POST /api/entries).
-///
-/// This is an example of a protected handler that requires authentication.
-/// The `CurrentUser` extractor automatically validates the session and
-/// returns 401 if the user is not authenticated.
-///
-/// Note: This handler is only available when auth features are enabled.
-/// The actual authorization logic (checking user has access to the calendar)
-/// should be implemented based on the application's requirements.
-#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
-#[allow(dead_code)]
-pub async fn create_entry_protected(
-    CurrentUser(user): CurrentUser,
-    State(state): State<AppState>,
-    form_result: Result<Form<CreateEntry>, FormRejection>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
-    let Form(payload) = form_result.map_err(|e| {
-        let msg = format!("Failed to parse form: {e}");
-        error_response(StatusCode::BAD_REQUEST, msg)
-    })?;
-
-    tracing::debug!(
-        user_id = %user.id,
-        user_name = %user.name,
-        payload = ?payload,
-        "Received authenticated create entry request"
-    );
-
-    // TODO: Check that the user has write access to the calendar
-    // This would involve:
-    // 1. Looking up the user's membership for the calendar
-    // 2. Verifying they have writer or owner role
-    //
-    // Example:
-    // ```
-    // let membership = state.membership_repo
-    //     .get_membership(payload.calendar_id, user.id)
-    //     .await?
-    //     .ok_or_else(|| error_response(StatusCode::FORBIDDEN, "No access to calendar"))?;
-    //
-    // if membership.role == CalendarRole::Reader {
-    //     return Err(error_response(StatusCode::FORBIDDEN, "Read-only access"));
-    // }
-    // ```
-
-    // Verify the calendar exists
-    let calendar = state
-        .calendar_repo
-        .get_calendar(payload.calendar_id)
-        .await
-        .map_err(|e| error_response(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    if calendar.is_none() {
-        return Err(error_response(
-            StatusCode::BAD_REQUEST,
-            format!("Calendar {} not found", payload.calendar_id),
-        ));
-    }
-
-    let entry = payload.into_entry().ok_or_else(|| {
-        error_response(
-            StatusCode::BAD_REQUEST,
-            "Invalid entry data: missing required fields for entry type",
-        )
-    })?;
-
-    state
-        .entry_repo
-        .create_entry(&entry)
-        .await
-        .map_err(|e| error_response(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    tracing::info!(
-        entry_id = %entry.id,
-        user_id = %user.id,
-        title = %entry.title,
-        "Created new entry (authenticated)"
-    );
-
-    Ok((StatusCode::CREATED, Json(entry_to_server_entry(&entry))))
 }
 
 // ============================================================================

@@ -1,3 +1,5 @@
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+pub mod authz;
 pub mod calendar_react;
 pub mod calendars;
 #[cfg(debug_assertions)]

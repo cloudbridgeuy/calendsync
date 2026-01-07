@@ -1,15 +1,13 @@
 use std::time::Duration;
 
 use axum::{
-    http::{header, Method, StatusCode},
+    http::{header, HeaderValue, Method, StatusCode},
     routing::{get, patch, post},
     Router,
 };
-use tower_http::{
-    cors::{Any, CorsLayer},
-    timeout::TimeoutLayer,
-    trace::TraceLayer,
-};
+use tower_http::{cors::CorsLayer, timeout::TimeoutLayer, trace::TraceLayer};
+
+use crate::config::Config;
 
 #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
 use calendsync_auth::auth_routes;
@@ -29,13 +27,23 @@ use crate::{
 };
 
 #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+use crate::handlers::calendars::list_my_calendars;
+
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
 use crate::handlers::{login::login_page, root::root_redirect};
 
 /// Create the application router with all routes and middleware.
-pub fn create_app(state: AppState) -> Router {
+pub fn create_app(state: AppState, config: &Config) -> Router {
     // CORS configuration for API endpoints
+    // Uses specific origins to support credentials (cookies for auth)
+    let origins: Vec<HeaderValue> = config
+        .cors_origins
+        .iter()
+        .filter_map(|origin| origin.parse().ok())
+        .collect();
+
     let cors = CorsLayer::new()
-        .allow_origin(Any)
+        .allow_origin(origins)
         .allow_methods([
             Method::GET,
             Method::POST,
@@ -43,10 +51,12 @@ pub fn create_app(state: AppState) -> Router {
             Method::PATCH,
             Method::DELETE,
         ])
-        .allow_headers([header::CONTENT_TYPE]);
+        .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION])
+        .allow_credentials(true);
 
     // API routes with CORS
-    let api_routes = Router::new()
+    #[allow(unused_mut)]
+    let mut api_routes = Router::new()
         // Calendar routes
         .route("/calendars", post(create_calendar))
         .route(
@@ -63,8 +73,15 @@ pub fn create_app(state: AppState) -> Router {
         )
         .route("/entries/{id}/toggle", patch(toggle_entry))
         // SSE events stream for real-time updates
-        .route("/events", get(events_sse))
-        .layer(cors);
+        .route("/events", get(events_sse));
+
+    // Add auth-required API routes if auth is enabled
+    #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+    {
+        api_routes = api_routes.route("/calendars/me", get(list_my_calendars));
+    }
+
+    let api_routes = api_routes.layer(cors);
 
     // Main application router
     let mut router = Router::new()
@@ -107,7 +124,9 @@ pub fn create_app(state: AppState) -> Router {
             .route("/", get(root_redirect))
             .route("/login", get(login_page));
 
-        tracing::info!("Auth routes enabled: /auth/*, /, /login endpoints available");
+        tracing::info!(
+            "Auth routes enabled: /auth/*, /, /login, /api/calendars/me endpoints available"
+        );
     }
 
     router
@@ -132,7 +151,8 @@ mod tests {
     #[tokio::test]
     async fn test_livez_returns_200_immediately() {
         let state = AppState::default();
-        let app = create_app(state);
+        let config = Config::default();
+        let app = create_app(state, &config);
 
         let response = app
             .oneshot(
@@ -151,7 +171,8 @@ mod tests {
     #[tokio::test]
     async fn test_healthz_without_ssr_pool() {
         let state = AppState::default();
-        let app = create_app(state);
+        let config = Config::default();
+        let app = create_app(state, &config);
 
         let response = app
             .oneshot(
@@ -170,7 +191,8 @@ mod tests {
     #[tokio::test]
     async fn test_readyz_without_ssr_pool() {
         let state = AppState::default();
-        let app = create_app(state);
+        let config = Config::default();
+        let app = create_app(state, &config);
 
         let response = app
             .oneshot(
@@ -189,7 +211,8 @@ mod tests {
     #[tokio::test]
     async fn test_list_entries_empty() {
         let state = AppState::default();
-        let app = create_app(state);
+        let config = Config::default();
+        let app = create_app(state, &config);
 
         // list_entries requires calendar_id query parameter
         // Using a fresh UUID - no calendars exist so entries will be empty
@@ -220,7 +243,8 @@ mod tests {
     #[tokio::test]
     async fn test_get_nonexistent_entry() {
         let state = AppState::default();
-        let app = create_app(state);
+        let config = Config::default();
+        let app = create_app(state, &config);
 
         let response = app
             .oneshot(

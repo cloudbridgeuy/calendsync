@@ -9,6 +9,15 @@ use axum::{
 };
 use uuid::Uuid;
 
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+use axum::response::{IntoResponse, Response};
+
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+use calendsync_auth::CurrentUser;
+
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+use super::authz::require_read_access;
+
 use super::entries::entry_to_server_entry;
 use crate::state::{AppState, CalendarEvent};
 
@@ -48,33 +57,43 @@ pub struct EventsQuery {
     pub last_event_id: Option<u64>,
 }
 
-/// SSE endpoint for calendar events.
-///
-/// Returns a stream of Server-Sent Events for the specified calendar.
-/// If `last_event_id` is provided, sends missed events first before streaming new ones.
-/// If there's a gap in event history (client's last_event_id is older than our oldest),
-/// sends a `refresh_required` event to tell the client to fetch fresh data.
+/// SSE endpoint for calendar events - with auth.
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+pub async fn events_sse(
+    CurrentUser(user): CurrentUser,
+    State(state): State<AppState>,
+    Query(query): Query<EventsQuery>,
+) -> Result<Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>>, Response> {
+    let auth = state.auth.as_ref().expect("Auth state required");
+    require_read_access(auth, query.calendar_id, user.id)
+        .await
+        .map_err(IntoResponse::into_response)?;
+
+    Ok(events_sse_impl(state, query))
+}
+
+/// SSE endpoint for calendar events - no auth.
+#[cfg(not(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock")))]
 pub async fn events_sse(
     State(state): State<AppState>,
     Query(query): Query<EventsQuery>,
 ) -> Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>> {
+    events_sse_impl(state, query)
+}
+
+fn events_sse_impl(
+    state: AppState,
+    query: EventsQuery,
+) -> Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>> {
     let calendar_id = query.calendar_id;
     let last_event_id = query.last_event_id.unwrap_or(0);
 
-    // Ensure event listener is running for this calendar
     state.ensure_event_listener(calendar_id);
 
-    // Subscribe to shutdown signal
     let mut shutdown_rx = state.subscribe_shutdown();
-
-    // Check for gap in event history before creating stream
     let oldest_event_id = state.oldest_event_id();
 
-    // Create the stream
     let stream = async_stream::stream! {
-        // Check if there's a gap in event history
-        // If client has a last_event_id that's older than our oldest stored event,
-        // they've missed events and need to refresh their data
         if last_event_id > 0 && last_event_id < oldest_event_id {
             yield Ok(Event::default()
                 .event("refresh_required")
@@ -84,10 +103,8 @@ pub async fn events_sse(
                 }).to_string()));
         }
 
-        // Track the last event ID we've sent to this client
         let mut current_event_id = last_event_id;
 
-        // First, send any missed events since last_event_id
         let missed_events = state.get_events_since(calendar_id, current_event_id);
         for stored in missed_events {
             current_event_id = stored.id;
@@ -104,20 +121,16 @@ pub async fn events_sse(
                 .data(event_data));
         }
 
-        // Track session start for max duration (1 hour)
         let session_start = std::time::Instant::now();
         let max_duration = Duration::from_secs(3600);
         let poll_interval = Duration::from_millis(100);
 
-        // Poll for new events until shutdown or max duration
         loop {
-            // Check if we've exceeded max session duration
             if session_start.elapsed() > max_duration {
                 tracing::info!("SSE session exceeded max duration, closing");
                 break;
             }
 
-            // Poll for new events
             let new_events = state.get_events_since(calendar_id, current_event_id);
             for stored in new_events {
                 current_event_id = stored.id;
@@ -134,11 +147,8 @@ pub async fn events_sse(
                     .data(event_data));
             }
 
-            // Wait for poll interval or shutdown signal
             tokio::select! {
-                _ = tokio::time::sleep(poll_interval) => {
-                    // Continue polling
-                }
+                _ = tokio::time::sleep(poll_interval) => {}
                 _ = shutdown_rx.recv() => {
                     tracing::info!("SSE session received shutdown signal");
                     break;

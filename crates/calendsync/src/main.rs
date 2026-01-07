@@ -92,7 +92,7 @@ async fn main() -> Result<()> {
     };
 
     // Build the application router
-    let app = create_app(state.clone());
+    let app = create_app(state.clone(), &config);
 
     // Auto-reload support via listenfd
     let mut listenfd = ListenFd::from_env();
@@ -263,10 +263,10 @@ async fn create_session_store(config: &Config) -> anyhow::Result<Arc<dyn Session
     not(feature = "auth-redis")
 ))]
 async fn create_session_store(_config: &Config) -> anyhow::Result<Arc<dyn SessionRepository>> {
-    use crate::storage::inmemory::InMemorySessionStore;
+    use calendsync_auth::SessionStore;
 
     tracing::info!("In-memory session store initialized (auth-mock mode)");
-    Ok(Arc::new(InMemorySessionStore::new()))
+    Ok(Arc::new(SessionStore::new()))
 }
 
 /// Sets up authentication if configured via environment variables.
