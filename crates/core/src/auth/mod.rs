@@ -10,4 +10,4 @@ pub use functions::{
 };
 pub use traits::{OidcProviderClient, Result, SessionRepository};
 pub use types::{AuthFlowState, OidcClaims, OidcProvider, Session, SessionId};
-pub use validation::validate_return_to;
+pub use validation::{validate_redirect_uri, validate_return_to};

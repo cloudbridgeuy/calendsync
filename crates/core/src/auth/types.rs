@@ -69,4 +69,8 @@ pub struct AuthFlowState {
     pub created_at: DateTime<Utc>,
     /// URL to redirect to after successful authentication.
     pub return_to: Option<String>,
+    /// Custom redirect URI for native apps (e.g., calendsync://auth/callback).
+    /// When set, the callback will redirect to this URI with code+state params
+    /// instead of processing the code exchange (native app calls /auth/exchange).
+    pub redirect_uri: Option<String>,
 }

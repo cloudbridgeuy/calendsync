@@ -49,14 +49,59 @@ pub fn validate_return_to(url: &str) -> Option<&str> {
     Some(url)
 }
 
+/// Expected prefix for native app redirect URIs.
+const NATIVE_REDIRECT_PREFIX: &str = "calendsync://auth/callback";
+
+/// Validates redirect_uri for native app callbacks.
+///
+/// Returns `Some(uri)` if the URI is a valid native app callback, `None` otherwise.
+///
+/// # Security
+///
+/// This function prevents redirect attacks by ensuring URIs:
+/// - Use the exact expected custom scheme (`calendsync://auth/callback`)
+/// - Additional query parameters are allowed (e.g., `?code=abc&state=xyz`)
+///
+/// # Examples
+///
+/// ```
+/// use calendsync_core::auth::validate_redirect_uri;
+///
+/// // Valid native app callbacks
+/// assert_eq!(
+///     validate_redirect_uri("calendsync://auth/callback"),
+///     Some("calendsync://auth/callback")
+/// );
+/// assert_eq!(
+///     validate_redirect_uri("calendsync://auth/callback?code=abc&state=xyz"),
+///     Some("calendsync://auth/callback?code=abc&state=xyz")
+/// );
+///
+/// // Invalid: wrong path
+/// assert_eq!(validate_redirect_uri("calendsync://other/path"), None);
+///
+/// // Invalid: wrong scheme
+/// assert_eq!(validate_redirect_uri("https://example.com"), None);
+/// ```
+pub fn validate_redirect_uri(uri: &str) -> Option<&str> {
+    // Only allow our specific custom scheme and path
+    if uri.starts_with(NATIVE_REDIRECT_PREFIX) {
+        Some(uri)
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    // ==================== validate_return_to tests ====================
+
     // Valid paths tests
 
     #[test]
-    fn accepts_simple_relative_path() {
+    fn return_to_accepts_simple_relative_path() {
         assert_eq!(validate_return_to("/calendar/123"), Some("/calendar/123"));
     }
 
@@ -210,5 +255,66 @@ mod tests {
     fn accepts_path_with_at_symbol() {
         // @ symbol is fine in paths
         assert_eq!(validate_return_to("/user@domain"), Some("/user@domain"));
+    }
+
+    // ==================== validate_redirect_uri tests ====================
+
+    // Valid native app callbacks
+
+    #[test]
+    fn redirect_uri_accepts_exact_callback() {
+        assert_eq!(
+            validate_redirect_uri("calendsync://auth/callback"),
+            Some("calendsync://auth/callback")
+        );
+    }
+
+    #[test]
+    fn redirect_uri_accepts_callback_with_query_params() {
+        assert_eq!(
+            validate_redirect_uri("calendsync://auth/callback?code=abc&state=xyz"),
+            Some("calendsync://auth/callback?code=abc&state=xyz")
+        );
+    }
+
+    // Invalid: too short / wrong path
+
+    #[test]
+    fn redirect_uri_rejects_scheme_only() {
+        // calendsync:// is too short - missing path
+        assert_eq!(validate_redirect_uri("calendsync://"), None);
+    }
+
+    #[test]
+    fn redirect_uri_rejects_wrong_path() {
+        assert_eq!(validate_redirect_uri("calendsync://other/path"), None);
+    }
+
+    #[test]
+    fn redirect_uri_rejects_partial_path() {
+        // Must be exactly "calendsync://auth/callback" not just "calendsync://auth"
+        assert_eq!(validate_redirect_uri("calendsync://auth"), None);
+    }
+
+    // Invalid: wrong scheme
+
+    #[test]
+    fn redirect_uri_rejects_https() {
+        assert_eq!(validate_redirect_uri("https://example.com"), None);
+    }
+
+    #[test]
+    fn redirect_uri_rejects_http() {
+        assert_eq!(
+            validate_redirect_uri("http://example.com/auth/callback"),
+            None
+        );
+    }
+
+    // Invalid: empty string
+
+    #[test]
+    fn redirect_uri_rejects_empty_string() {
+        assert_eq!(validate_redirect_uri(""), None);
     }
 }

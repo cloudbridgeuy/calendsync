@@ -37,6 +37,10 @@ pub trait SessionRepository: Send + Sync {
     /// Store PKCE/state for auth flow (short TTL).
     async fn store_auth_flow(&self, state: &str, flow: &AuthFlowState) -> Result<()>;
 
+    /// Retrieve auth flow state without consuming it.
+    /// Used to check redirect_uri before deciding whether to process the callback.
+    async fn peek_auth_flow(&self, state: &str) -> Result<Option<AuthFlowState>>;
+
     /// Retrieve and delete auth flow state.
     async fn take_auth_flow(&self, state: &str) -> Result<Option<AuthFlowState>>;
 }
