@@ -13,6 +13,7 @@ mod dynamodb;
 mod integration;
 mod lint;
 mod prelude;
+mod seed;
 
 /// Development tasks for the calendsync repository
 #[derive(Debug, Parser)]
@@ -69,6 +70,9 @@ enum Commands {
     /// Run integration tests
     Integration(integration::IntegrationCommand),
 
+    /// Seed a calendar with demo entries (requires authentication)
+    Seed(seed::SeedCommand),
+
     /// Documentation tasks (coming soon)
     #[command(hide = true)]
     Docs {
@@ -98,6 +102,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Integration(integration_cmd) => {
             integration::run(integration_cmd, cli.global).await?;
+        }
+        Commands::Seed(seed_cmd) => {
+            seed::run(seed_cmd, cli.global).await?;
         }
         Commands::Docs { .. } => {
             println!("Documentation automation coming soon!");

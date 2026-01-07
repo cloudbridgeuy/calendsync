@@ -5,7 +5,6 @@
 //! - Cache backends (memory, redis)
 //! - Container orchestration for DynamoDB and Redis
 //! - TypeScript hot-reload for frontend development
-//! - HTTP-based data seeding
 //!
 //! ## Execution Flow
 //!
@@ -13,7 +12,7 @@
 //! 2. **Container Management**: Start required containers (DynamoDB/Redis)
 //! 3. **Infrastructure Setup**: Deploy DynamoDB table, ensure SQLite directory
 //! 4. **Server Execution**: Build and run with correct features
-//! 5. **Seeding and Cleanup**: Seed data via HTTP, cleanup containers on exit
+//! 5. **Cleanup**: Stop containers on exit
 
 use std::path::Path;
 use std::time::Duration;
@@ -25,7 +24,6 @@ use tokio::sync::mpsc as tokio_mpsc;
 
 use super::containers::{self, Cache, ContainerPorts, ContainerRuntime, ContainerSpec, Storage};
 use super::error::{DevError, Result};
-use super::seed;
 use crate::prelude::*;
 
 #[derive(Debug, clap::Args)]
@@ -62,17 +60,9 @@ pub struct ServerOptions {
     #[arg(long)]
     pub flush: bool,
 
-    /// Seed the database with demo data via HTTP after startup
-    #[arg(long)]
-    pub seed: bool,
-
     /// Keep containers running on error (default: stop containers)
     #[arg(long)]
     pub keep_containers: bool,
-
-    /// Open browser to calendar URL after seeding (macOS only)
-    #[arg(long)]
-    pub open: bool,
 }
 
 pub async fn run(opts: ServerOptions, global: crate::Global) -> Result<()> {
@@ -256,52 +246,6 @@ pub async fn run(opts: ServerOptions, global: crate::Global) -> Result<()> {
 
     // In release mode or with --no-hot-reload, handle simplified flow
     if opts.release || opts.no_hot_reload {
-        // Wait for server to be ready for seeding
-        if opts.seed {
-            let base_url = format!("http://localhost:{}", opts.port);
-            if !global.is_silent() {
-                aprintln!("{} Waiting for server to be ready...", p_b("⏳"));
-            }
-
-            if let Err(e) = seed::wait_for_server(&base_url, Duration::from_secs(60)).await {
-                if !opts.keep_containers {
-                    if let Some(runtime) = runtime {
-                        cleanup_containers(runtime, &started_containers, &global).await;
-                    }
-                }
-                let _ = server.kill().await;
-                return Err(e);
-            }
-
-            // Seed via HTTP
-            match seed::seed_via_http(&base_url, global.is_silent()).await {
-                Ok(calendar_id) => {
-                    let calendar_url = format!("{}/calendar/{}", base_url, calendar_id);
-                    if !global.is_silent() {
-                        aprintln!("{} Seeding complete!", p_g("✓"));
-                        aprintln!("   Calendar URL: {}", p_b(&calendar_url));
-                    }
-
-                    // Open browser if requested
-                    if opts.open {
-                        open_browser(&calendar_url, global.is_silent()).await;
-                    }
-                }
-                Err(e) => {
-                    aprintln!("{} Seeding failed: {}", p_r("✗"), e);
-                    // Continue running server even if seeding fails
-                }
-            }
-        } else if opts.open {
-            // --open without --seed: warn the user
-            if !global.is_silent() {
-                aprintln!(
-                    "{} --open requires --seed to create a calendar to open",
-                    p_y("⚠")
-                );
-            }
-        }
-
         let status = server.wait().await?;
         if !opts.keep_containers {
             if let Some(runtime) = runtime {
@@ -315,7 +259,7 @@ pub async fn run(opts: ServerOptions, global: crate::Global) -> Result<()> {
     }
 
     // =========================================================================
-    // Stage 5: Hot-reload mode with seeding
+    // Stage 5: Hot-reload mode
     // =========================================================================
     if !global.is_silent() {
         aprintln!(
@@ -325,42 +269,7 @@ pub async fn run(opts: ServerOptions, global: crate::Global) -> Result<()> {
     }
 
     // Wait for server to be ready before starting watcher
-    let base_url = format!("http://localhost:{}", opts.port);
     wait_for_server_ready(opts.port, global.is_silent()).await;
-
-    // Seed if requested
-    if opts.seed {
-        if !global.is_silent() {
-            aprintln!("{} Seeding database...", p_b("🌱"));
-        }
-
-        match seed::seed_via_http(&base_url, global.is_silent()).await {
-            Ok(calendar_id) => {
-                let calendar_url = format!("{}/calendar/{}", base_url, calendar_id);
-                if !global.is_silent() {
-                    aprintln!("{} Seeding complete!", p_g("✓"));
-                    aprintln!("   Calendar URL: {}", p_b(&calendar_url));
-                }
-
-                // Open browser if requested
-                if opts.open {
-                    open_browser(&calendar_url, global.is_silent()).await;
-                }
-            }
-            Err(e) => {
-                aprintln!("{} Seeding failed: {}", p_r("✗"), e);
-                // Continue running server even if seeding fails
-            }
-        }
-    } else if opts.open {
-        // --open without --seed: warn the user
-        if !global.is_silent() {
-            aprintln!(
-                "{} --open requires --seed to create a calendar to open",
-                p_y("⚠")
-            );
-        }
-    }
 
     // Track current asset filenames for change detection
     let mut current_css = get_current_css_filename();
@@ -564,33 +473,6 @@ async fn wait_for_server_ready(port: u16, silent: bool) -> bool {
     }
 
     false
-}
-
-/// Opens the browser to the specified URL (macOS only).
-///
-/// Waits briefly to ensure the page is ready before opening.
-async fn open_browser(url: &str, silent: bool) {
-    // Brief delay to ensure the page is ready
-    tokio::time::sleep(Duration::from_millis(500)).await;
-
-    if !silent {
-        aprintln!("{} Opening browser...", p_b("🌐"));
-    }
-
-    // macOS-specific: use `open` command
-    match Command::new("open").arg(url).spawn() {
-        Ok(_) => {
-            if !silent {
-                aprintln!("{} Browser opened: {}", p_g("✓"), url);
-            }
-        }
-        Err(e) => {
-            if !silent {
-                aprintln!("{} Failed to open browser: {}", p_y("⚠"), e);
-                aprintln!("   Open manually: {}", url);
-            }
-        }
-    }
 }
 
 /// Tracked asset filenames for change detection.

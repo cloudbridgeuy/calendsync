@@ -1,44 +1,22 @@
-//! HTTP-based seeding module for the development server.
+//! Seeding types and functions for calendar data generation.
 //!
-//! This module provides functionality to seed the server with demo data via HTTP.
-//! It uses the `calendsync_core` library for data generation, ensuring consistency
-//! with the domain types.
+//! This module provides:
+//! - **Pure functions**: Data generation and conversion (`convert_entry_to_seed`,
+//!   `generate_entries_for_seeding`)
+//! - **Types**: `SeedEntry` for HTTP form submission
 //!
-//! ## Architecture
-//!
-//! Follows the Functional Core - Imperative Shell pattern:
-//! - **Pure functions**: Data generation and conversion (`generate_seed_calendar`,
-//!   `convert_entry_to_seed`, etc.)
-//! - **I/O functions**: HTTP operations (`wait_for_server`, `create_calendar_via_http`,
-//!   `seed_via_http`)
-//!
-//! ## Side Effect: API Validation
-//!
-//! As a side effect, seeding validates that the API endpoints work correctly.
-//! If seeding succeeds, the API is functional.
+//! The standalone `cargo xtask seed` command uses these to create entries
+//! with authentication support.
 
-use std::time::Duration;
-
-use chrono::{NaiveDate, NaiveTime, Utc};
-use serde::{Deserialize, Serialize};
+use chrono::{NaiveDate, NaiveTime};
+use serde::Serialize;
 use uuid::Uuid;
 
 use calendsync_core::calendar::{generate_seed_entries, CalendarEntry, EntryKind};
 
-use super::error::{DevError, Result};
-
 // ============================================================================
 // Types
 // ============================================================================
-
-/// Calendar data for seeding via HTTP.
-#[derive(Debug, Serialize)]
-pub struct SeedCalendar {
-    pub name: String,
-    pub color: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-}
 
 /// Entry data for seeding via HTTP.
 /// Field names match the server's CreateEntry form expectations.
@@ -62,24 +40,9 @@ pub struct SeedEntry {
     pub end_date: Option<NaiveDate>,
 }
 
-/// Response from calendar creation endpoint.
-#[derive(Debug, Deserialize)]
-struct CalendarResponse {
-    id: Uuid,
-}
-
 // ============================================================================
 // Pure Functions (Functional Core)
 // ============================================================================
-
-/// Returns a default calendar for seeding.
-pub fn generate_seed_calendar() -> SeedCalendar {
-    SeedCalendar {
-        name: "Demo Calendar".to_string(),
-        color: "#3B82F6".to_string(), // Blue
-        description: Some("A demo calendar with sample entries".to_string()),
-    }
-}
 
 /// Converts an `EntryKind` to the form string expected by the server.
 pub fn entry_type_string(kind: &EntryKind) -> &'static str {
@@ -135,171 +98,6 @@ pub fn generate_entries_for_seeding(
 }
 
 // ============================================================================
-// I/O Functions (Imperative Shell)
-// ============================================================================
-
-/// Polls the server's health endpoint until it responds or times out.
-///
-/// # Arguments
-///
-/// * `base_url` - The server's base URL (e.g., "http://localhost:3000")
-/// * `timeout` - Maximum time to wait for the server to become healthy
-///
-/// # Errors
-///
-/// Returns `DevError::ServerNotHealthy` if the server doesn't respond within the timeout.
-pub async fn wait_for_server(base_url: &str, timeout: Duration) -> Result<()> {
-    let client = reqwest::Client::new();
-    let health_url = format!("{base_url}/livez");
-    let poll_interval = Duration::from_millis(500);
-    let start = std::time::Instant::now();
-
-    loop {
-        match client.get(&health_url).send().await {
-            Ok(response) if response.status().is_success() => {
-                return Ok(());
-            }
-            _ => {
-                if start.elapsed() >= timeout {
-                    return Err(DevError::ServerNotHealthy {
-                        timeout_secs: timeout.as_secs(),
-                    });
-                }
-                tokio::time::sleep(poll_interval).await;
-            }
-        }
-    }
-}
-
-/// Creates a calendar via the HTTP API.
-///
-/// # Arguments
-///
-/// * `client` - The HTTP client to use
-/// * `base_url` - The server's base URL
-/// * `calendar` - The calendar data to create
-///
-/// # Returns
-///
-/// The UUID of the created calendar.
-///
-/// # Errors
-///
-/// Returns `DevError::SeedingFailed` if the request fails.
-pub async fn create_calendar_via_http(
-    client: &reqwest::Client,
-    base_url: &str,
-    calendar: &SeedCalendar,
-) -> Result<Uuid> {
-    let url = format!("{base_url}/api/calendars");
-
-    let response = client
-        .post(&url)
-        .form(calendar)
-        .send()
-        .await
-        .map_err(|e| DevError::SeedingFailed(format!("Failed to create calendar: {e}")))?;
-
-    if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-        return Err(DevError::SeedingFailed(format!(
-            "Failed to create calendar: {status} - {body}"
-        )));
-    }
-
-    let calendar_response: CalendarResponse = response
-        .json()
-        .await
-        .map_err(|e| DevError::SeedingFailed(format!("Failed to parse calendar response: {e}")))?;
-
-    Ok(calendar_response.id)
-}
-
-/// Creates an entry via the HTTP API.
-///
-/// # Arguments
-///
-/// * `client` - The HTTP client to use
-/// * `base_url` - The server's base URL
-/// * `entry` - The entry data to create
-///
-/// # Errors
-///
-/// Returns `DevError::SeedingFailed` if the request fails.
-pub async fn create_entry_via_http(
-    client: &reqwest::Client,
-    base_url: &str,
-    entry: &SeedEntry,
-) -> Result<()> {
-    let url = format!("{base_url}/api/entries");
-
-    let response = client
-        .post(&url)
-        .form(entry)
-        .send()
-        .await
-        .map_err(|e| DevError::SeedingFailed(format!("Failed to create entry: {e}")))?;
-
-    if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-        return Err(DevError::SeedingFailed(format!(
-            "Failed to create entry '{}': {status} - {body}",
-            entry.title
-        )));
-    }
-
-    Ok(())
-}
-
-/// Seeds the server with demo data via HTTP.
-///
-/// This is the main entry point for seeding. It:
-/// 1. Creates a reqwest client
-/// 2. Creates a demo calendar
-/// 3. Generates and creates 25 mock entries
-///
-/// # Arguments
-///
-/// * `base_url` - The server's base URL (e.g., "http://localhost:3000")
-/// * `silent` - If false, prints progress messages
-///
-/// # Returns
-///
-/// The UUID of the created calendar.
-///
-/// # Errors
-///
-/// Returns an error if any HTTP request fails.
-pub async fn seed_via_http(base_url: &str, silent: bool) -> Result<Uuid> {
-    let client = reqwest::Client::new();
-
-    // Create calendar
-    let calendar = generate_seed_calendar();
-    let calendar_id = create_calendar_via_http(&client, base_url, &calendar).await?;
-
-    if !silent {
-        println!("Created calendar: {} ({})", calendar.name, calendar_id);
-    }
-
-    // Generate and create entries
-    let center_date = Utc::now().date_naive();
-    let entries = generate_entries_for_seeding(calendar_id, center_date, 25);
-    let entry_count = entries.len();
-
-    for entry in &entries {
-        create_entry_via_http(&client, base_url, entry).await?;
-    }
-
-    if !silent {
-        println!("Created {entry_count} entries");
-    }
-
-    Ok(calendar_id)
-}
-
-// ============================================================================
 // Tests
 // ============================================================================
 
@@ -307,15 +105,6 @@ pub async fn seed_via_http(base_url: &str, silent: bool) -> Result<Uuid> {
 mod tests {
     use super::*;
     use chrono::NaiveDate;
-
-    #[test]
-    fn test_generate_seed_calendar() {
-        let calendar = generate_seed_calendar();
-
-        assert_eq!(calendar.name, "Demo Calendar");
-        assert_eq!(calendar.color, "#3B82F6");
-        assert!(calendar.description.is_some());
-    }
 
     #[test]
     fn test_entry_type_string() {
