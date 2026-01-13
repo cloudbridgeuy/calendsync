@@ -448,6 +448,14 @@ async fn test_endpoint() {
 }
 ```
 
+### Frontend Testing Policy
+
+- **Functional Core (`src/core/`)**: Require unit tests for all pure functions
+- **Imperative Shell (`src/calendsync/hooks/`, `src/tauri/hooks/`)**: No integration tests required
+- **React Components**: No tests required unless explicitly requested
+
+This follows the Functional Core - Imperative Shell pattern: pure functions are easy to test in isolation, while imperative shell code is verified through manual testing and type safety.
+
 ## Code Style
 
 - Follow Rust standard style (`rustfmt`)
@@ -606,6 +614,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | Wheel Navigation     | `.claude/context/wheel-navigation.md`  |
 | Scroll Animation     | `.claude/context/scroll-animation.md`  |
 | SSE Event Publishing | `.claude/context/sse-events.md`        |
+| SSE Hooks            | `.claude/context/sse-hooks.md`         |
 | Task Entries         | `.claude/context/task-entries.md`      |
 | SSR Worker Pool      | `.claude/context/ssr-worker-pool.md`   |
 | Axum Reference       | `.claude/context/AXUM.md`              |
