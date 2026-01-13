@@ -16,13 +16,18 @@
  * For Tauri desktop apps, use useTauriSse instead.
  */
 
-import type { ServerEntry } from "@core/calendar/types"
-import { MAX_RECONNECT_ATTEMPTS, RECONNECT_DELAY_MS } from "@core/sse/connection"
+import {
+  buildSseUrl,
+  calculateReconnectDelay,
+  MAX_RECONNECT_ATTEMPTS,
+  parseEventData,
+} from "@core/sse/connection"
 import type {
+  BaseSseConfig,
+  BaseSseResult,
   EntryAddedEvent,
   EntryDeletedEvent,
   EntryUpdatedEvent,
-  SseConnectionState,
 } from "@core/sse/types"
 import { useLiveQuery } from "dexie-react-hooks"
 import { useCallback, useEffect, useRef } from "react"
@@ -31,33 +36,17 @@ import { db } from "../db"
 import { useConnectionManager, useDexieHandlers } from "./sse"
 import { getControlPlaneUrl } from "./useApi"
 
-/** Configuration for the useWebSse hook */
-export interface UseWebSseConfig {
-  /** Calendar ID to subscribe to */
-  calendarId: string
-  /** Whether SSE is enabled (default: true, false on server) */
-  enabled?: boolean
-  /** Callback when an entry is added (for notifications, etc.) */
-  onEntryAdded?: (entry: ServerEntry, date: string) => void
-  /** Callback when an entry is updated (for notifications, etc.) */
-  onEntryUpdated?: (entry: ServerEntry, date: string) => void
-  /** Callback when an entry is deleted (for notifications, etc.) */
-  onEntryDeleted?: (entryId: string, date: string) => void
-  /** Callback when connection state changes */
-  onConnectionChange?: (state: SseConnectionState) => void
-}
+/**
+ * Configuration for the useWebSse hook.
+ * Uses BaseSseConfig from core/sse/types.
+ */
+export type UseWebSseConfig = BaseSseConfig
 
-/** Result from useWebSse hook */
-export interface UseWebSseResult {
-  /** Current SSE connection state */
-  connectionState: SseConnectionState
-  /** Manually reconnect to SSE */
-  reconnect: () => void
-  /** Manually disconnect from SSE */
-  disconnect: () => void
-  /** Last event ID received (for debugging) */
-  lastEventId: string | null
-}
+/**
+ * Result from useWebSse hook.
+ * Uses BaseSseResult from core/sse/types.
+ */
+export type UseWebSseResult = BaseSseResult
 
 /**
  * Hook for managing SSE connection in web browsers.
@@ -92,6 +81,7 @@ export function useWebSse(config: UseWebSseConfig): UseWebSseResult {
     onEntryUpdated,
     onEntryDeleted,
     onConnectionChange,
+    onError,
   } = config
 
   // Use shared connection manager for state management
@@ -116,6 +106,7 @@ export function useWebSse(config: UseWebSseConfig): UseWebSseResult {
     onEntryAdded,
     onEntryUpdated,
     onEntryDeleted,
+    onError,
   })
 
   // Update callback refs
@@ -124,8 +115,9 @@ export function useWebSse(config: UseWebSseConfig): UseWebSseResult {
       onEntryAdded,
       onEntryUpdated,
       onEntryDeleted,
+      onError,
     }
-  }, [onEntryAdded, onEntryUpdated, onEntryDeleted])
+  }, [onEntryAdded, onEntryUpdated, onEntryDeleted, onError])
 
   // Load last event ID from Dexie reactively
   const syncState = useLiveQuery(() => db.sync_state.get(calendarId), [calendarId])
@@ -232,10 +224,7 @@ export function useWebSse(config: UseWebSseConfig): UseWebSseResult {
 
     // Build SSE URL with optional last event ID
     const baseUrl = getControlPlaneUrl()
-    let sseUrl = `${baseUrl}/api/events?calendar_id=${calendarId}`
-    if (lastEventIdRef.current) {
-      sseUrl += `&last_event_id=${lastEventIdRef.current}`
-    }
+    const sseUrl = buildSseUrl(baseUrl, calendarId, lastEventIdRef.current)
 
     const eventSource = new EventSource(sseUrl)
     eventSourceRef.current = eventSource
@@ -246,41 +235,39 @@ export function useWebSse(config: UseWebSseConfig): UseWebSseResult {
       updateConnectionState("connected")
     }
 
-    // Handle entry_added events
-    eventSource.addEventListener("entry_added", (e: MessageEvent) => {
-      try {
-        const data = JSON.parse(e.data) as EntryAddedEvent
-        handleEntryAdded(data, e.lastEventId).catch((err) => {
-          console.error("Failed to handle entry_added event:", err)
-        })
-      } catch (err) {
-        console.error("Failed to parse entry_added event:", err)
-      }
-    })
+    // Helper to create event listeners with error handling
+    const createEventHandler = <T>(
+      eventType: string,
+      handler: (data: T, eventId: string) => Promise<void>,
+    ) => {
+      return (e: MessageEvent) => {
+        const data = parseEventData<T>(e.data)
+        if (!data) {
+          const error = new Error(`Failed to parse ${eventType} event`)
+          eventCallbacksRef.current.onError?.(error, `parse_${eventType}`)
+          return
+        }
 
-    // Handle entry_updated events
-    eventSource.addEventListener("entry_updated", (e: MessageEvent) => {
-      try {
-        const data = JSON.parse(e.data) as EntryUpdatedEvent
-        handleEntryUpdated(data, e.lastEventId).catch((err) => {
-          console.error("Failed to handle entry_updated event:", err)
+        handler(data, e.lastEventId).catch((err) => {
+          const error = err instanceof Error ? err : new Error(String(err))
+          eventCallbacksRef.current.onError?.(error, `handle_${eventType}`)
         })
-      } catch (err) {
-        console.error("Failed to parse entry_updated event:", err)
       }
-    })
+    }
 
-    // Handle entry_deleted events
-    eventSource.addEventListener("entry_deleted", (e: MessageEvent) => {
-      try {
-        const data = JSON.parse(e.data) as EntryDeletedEvent
-        handleEntryDeleted(data, e.lastEventId).catch((err) => {
-          console.error("Failed to handle entry_deleted event:", err)
-        })
-      } catch (err) {
-        console.error("Failed to parse entry_deleted event:", err)
-      }
-    })
+    // Handle SSE events
+    eventSource.addEventListener(
+      "entry_added",
+      createEventHandler<EntryAddedEvent>("entry_added", handleEntryAdded),
+    )
+    eventSource.addEventListener(
+      "entry_updated",
+      createEventHandler<EntryUpdatedEvent>("entry_updated", handleEntryUpdated),
+    )
+    eventSource.addEventListener(
+      "entry_deleted",
+      createEventHandler<EntryDeletedEvent>("entry_deleted", handleEntryDeleted),
+    )
 
     // Handle errors and reconnection
     eventSource.onerror = () => {
@@ -292,12 +279,15 @@ export function useWebSse(config: UseWebSseConfig): UseWebSseResult {
         updateConnectionState("disconnected")
         reconnectAttemptsRef.current++
 
-        // Schedule reconnection
+        // Schedule reconnection with exponential backoff
+        const delay = calculateReconnectDelay(reconnectAttemptsRef.current)
         reconnectTimeoutRef.current = setTimeout(() => {
           connect()
-        }, RECONNECT_DELAY_MS)
+        }, delay)
       } else {
         updateConnectionState("error")
+        const error = new Error("Max reconnection attempts reached")
+        eventCallbacksRef.current.onError?.(error, "max_reconnect_attempts")
       }
     }
   }, [

@@ -6,7 +6,7 @@
  * - handleEntryUpdated: Updates entry or confirms pending update
  * - handleEntryDeleted: Removes entry from database
  *
- * Used by: useSseWithOffline, useSseUnified (Tauri branch)
+ * Used by: useWebSse, useTauriSse
  */
 
 import type { ServerEntry } from "@core/calendar/types"
@@ -50,14 +50,14 @@ export interface DexieHandlers {
  * **Note on lastEventId tracking**: These handlers focus solely on Dexie entry
  * updates. Consumers are responsible for tracking `lastEventId` separately if
  * they need to resume from the last processed event after reconnection. This
- * is typically done in the SSE connection hook (e.g., useSseWithOffline) by
+ * is typically done in the SSE connection hook (e.g., useWebSse) by
  * storing the event ID from each received message.
  *
  * @returns Memoized handlers for entry_added, entry_updated, entry_deleted
  *
  * @example
  * ```typescript
- * function useSseWithOffline(config) {
+ * function useWebSse(config) {
  *   const { handleEntryAdded, handleEntryUpdated, handleEntryDeleted } = useDexieHandlers()
  *
  *   eventSource.addEventListener("entry_added", async (e) => {

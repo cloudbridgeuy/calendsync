@@ -7,8 +7,7 @@
  */
 
 import { useTransport } from "@core/transport"
-import type { Transport } from "@core/transport/types"
-import { createContext, type ReactNode, useContext, useRef } from "react"
+import { createContext, type ReactNode, useContext, useEffect, useRef } from "react"
 
 import { db } from "../db"
 import { SyncEngine } from "../sync/engine"
@@ -61,6 +60,13 @@ export function SyncEngineProvider({ children }: SyncEngineProviderProps) {
     engineRef.current.initTransport(transport)
   }
 
+  // Cleanup on unmount - dispose event listeners
+  useEffect(() => {
+    return () => {
+      engineRef.current?.dispose()
+    }
+  }, [])
+
   return (
     <SyncEngineContext.Provider value={engineRef.current}>{children}</SyncEngineContext.Provider>
   )
@@ -86,20 +92,6 @@ export function useSyncEngineContext(): SyncEngine {
   const engine = useContext(SyncEngineContext)
   if (!engine) {
     throw new Error("useSyncEngineContext must be used within a SyncEngineProvider")
-  }
-  return engine
-}
-
-/**
- * Create a SyncEngine instance for use outside of React (e.g., in tests).
- *
- * @param transport - Optional transport to initialize with
- * @returns A new SyncEngine instance
- */
-export function createSyncEngine(transport?: Transport): SyncEngine {
-  const engine = new SyncEngine(db)
-  if (transport) {
-    engine.initTransport(transport)
   }
   return engine
 }

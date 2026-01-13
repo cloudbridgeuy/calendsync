@@ -12,9 +12,8 @@
  * using pure functions from @core/sync/operations for logic.
  */
 
-import { entryToFormData, formDataToApiPayload } from "@core/calendar"
+import { deriveEntryTypeFromFlags, updatePayloadToFormData } from "@core/calendar"
 import type { ServerEntry } from "@core/calendar/types"
-import { deriveEntryTypeFromFlags } from "@core/sse/connection"
 import {
   incrementRetry,
   markAsConflict,
@@ -58,7 +57,7 @@ function createDefaultApiClient(): SyncApiClient {
 
   return {
     async createEntry(calendarId: string, payload: Partial<ServerEntry>): Promise<ServerEntry> {
-      const formData = payloadToFormData(payload, calendarId)
+      const formData = updatePayloadToFormData(payload, calendarId)
 
       const response = await fetch(`${baseUrl}/api/entries`, {
         method: "POST",
@@ -79,7 +78,7 @@ function createDefaultApiClient(): SyncApiClient {
 
     async updateEntry(entryId: string, payload: Partial<ServerEntry>): Promise<ServerEntry> {
       const calendarId = payload.calendarId ?? ""
-      const formData = payloadToFormData(payload, calendarId)
+      const formData = updatePayloadToFormData(payload, calendarId)
 
       const response = await fetch(`${baseUrl}/api/entries/${entryId}`, {
         method: "PUT",
@@ -154,47 +153,6 @@ function createTransportApiClient(transport: Transport): SyncApiClient {
 }
 
 /**
- * Convert a partial ServerEntry payload to form data for API calls.
- * Uses entryToFormData pattern for complete entries, or builds manually for partials.
- */
-function payloadToFormData(payload: Partial<ServerEntry>, calendarId: string): URLSearchParams {
-  // If we have a complete ServerEntry, use the existing conversion
-  if (isCompleteEntry(payload)) {
-    const formData = entryToFormData(payload as ServerEntry)
-    return formDataToApiPayload(formData, calendarId)
-  }
-
-  // For partial payloads, build form data manually
-  const entryType = deriveEntryTypeFromFlags(payload)
-  const formData = {
-    title: payload.title ?? "",
-    startDate: payload.startDate ?? "",
-    endDate: payload.endDate,
-    isAllDay: payload.isAllDay ?? entryType === "all_day",
-    description: payload.description ?? undefined,
-    location: payload.location ?? undefined,
-    entryType,
-    startTime: payload.startTime ?? undefined,
-    endTime: payload.endTime ?? undefined,
-    completed: payload.completed,
-  }
-
-  return formDataToApiPayload(formData, calendarId)
-}
-
-/**
- * Check if a partial ServerEntry has enough fields to be considered complete.
- */
-function isCompleteEntry(payload: Partial<ServerEntry>): boolean {
-  return (
-    typeof payload.id === "string" &&
-    typeof payload.title === "string" &&
-    typeof payload.startDate === "string" &&
-    typeof payload.isAllDay === "boolean"
-  )
-}
-
-/**
  * SyncEngine orchestrates offline sync operations.
  *
  * Usage:
@@ -212,7 +170,7 @@ export class SyncEngine {
   private isSyncing: boolean = false
   private pendingWhileSyncing: boolean = false
   private api: SyncApiClient
-  private transport: Transport | null = null
+  private transportInitialized: boolean = false
   private onlineHandler: () => void
   private offlineHandler: () => void
   private listeners: Set<() => void> = new Set()
@@ -245,8 +203,8 @@ export class SyncEngine {
    * for cross-platform compatibility (web + Tauri).
    */
   initTransport(transport: Transport): void {
-    if (this.transport === transport) return // Already initialized with same transport
-    this.transport = transport
+    if (this.transportInitialized) return // Already initialized
+    this.transportInitialized = true
     this.api = createTransportApiClient(transport)
   }
 
@@ -254,7 +212,16 @@ export class SyncEngine {
    * Check if transport has been initialized.
    */
   hasTransport(): boolean {
-    return this.transport !== null
+    return this.transportInitialized
+  }
+
+  /**
+   * Reset transport initialization state for testing.
+   * @internal For testing only
+   */
+  resetTransport(): void {
+    this.transportInitialized = false
+    this.api = createDefaultApiClient()
   }
 
   /**

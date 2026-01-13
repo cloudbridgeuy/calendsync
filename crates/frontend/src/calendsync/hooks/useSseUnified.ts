@@ -8,14 +8,11 @@
  * Both implementations update Dexie and provide the same callbacks.
  */
 
-import { type UseWebSseConfig, type UseWebSseResult, useWebSse } from "./useWebSse"
 import { useTauriSse } from "../../tauri/hooks/useTauriSse"
+import { type UseWebSseConfig, type UseWebSseResult, useWebSse } from "./useWebSse"
 
 /** Detect if running in Tauri */
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
-
-// Re-export types for consumers
-export type { UseWebSseConfig, UseWebSseResult }
 
 /**
  * Hook for managing SSE that works on both web and Tauri.

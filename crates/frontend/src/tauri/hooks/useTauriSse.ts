@@ -18,7 +18,7 @@
  */
 
 import type { ServerEntry } from "@core/calendar/types"
-import type { SseConnectionState } from "@core/sse/types"
+import type { BaseSseConfig, BaseSseResult, SseConnectionState } from "@core/sse/types"
 import { useCallback, useEffect, useRef } from "react"
 
 import { useConnectionManager, useDexieHandlers } from "../../calendsync/hooks/sse"
@@ -26,33 +26,17 @@ import { useConnectionManager, useDexieHandlers } from "../../calendsync/hooks/s
 // Re-export types from core for consumers (preserves public API)
 export type { SseConnectionState }
 
-/** Configuration for the useTauriSse hook */
-export interface UseTauriSseConfig {
-  /** Calendar ID to subscribe to */
-  calendarId: string
-  /** Whether SSE is enabled (default: true) */
-  enabled?: boolean
-  /** Callback when an entry is added (for notifications, etc.) */
-  onEntryAdded?: (entry: ServerEntry, date: string) => void
-  /** Callback when an entry is updated (for notifications, etc.) */
-  onEntryUpdated?: (entry: ServerEntry, date: string) => void
-  /** Callback when an entry is deleted (for notifications, etc.) */
-  onEntryDeleted?: (entryId: string, date: string) => void
-  /** Callback when connection state changes */
-  onConnectionChange?: (state: SseConnectionState) => void
-}
+/**
+ * Configuration for the useTauriSse hook.
+ * Uses BaseSseConfig from core/sse/types.
+ */
+export type UseTauriSseConfig = BaseSseConfig
 
-/** Result from useTauriSse hook */
-export interface UseTauriSseResult {
-  /** Current SSE connection state */
-  connectionState: SseConnectionState
-  /** Manually reconnect to SSE */
-  reconnect: () => void
-  /** Manually disconnect from SSE */
-  disconnect: () => void
-  /** Last event ID received (for debugging) */
-  lastEventId: string | null
-}
+/**
+ * Result from useTauriSse hook.
+ * Uses BaseSseResult from core/sse/types.
+ */
+export type UseTauriSseResult = BaseSseResult
 
 /**
  * Hook for managing SSE connection in Tauri desktop/mobile apps.
@@ -91,6 +75,7 @@ export function useTauriSse(config: UseTauriSseConfig): UseTauriSseResult {
     onEntryUpdated,
     onEntryDeleted,
     onConnectionChange,
+    onError,
   } = config
 
   const unlistenersRef = useRef<Array<() => void>>([])
@@ -108,10 +93,10 @@ export function useTauriSse(config: UseTauriSseConfig): UseTauriSseResult {
   } = useDexieHandlers()
 
   // Store entry callbacks in refs (connection callback handled by useConnectionManager)
-  const entryCallbacksRef = useRef({ onEntryAdded, onEntryUpdated, onEntryDeleted })
+  const entryCallbacksRef = useRef({ onEntryAdded, onEntryUpdated, onEntryDeleted, onError })
   useEffect(() => {
-    entryCallbacksRef.current = { onEntryAdded, onEntryUpdated, onEntryDeleted }
-  }, [onEntryAdded, onEntryUpdated, onEntryDeleted])
+    entryCallbacksRef.current = { onEntryAdded, onEntryUpdated, onEntryDeleted, onError }
+  }, [onEntryAdded, onEntryUpdated, onEntryDeleted, onError])
 
   /**
    * Handle entry_added event: update Dexie via shared handler, then call callback.
@@ -156,7 +141,8 @@ export function useTauriSse(config: UseTauriSseConfig): UseTauriSseResult {
       // Pass null to let Rust use its tracked lastEventId
       await invoke("start_sse", { calendarId, lastEventId: null })
     } catch (e) {
-      console.error("Failed to reconnect SSE:", e)
+      const error = e instanceof Error ? e : new Error(String(e))
+      entryCallbacksRef.current.onError?.(error, "reconnect_sse")
     }
   }, [calendarId])
 
@@ -168,7 +154,8 @@ export function useTauriSse(config: UseTauriSseConfig): UseTauriSseResult {
       const { invoke } = await import("@tauri-apps/api/core")
       await invoke("stop_sse")
     } catch (e) {
-      console.error("Failed to disconnect SSE:", e)
+      const error = e instanceof Error ? e : new Error(String(e))
+      entryCallbacksRef.current.onError?.(error, "disconnect_sse")
     }
   }, [])
 
@@ -201,9 +188,10 @@ export function useTauriSse(config: UseTauriSseConfig): UseTauriSseResult {
       unlisteners.push(
         await listen<{ data: { entry: ServerEntry; date: string } }>("sse:entry_added", (event) => {
           const { entry, date } = event.payload.data
-          handleEntryAdded(entry, date).catch((e) =>
-            console.error("Failed to handle entry_added:", e),
-          )
+          handleEntryAdded(entry, date).catch((e) => {
+            const error = e instanceof Error ? e : new Error(String(e))
+            entryCallbacksRef.current.onError?.(error, "handle_entry_added")
+          })
         }),
       )
 
@@ -213,9 +201,10 @@ export function useTauriSse(config: UseTauriSseConfig): UseTauriSseResult {
           "sse:entry_updated",
           (event) => {
             const { entry, date } = event.payload.data
-            handleEntryUpdated(entry, date).catch((e) =>
-              console.error("Failed to handle entry_updated:", e),
-            )
+            handleEntryUpdated(entry, date).catch((e) => {
+              const error = e instanceof Error ? e : new Error(String(e))
+              entryCallbacksRef.current.onError?.(error, "handle_entry_updated")
+            })
           },
         ),
       )
@@ -224,9 +213,10 @@ export function useTauriSse(config: UseTauriSseConfig): UseTauriSseResult {
       unlisteners.push(
         await listen<{ data: { entry_id: string; date: string } }>("sse:entry_deleted", (event) => {
           const { entry_id, date } = event.payload.data
-          handleEntryDeleted(entry_id, date).catch((e) =>
-            console.error("Failed to handle entry_deleted:", e),
-          )
+          handleEntryDeleted(entry_id, date).catch((e) => {
+            const error = e instanceof Error ? e : new Error(String(e))
+            entryCallbacksRef.current.onError?.(error, "handle_entry_deleted")
+          })
         }),
       )
 
@@ -236,7 +226,8 @@ export function useTauriSse(config: UseTauriSseConfig): UseTauriSseResult {
       try {
         await invoke("start_sse", { calendarId, lastEventId: null })
       } catch (e) {
-        console.error("Failed to start SSE:", e)
+        const error = e instanceof Error ? e : new Error(String(e))
+        entryCallbacksRef.current.onError?.(error, "start_sse")
         updateConnectionState("error")
       }
     }
