@@ -5,6 +5,7 @@
 
 import type { EntryStyle, ViewMode } from "@core/calendar/settings"
 import type { ServerEntry } from "@core/calendar/types"
+import type { SseConnectionState } from "@core/sse/types"
 import type { LocalEntry } from "@core/sync/types"
 import { createContext, useContext } from "react"
 import type {
@@ -13,7 +14,7 @@ import type {
   NotificationCenterActions,
   NotificationCenterState,
 } from "../hooks"
-import type { FlashState, ModalState, SseConnectionState } from "../types"
+import type { FlashState, ModalState } from "../types"
 
 /** Context value shared with calendar sub-components */
 export interface CalendarContextValue {

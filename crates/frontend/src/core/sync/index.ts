@@ -32,6 +32,5 @@ export type {
 export {
   createLocalEntry,
   markEntryAsPending,
-  markEntryAsSynced,
   serverToLocalEntry,
 } from "./types"

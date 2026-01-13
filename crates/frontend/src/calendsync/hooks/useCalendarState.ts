@@ -23,6 +23,7 @@ import { addDays, formatDateKey, isSameDay } from "@core/calendar/dates"
 import { mergeEntryCache, serverDaysToMap } from "@core/calendar/entries"
 import { calculateVisibleDays } from "@core/calendar/layout"
 import type { ServerEntry } from "@core/calendar/types"
+import type { SseConnectionState } from "@core/sse/types"
 import { useTransport } from "@core/transport"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
@@ -32,7 +33,6 @@ import type {
   FlashState,
   InitialData,
   NotificationType,
-  SseConnectionState,
   ToastData,
 } from "../types"
 

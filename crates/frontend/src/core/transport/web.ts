@@ -5,42 +5,9 @@
  * This is the default transport for the web version of the app.
  */
 
+import { createPayloadToFormData } from "../calendar/forms"
 import type { ServerDay, ServerEntry } from "../calendar/types"
 import type { CalendarWithRole, CreateEntryPayload, FetchEntriesOptions, Transport } from "./types"
-
-/**
- * Convert CreateEntryPayload to URLSearchParams for form submission.
- */
-function payloadToFormData(payload: CreateEntryPayload): URLSearchParams {
-  const params = new URLSearchParams()
-
-  params.set("calendar_id", payload.calendar_id)
-  params.set("title", payload.title)
-  params.set("start_date", payload.date)
-
-  // Determine entry_type
-  if (payload.entry_type) {
-    params.set("entry_type", payload.entry_type)
-  } else if (payload.all_day) {
-    params.set("entry_type", "all_day")
-  } else if (payload.start_time || payload.end_time) {
-    params.set("entry_type", "timed")
-  } else {
-    params.set("entry_type", "all_day")
-  }
-
-  if (payload.start_time) {
-    params.set("start_time", payload.start_time)
-  }
-  if (payload.end_time) {
-    params.set("end_time", payload.end_time)
-  }
-  if (payload.description) {
-    params.set("description", payload.description)
-  }
-
-  return params
-}
 
 /**
  * Create a web transport that uses fetch() for HTTP communication.
@@ -131,7 +98,7 @@ export function createWebTransport(baseUrl: string): Transport {
     // Entry operations
 
     async createEntry(payload: CreateEntryPayload): Promise<ServerEntry> {
-      const formData = payloadToFormData(payload)
+      const formData = createPayloadToFormData(payload)
 
       const response = await fetch(`${baseUrl}/api/entries`, {
         method: "POST",
@@ -149,7 +116,7 @@ export function createWebTransport(baseUrl: string): Transport {
     },
 
     async updateEntry(id: string, payload: CreateEntryPayload): Promise<ServerEntry> {
-      const formData = payloadToFormData(payload)
+      const formData = createPayloadToFormData(payload)
 
       const response = await fetch(`${baseUrl}/api/entries/${id}`, {
         method: "PUT",

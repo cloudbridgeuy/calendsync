@@ -13,14 +13,6 @@ import type { SseConnectionState } from "@core/sse/types"
 import { useCallback, useEffect, useRef, useState } from "react"
 
 /**
- * Callbacks that can be passed to the connection manager.
- * Stored in refs to avoid triggering reconnections when callbacks change.
- */
-export interface ConnectionCallbacks {
-  onConnectionChange?: (state: SseConnectionState) => void
-}
-
-/**
  * Configuration for the connection manager hook.
  */
 export interface ConnectionConfig {
@@ -36,8 +28,6 @@ export interface ConnectionManager {
   connectionState: SseConnectionState
   /** Update connection state and notify callback */
   updateConnectionState: (state: SseConnectionState) => void
-  /** Ref containing current callbacks (to avoid stale closures) */
-  callbacksRef: React.RefObject<ConnectionCallbacks>
 }
 
 /**
@@ -52,10 +42,9 @@ export interface ConnectionManager {
  * @example
  * ```typescript
  * function useMySSE(config: { onConnectionChange?: (state) => void }) {
- *   const { connectionState, updateConnectionState, callbacksRef } =
- *     useConnectionManager({
- *       onConnectionChange: config.onConnectionChange,
- *     })
+ *   const { connectionState, updateConnectionState } = useConnectionManager({
+ *     onConnectionChange: config.onConnectionChange,
+ *   })
  *
  *   // Use updateConnectionState when connection opens/closes/errors
  *   eventSource.onopen = () => updateConnectionState("connected")
@@ -70,7 +59,7 @@ export function useConnectionManager(config: ConnectionConfig): ConnectionManage
   const [connectionState, setConnectionState] = useState<SseConnectionState>("disconnected")
 
   // Store callbacks in refs to avoid reconnecting on callback changes
-  const callbacksRef = useRef<ConnectionCallbacks>({
+  const callbacksRef = useRef<Pick<ConnectionConfig, "onConnectionChange">>({
     onConnectionChange,
   })
 
@@ -93,6 +82,5 @@ export function useConnectionManager(config: ConnectionConfig): ConnectionManage
   return {
     connectionState,
     updateConnectionState,
-    callbacksRef,
   }
 }

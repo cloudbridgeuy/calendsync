@@ -122,14 +122,3 @@ export function markEntryAsPending(entry: LocalEntry, operation: PendingOperatio
     pendingOperation: operation,
   }
 }
-
-/**
- * Mark a LocalEntry as synced with the server.
- */
-export function markEntryAsSynced(entry: LocalEntry): LocalEntry {
-  return {
-    ...entry,
-    syncStatus: "synced",
-    pendingOperation: null,
-  }
-}

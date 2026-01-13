@@ -7,11 +7,7 @@
  * - useSseUnified (platform-agnostic SSE selector)
  */
 
-export type {
-  ConnectionCallbacks,
-  ConnectionConfig,
-  ConnectionManager,
-} from "./useConnectionManager"
+export type { ConnectionConfig, ConnectionManager } from "./useConnectionManager"
 export { useConnectionManager } from "./useConnectionManager"
 export type { DexieHandlers } from "./useDexieHandlers"
 export { useDexieHandlers } from "./useDexieHandlers"

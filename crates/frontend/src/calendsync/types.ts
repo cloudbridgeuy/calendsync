@@ -17,9 +17,6 @@ export {
   MONTH_NAMES,
 } from "@core/calendar/types"
 
-// Re-export SSE types from core
-export type { SseConnectionState } from "@core/sse/types"
-
 import type { SseConnectionState } from "@core/sse/types"
 
 /**
