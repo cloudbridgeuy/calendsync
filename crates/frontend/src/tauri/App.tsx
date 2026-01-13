@@ -35,7 +35,7 @@ export function App() {
           days,
           clientBundleUrl: "",
           controlPlaneUrl: "", // Not needed for Tauri - transport handles it
-          sseEnabled: false, // Disabled in Tauri - EventSource bypasses transport layer
+          // SSE is now enabled via useSseUnified which routes through Rust backend
         })
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e)

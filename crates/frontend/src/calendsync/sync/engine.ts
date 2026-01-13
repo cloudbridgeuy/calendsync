@@ -14,6 +14,7 @@
 
 import { entryToFormData, formDataToApiPayload } from "@core/calendar"
 import type { ServerEntry } from "@core/calendar/types"
+import { deriveEntryTypeFromFlags } from "@core/sse/connection"
 import {
   incrementRetry,
   markAsConflict,
@@ -22,6 +23,7 @@ import {
   sortByCreatedAt,
 } from "@core/sync/operations"
 import type { PendingOperation, PendingOperationType } from "@core/sync/types"
+import type { Transport } from "@core/transport/types"
 
 import type { CalendSyncDatabase } from "../db"
 import { getControlPlaneUrl } from "../hooks/useApi"
@@ -49,6 +51,7 @@ export interface SyncApiClient {
 
 /**
  * Default API client implementation using fetch.
+ * Used as fallback when transport is not initialized (web before TransportProvider).
  */
 function createDefaultApiClient(): SyncApiClient {
   const baseUrl = getControlPlaneUrl()
@@ -63,6 +66,7 @@ function createDefaultApiClient(): SyncApiClient {
           "Content-Type": "application/x-www-form-urlencoded",
         },
         body: formData.toString(),
+        credentials: "include",
       })
 
       if (!response.ok) {
@@ -83,6 +87,7 @@ function createDefaultApiClient(): SyncApiClient {
           "Content-Type": "application/x-www-form-urlencoded",
         },
         body: formData.toString(),
+        credentials: "include",
       })
 
       if (!response.ok) {
@@ -96,6 +101,7 @@ function createDefaultApiClient(): SyncApiClient {
     async deleteEntry(entryId: string): Promise<void> {
       const response = await fetch(`${baseUrl}/api/entries/${entryId}`, {
         method: "DELETE",
+        credentials: "include",
       })
 
       if (!response.ok) {
@@ -107,15 +113,44 @@ function createDefaultApiClient(): SyncApiClient {
 }
 
 /**
- * Determine entry type from ServerEntry fields.
+ * Create an API client backed by the Transport layer.
+ * Used by SyncEngine when transport is initialized.
  */
-function deriveEntryType(
-  payload: Partial<ServerEntry>,
-): "all_day" | "timed" | "task" | "multi_day" {
-  if (payload.isTimed) return "timed"
-  if (payload.isTask) return "task"
-  if (payload.isMultiDay) return "multi_day"
-  return "all_day"
+function createTransportApiClient(transport: Transport): SyncApiClient {
+  return {
+    async createEntry(calendarId: string, payload: Partial<ServerEntry>): Promise<ServerEntry> {
+      const entryType = deriveEntryTypeFromFlags(payload)
+      return transport.createEntry({
+        calendar_id: calendarId,
+        title: payload.title ?? "",
+        date: payload.startDate ?? "",
+        start_time: payload.startTime ?? undefined,
+        end_time: payload.endTime ?? undefined,
+        all_day: payload.isAllDay ?? entryType === "all_day",
+        description: payload.description ?? undefined,
+        entry_type: entryType,
+      })
+    },
+
+    async updateEntry(entryId: string, payload: Partial<ServerEntry>): Promise<ServerEntry> {
+      const calendarId = payload.calendarId ?? ""
+      const entryType = deriveEntryTypeFromFlags(payload)
+      return transport.updateEntry(entryId, {
+        calendar_id: calendarId,
+        title: payload.title ?? "",
+        date: payload.startDate ?? "",
+        start_time: payload.startTime ?? undefined,
+        end_time: payload.endTime ?? undefined,
+        all_day: payload.isAllDay ?? entryType === "all_day",
+        description: payload.description ?? undefined,
+        entry_type: entryType,
+      })
+    },
+
+    async deleteEntry(entryId: string): Promise<void> {
+      return transport.deleteEntry(entryId)
+    },
+  }
 }
 
 /**
@@ -130,7 +165,7 @@ function payloadToFormData(payload: Partial<ServerEntry>, calendarId: string): U
   }
 
   // For partial payloads, build form data manually
-  const entryType = deriveEntryType(payload)
+  const entryType = deriveEntryTypeFromFlags(payload)
   const formData = {
     title: payload.title ?? "",
     startDate: payload.startDate ?? "",
@@ -177,6 +212,7 @@ export class SyncEngine {
   private isSyncing: boolean = false
   private pendingWhileSyncing: boolean = false
   private api: SyncApiClient
+  private transport: Transport | null = null
   private onlineHandler: () => void
   private offlineHandler: () => void
   private listeners: Set<() => void> = new Set()
@@ -200,6 +236,25 @@ export class SyncEngine {
       window.addEventListener("online", this.onlineHandler)
       window.addEventListener("offline", this.offlineHandler)
     }
+  }
+
+  /**
+   * Initialize transport for API calls.
+   * Must be called from within TransportProvider context.
+   * This allows the singleton SyncEngine to use the transport layer
+   * for cross-platform compatibility (web + Tauri).
+   */
+  initTransport(transport: Transport): void {
+    if (this.transport === transport) return // Already initialized with same transport
+    this.transport = transport
+    this.api = createTransportApiClient(transport)
+  }
+
+  /**
+   * Check if transport has been initialized.
+   */
+  hasTransport(): boolean {
+    return this.transport !== null
   }
 
   /**

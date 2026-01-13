@@ -25,7 +25,7 @@ import {
   useModalUrl,
   useNotificationCenter,
   useOfflineCalendar,
-  useSseWithOffline,
+  useSseUnified,
   useVirtualScroll,
 } from "../hooks"
 import type { InitialData } from "../types"
@@ -87,23 +87,23 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
     calendarId: initialData.calendarId,
   })
 
-  // useSseWithOffline handles SSE with Dexie updates
+  // useSseUnified handles SSE with Dexie updates across web and Tauri
+  // - Web: Uses native EventSource via useSseWithOffline
+  // - Tauri: Uses Tauri events via Rust backend (routed through reqwest)
   // Callbacks trigger flash states, toasts, and notifications via useCalendarState's SSE handlers
-  // SSE is disabled in Tauri (initialData.sseEnabled === false) because EventSource
-  // makes direct HTTP requests that bypass the transport layer
-  useSseWithOffline({
+  const { reconnect: sseReconnect } = useSseUnified({
     calendarId: initialData.calendarId,
     enabled: typeof window !== "undefined" && initialData.sseEnabled !== false,
     onEntryAdded: (entry, date) => {
       // Trigger visual feedback (flash animation, toast, notification)
-      // The SSE event was already processed by useSseWithOffline (stored in Dexie)
+      // The SSE event was already processed and stored in Dexie
       actions.onSseEntryAdded(entry, date)
     },
     onEntryUpdated: (entry, date) => {
       actions.onSseEntryUpdated(entry, date)
     },
     onEntryDeleted: (entryId, date) => {
-      // Trigger visual feedback - entry is also removed from Dexie by useSseWithOffline
+      // Trigger visual feedback - entry is also removed from Dexie
       actions.onSseEntryDeleted(entryId, date)
     },
     onConnectionChange: (state) => {
@@ -331,7 +331,7 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
       navigateDays,
       goToToday: scrollToToday,
       getEntriesForDate,
-      refresh: actions.refresh,
+      refresh: sseReconnect,
       // Modal state
       openCreateModal,
       openEditModal,
@@ -380,7 +380,6 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
       navigateDays,
       scrollToToday,
       getEntriesForDate,
-      actions,
       openCreateModal,
       openEditModal,
       closeModal,
@@ -401,6 +400,7 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
       isSyncing,
       offlineEnabled,
       getLocalEntry,
+      sseReconnect,
     ],
   )
 

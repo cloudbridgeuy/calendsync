@@ -1,3 +1,4 @@
+import { determineInitialView, selectCalendar } from "@core/calendar/selection"
 import { useTransport } from "@core/transport"
 import { listen } from "@tauri-apps/api/event"
 import { useEffect } from "react"
@@ -22,19 +23,22 @@ export function useAppInit(options: UseAppInitOptions) {
         // Check for stored session
         const sessionId = await transport.getSession()
 
-        if (!sessionId) {
+        // Validate session with server (only if we have a session)
+        const isValid = sessionId ? await transport.validateSession() : false
+
+        // Determine initial view using pure function
+        const view = determineInitialView(sessionId, isValid)
+
+        if (view === "login") {
+          if (sessionId) {
+            // Had a session but it was invalid - clear it
+            await transport.clearSession()
+          }
           if (mounted) setView("login")
           return
         }
 
-        // Validate session with server
-        const isValid = await transport.validateSession()
-        if (!isValid) {
-          await transport.clearSession()
-          if (mounted) setView("login")
-          return
-        }
-
+        // view === "loading_calendar" - valid session
         if (mounted) setSession(sessionId)
 
         // Load calendar
@@ -52,37 +56,37 @@ export function useAppInit(options: UseAppInitOptions) {
         // Fetch user's calendars first
         const calendars = await transport.fetchMyCalendars()
 
-        if (calendars.length === 0) {
+        // Get stored calendar preference
+        const lastCalendarId = await transport.getLastCalendar()
+
+        // Use pure function to determine calendar selection
+        const selection = selectCalendar(lastCalendarId, calendars)
+
+        if (selection.type === "no_calendars") {
           // User has no calendars - shouldn't happen normally
           if (mounted) setError("No calendars found for this account")
           return
         }
 
-        // Try stored calendar first, but verify user has access
-        const lastCalendarId = await transport.getLastCalendar()
-
-        if (lastCalendarId) {
-          // Check if user has access to this calendar
-          const hasAccess = calendars.some((cal) => cal.id === lastCalendarId)
-
-          if (hasAccess) {
-            // User has access - use stored calendar
-            if (mounted) {
-              setCalendar(lastCalendarId)
-              setView("calendar")
-            }
-            return
+        if (selection.type === "use_stored") {
+          // Using stored calendar - already saved
+          if (mounted) {
+            setCalendar(selection.calendarId)
+            setView("calendar")
           }
+          return
+        }
 
-          // User doesn't have access - clear stale ID
+        // selection.type === "use_default"
+        // Clear stale stored ID if we had one that wasn't valid
+        if (lastCalendarId) {
           await transport.clearLastCalendar()
         }
 
-        // Use first calendar (usually the user's default/main calendar)
-        const calendarId = calendars[0].id
-        await transport.setLastCalendar(calendarId)
+        // Save and use the default calendar
+        await transport.setLastCalendar(selection.calendarId)
         if (mounted) {
-          setCalendar(calendarId)
+          setCalendar(selection.calendarId)
           setView("calendar")
         }
       } catch (e: unknown) {

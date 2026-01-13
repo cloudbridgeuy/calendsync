@@ -55,6 +55,10 @@ export function createTauriTransport(): Transport {
       return invoke<ServerEntry>("toggle_entry", { id })
     },
 
+    async fetchEntry(id) {
+      return invoke<ServerEntry>("fetch_entry", { id })
+    },
+
     // Persistent storage via Tauri store plugin
     async getSession() {
       return invoke<string | null>("get_session")

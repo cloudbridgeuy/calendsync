@@ -2,8 +2,7 @@
  * React Calendar Hooks
  */
 
-export type { UseApiConfig } from "./useApi"
-export { fetchEntries, getControlPlaneUrl } from "./useApi"
+export { getControlPlaneUrl, initControlPlaneUrl } from "./useApi"
 export type { UseAriaAnnouncerReturn } from "./useAriaAnnouncer"
 export { useAriaAnnouncer } from "./useAriaAnnouncer"
 export type {
@@ -36,19 +35,9 @@ export type { UseOfflineCalendarConfig, UseOfflineCalendarResult } from "./useOf
 export { useOfflineCalendar } from "./useOfflineCalendar"
 export type { UseScrollAnimationOptions, UseScrollAnimationReturn } from "./useScrollAnimation"
 export { useScrollAnimation } from "./useScrollAnimation"
-export type {
-  EntryAddedEvent,
-  EntryDeletedEvent,
-  EntryUpdatedEvent,
-  SseEvent,
-  SseEventHandler,
-  SseEventType,
-  UseSseConfig,
-  UseSseResult,
-} from "./useSse"
-export { useSse } from "./useSse"
-export type { UseSseWithOfflineConfig, UseSseWithOfflineResult } from "./useSseWithOffline"
-export { useSseWithOffline } from "./useSseWithOffline"
+export { useSseUnified } from "./useSseUnified"
+export type { UseWebSseConfig, UseWebSseResult } from "./useWebSse"
+export { useWebSse } from "./useWebSse"
 export type { UseSyncEngineResult } from "./useSyncEngine"
 export { useSyncEngine } from "./useSyncEngine"
 export type { UseVirtualScrollOptions, UseVirtualScrollReturn } from "./useVirtualScroll"

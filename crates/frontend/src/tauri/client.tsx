@@ -1,3 +1,4 @@
+import { SyncEngineProvider } from "@calendsync/contexts"
 import { createTauriTransport, TransportProvider } from "@core/transport"
 import { createRoot } from "react-dom/client"
 import { App } from "./App"
@@ -11,6 +12,8 @@ if (!root) {
 
 createRoot(root).render(
   <TransportProvider transport={transport}>
-    <App />
+    <SyncEngineProvider>
+      <App />
+    </SyncEngineProvider>
   </TransportProvider>,
 )

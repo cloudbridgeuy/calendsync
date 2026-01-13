@@ -66,6 +66,8 @@ export interface Transport {
   updateEntry(id: string, payload: CreateEntryPayload): Promise<ServerEntry>
   deleteEntry(id: string): Promise<void>
   toggleEntry(id: string): Promise<ServerEntry>
+  /** Fetch a single entry by ID */
+  fetchEntry(id: string): Promise<ServerEntry>
 
   // Persistent storage (session, last calendar)
   getSession(): Promise<string | null>

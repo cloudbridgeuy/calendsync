@@ -1,18 +1,20 @@
 /**
  * React hook for SyncEngine.
  *
- * Provides a singleton SyncEngine instance for the application,
- * with reactive state for online status and pending operation count.
+ * Provides reactive state for online status, syncing status,
+ * and pending operation count. Uses SyncEngine from context.
+ *
+ * Must be used within a SyncEngineProvider.
  */
 
 import type { ServerEntry } from "@core/calendar/types"
-
 import type { PendingOperationType } from "@core/sync/types"
 import { useLiveQuery } from "dexie-react-hooks"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 
+import { useSyncEngineContext } from "../contexts"
 import { db } from "../db"
-import { createOperationInput, SyncEngine } from "../sync/engine"
+import { createOperationInput } from "../sync/engine"
 
 /** Result from useSyncEngine hook */
 export interface UseSyncEngineResult {
@@ -32,19 +34,6 @@ export interface UseSyncEngineResult {
   syncNow: () => Promise<void>
   /** Last error from queueOperation, if any */
   lastError: string | null
-}
-
-// Singleton instance - shared across all hook consumers
-let engineInstance: SyncEngine | null = null
-
-/**
- * Get or create the singleton SyncEngine instance.
- */
-function getEngine(): SyncEngine {
-  if (!engineInstance) {
-    engineInstance = new SyncEngine(db)
-  }
-  return engineInstance
 }
 
 /**
@@ -78,7 +67,7 @@ function getEngine(): SyncEngine {
  * ```
  */
 export function useSyncEngine(): UseSyncEngineResult {
-  const engineRef = useRef<SyncEngine | null>(null)
+  const engine = useSyncEngineContext()
   const [isOnline, setIsOnline] = useState(() =>
     typeof navigator !== "undefined" ? navigator.onLine : true,
   )
@@ -88,11 +77,8 @@ export function useSyncEngine(): UseSyncEngineResult {
   // Use Dexie's liveQuery for reactive pending count (no polling needed)
   const pendingCount = useLiveQuery(() => db.pending_operations.count(), [], 0) ?? 0
 
-  // Initialize engine
+  // Subscribe to engine state changes
   useEffect(() => {
-    const engine = getEngine()
-    engineRef.current = engine
-
     // Initial state
     setIsOnline(engine.getIsOnline())
     setIsSyncing(engine.getIsSyncing())
@@ -104,7 +90,7 @@ export function useSyncEngine(): UseSyncEngineResult {
     })
 
     return unsubscribe
-  }, [])
+  }, [engine])
 
   /**
    * Queue an operation for sync.
@@ -115,9 +101,6 @@ export function useSyncEngine(): UseSyncEngineResult {
       operation: PendingOperationType,
       payload: Partial<ServerEntry> | null,
     ): Promise<void> => {
-      const engine = engineRef.current
-      if (!engine) return
-
       setLastError(null)
 
       try {
@@ -129,23 +112,20 @@ export function useSyncEngine(): UseSyncEngineResult {
         throw error
       }
     },
-    [],
+    [engine],
   )
 
   /**
    * Manually trigger sync.
    */
   const syncNow = useCallback(async (): Promise<void> => {
-    const engine = engineRef.current
-    if (!engine) return
-
     setIsSyncing(true)
     try {
       await engine.syncPending()
     } finally {
       setIsSyncing(engine.getIsSyncing())
     }
-  }, [])
+  }, [engine])
 
   return {
     isOnline,

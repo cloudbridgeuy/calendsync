@@ -12,3 +12,4 @@ export type {
   FetchEntriesOptions,
   Transport,
 } from "./types"
+export { createWebTransport } from "./web"

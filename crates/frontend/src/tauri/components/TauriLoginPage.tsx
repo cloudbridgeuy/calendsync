@@ -1,4 +1,4 @@
-import { openOAuthLogin } from "../api"
+import { openOAuthLogin } from "../auth"
 
 interface Props {
   onError: (error: string) => void

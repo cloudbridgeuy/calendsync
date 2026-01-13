@@ -13,3 +13,5 @@ export type {
   SettingsMenuState,
 } from "./SettingsMenuContext"
 export { SettingsMenuProvider, useSettingsMenuContext } from "./SettingsMenuContext"
+export type { SyncEngineProviderProps } from "./SyncEngineContext"
+export { createSyncEngine, SyncEngineProvider, useSyncEngineContext } from "./SyncEngineContext"

@@ -13,6 +13,9 @@ export {
   shouldRetry,
   sortByCreatedAt,
 } from "./operations"
+// Re-export sync strategy functions
+export type { SyncStrategy } from "./strategy"
+export { decideSyncStrategy } from "./strategy"
 export type { DerivedEntryType } from "./transformations"
 // Re-export pure functions from transformations
 export { deriveEntryType, formDataToEntry } from "./transformations"

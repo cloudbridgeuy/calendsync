@@ -1,14 +1,14 @@
 /**
  * Hook for entry CRUD API operations.
- * Imperative Shell: Handles fetch operations for entries.
+ * Imperative Shell: Handles fetch operations for entries via transport layer.
  */
 
-import { formDataToApiPayload } from "@core/calendar"
 import type { ServerEntry } from "@core/calendar/types"
-import { useCallback, useMemo } from "react"
+import { useTransport } from "@core/transport"
+import type { CreateEntryPayload } from "@core/transport/types"
+import { useCallback } from "react"
 
 import type { EntryFormData } from "../types"
-import { getControlPlaneUrl } from "./useApi"
 
 /**
  * Configuration for useEntryApi hook.
@@ -35,6 +35,22 @@ export interface UseEntryApiResult {
 }
 
 /**
+ * Convert EntryFormData to CreateEntryPayload for transport.
+ */
+function formDataToPayload(data: EntryFormData, calendarId: string): CreateEntryPayload {
+  return {
+    calendar_id: calendarId,
+    title: data.title,
+    date: data.startDate,
+    start_time: data.startTime,
+    end_time: data.endTime,
+    all_day: data.isAllDay,
+    description: data.description,
+    entry_type: data.entryType,
+  }
+}
+
+/**
  * Hook for entry CRUD API operations.
  *
  * This hook provides functions to:
@@ -45,32 +61,17 @@ export interface UseEntryApiResult {
  */
 export function useEntryApi(config: UseEntryApiConfig): UseEntryApiResult {
   const { calendarId } = config
-
-  const baseUrl = useMemo(() => getControlPlaneUrl(), [])
+  const transport = useTransport()
 
   /**
    * Create a new entry.
    */
   const createEntry = useCallback(
     async (data: EntryFormData): Promise<ServerEntry> => {
-      const payload = formDataToApiPayload(data, calendarId)
-
-      const response = await fetch(`${baseUrl}/api/entries`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: payload.toString(),
-      })
-
-      if (!response.ok) {
-        const text = await response.text()
-        throw new Error(`Failed to create entry: ${response.status} ${text}`)
-      }
-
-      return response.json()
+      const payload = formDataToPayload(data, calendarId)
+      return transport.createEntry(payload)
     },
-    [baseUrl, calendarId],
+    [transport, calendarId],
   )
 
   /**
@@ -78,24 +79,10 @@ export function useEntryApi(config: UseEntryApiConfig): UseEntryApiResult {
    */
   const updateEntry = useCallback(
     async (entryId: string, data: EntryFormData): Promise<ServerEntry> => {
-      const payload = formDataToApiPayload(data, calendarId)
-
-      const response = await fetch(`${baseUrl}/api/entries/${entryId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: payload.toString(),
-      })
-
-      if (!response.ok) {
-        const text = await response.text()
-        throw new Error(`Failed to update entry: ${response.status} ${text}`)
-      }
-
-      return response.json()
+      const payload = formDataToPayload(data, calendarId)
+      return transport.updateEntry(entryId, payload)
     },
-    [baseUrl, calendarId],
+    [transport, calendarId],
   )
 
   /**
@@ -103,16 +90,9 @@ export function useEntryApi(config: UseEntryApiConfig): UseEntryApiResult {
    */
   const deleteEntry = useCallback(
     async (entryId: string): Promise<void> => {
-      const response = await fetch(`${baseUrl}/api/entries/${entryId}`, {
-        method: "DELETE",
-      })
-
-      if (!response.ok) {
-        const text = await response.text()
-        throw new Error(`Failed to delete entry: ${response.status} ${text}`)
-      }
+      return transport.deleteEntry(entryId)
     },
-    [baseUrl],
+    [transport],
   )
 
   /**
@@ -121,16 +101,9 @@ export function useEntryApi(config: UseEntryApiConfig): UseEntryApiResult {
    */
   const fetchEntry = useCallback(
     async (entryId: string): Promise<ServerEntry> => {
-      const response = await fetch(`${baseUrl}/api/entries/${entryId}`)
-
-      if (!response.ok) {
-        const text = await response.text()
-        throw new Error(`Failed to fetch entry: ${response.status} ${text}`)
-      }
-
-      return response.json()
+      return transport.fetchEntry(entryId)
     },
-    [baseUrl],
+    [transport],
   )
 
   /**
@@ -138,18 +111,9 @@ export function useEntryApi(config: UseEntryApiConfig): UseEntryApiResult {
    */
   const toggleEntry = useCallback(
     async (entryId: string): Promise<ServerEntry> => {
-      const response = await fetch(`${baseUrl}/api/entries/${entryId}/toggle`, {
-        method: "PATCH",
-      })
-
-      if (!response.ok) {
-        const text = await response.text()
-        throw new Error(`Failed to toggle entry: ${response.status} ${text}`)
-      }
-
-      return response.json()
+      return transport.toggleEntry(entryId)
     },
-    [baseUrl],
+    [transport],
   )
 
   return {

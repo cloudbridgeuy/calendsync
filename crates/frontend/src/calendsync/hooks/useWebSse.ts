@@ -1,31 +1,38 @@
 /**
- * SSE hook for offline-first calendar updates.
+ * Web SSE hook for browser-based calendar updates.
  *
- * This hook manages SSE connections and updates Dexie directly
- * (instead of React state) when receiving events. This enables:
+ * This hook manages SSE connections using native EventSource and updates
+ * Dexie directly when receiving events. This enables:
  * - Persistent storage of SSE updates across page refreshes
  * - Automatic sync confirmation (marks entries as synced)
  * - Last event ID tracking for reconnection catch-up
  *
  * Data flow:
- * 1. SSE event received from server
+ * 1. SSE event received from server via EventSource
  * 2. Entry updated in Dexie with syncStatus: "synced"
  * 3. last_event_id saved to sync_state table
  * 4. useLiveQuery in useOfflineCalendar reactively updates UI
+ *
+ * For Tauri desktop apps, use useTauriSse instead.
  */
 
 import type { ServerEntry } from "@core/calendar/types"
-import { serverToLocalEntry } from "@core/sync/types"
+import { MAX_RECONNECT_ATTEMPTS, RECONNECT_DELAY_MS } from "@core/sse/connection"
+import type {
+  EntryAddedEvent,
+  EntryDeletedEvent,
+  EntryUpdatedEvent,
+  SseConnectionState,
+} from "@core/sse/types"
 import { useLiveQuery } from "dexie-react-hooks"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef } from "react"
 
 import { db } from "../db"
-import type { SseConnectionState } from "../types"
+import { useConnectionManager, useDexieHandlers } from "./sse"
 import { getControlPlaneUrl } from "./useApi"
-import type { EntryAddedEvent, EntryDeletedEvent, EntryUpdatedEvent } from "./useSse"
 
-/** Configuration for the useSseWithOffline hook */
-export interface UseSseWithOfflineConfig {
+/** Configuration for the useWebSse hook */
+export interface UseWebSseConfig {
   /** Calendar ID to subscribe to */
   calendarId: string
   /** Whether SSE is enabled (default: true, false on server) */
@@ -40,8 +47,8 @@ export interface UseSseWithOfflineConfig {
   onConnectionChange?: (state: SseConnectionState) => void
 }
 
-/** Result from useSseWithOffline hook */
-export interface UseSseWithOfflineResult {
+/** Result from useWebSse hook */
+export interface UseWebSseResult {
   /** Current SSE connection state */
   connectionState: SseConnectionState
   /** Manually reconnect to SSE */
@@ -52,16 +59,10 @@ export interface UseSseWithOfflineResult {
   lastEventId: string | null
 }
 
-/** Reconnection delay in milliseconds */
-const RECONNECT_DELAY_MS = 3000
-
-/** Maximum reconnection attempts before giving up */
-const MAX_RECONNECT_ATTEMPTS = 5
-
 /**
- * Hook for managing SSE connection with offline-first storage.
+ * Hook for managing SSE connection in web browsers.
  *
- * Unlike the regular useSse hook, this hook:
+ * Uses native EventSource API to connect to SSE endpoint and:
  * - Updates Dexie directly instead of React state
  * - Tracks last_event_id in IndexedDB for reconnection
  * - Marks entries as synced when confirmed by server
@@ -69,7 +70,7 @@ const MAX_RECONNECT_ATTEMPTS = 5
  * @example
  * ```typescript
  * function MyCalendar({ calendarId }) {
- *   const { connectionState } = useSseWithOffline({
+ *   const { connectionState } = useWebSse({
  *     calendarId,
  *     onEntryAdded: (entry) => showNotification(`Added: ${entry.title}`),
  *   })
@@ -83,7 +84,7 @@ const MAX_RECONNECT_ATTEMPTS = 5
  * }
  * ```
  */
-export function useSseWithOffline(config: UseSseWithOfflineConfig): UseSseWithOfflineResult {
+export function useWebSse(config: UseWebSseConfig): UseWebSseResult {
   const {
     calendarId,
     enabled = typeof window !== "undefined",
@@ -93,30 +94,38 @@ export function useSseWithOffline(config: UseSseWithOfflineConfig): UseSseWithOf
     onConnectionChange,
   } = config
 
-  const [connectionState, setConnectionState] = useState<SseConnectionState>("disconnected")
+  // Use shared connection manager for state management
+  const { connectionState, updateConnectionState } = useConnectionManager({
+    onConnectionChange,
+  })
+
+  // Use shared Dexie handlers for SSE event processing
+  const {
+    handleEntryAdded: dexieHandleAdded,
+    handleEntryUpdated: dexieHandleUpdated,
+    handleEntryDeleted: dexieHandleDeleted,
+  } = useDexieHandlers()
 
   // Refs for EventSource and reconnection
   const eventSourceRef = useRef<EventSource | null>(null)
   const reconnectAttemptsRef = useRef<number>(0)
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Store callbacks in refs to avoid reconnecting on callback changes
-  const callbacksRef = useRef({
+  // Store event-specific callbacks in refs to avoid reconnecting on callback changes
+  const eventCallbacksRef = useRef({
     onEntryAdded,
     onEntryUpdated,
     onEntryDeleted,
-    onConnectionChange,
   })
 
   // Update callback refs
   useEffect(() => {
-    callbacksRef.current = {
+    eventCallbacksRef.current = {
       onEntryAdded,
       onEntryUpdated,
       onEntryDeleted,
-      onConnectionChange,
     }
-  }, [onEntryAdded, onEntryUpdated, onEntryDeleted, onConnectionChange])
+  }, [onEntryAdded, onEntryUpdated, onEntryDeleted])
 
   // Load last event ID from Dexie reactively
   const syncState = useLiveQuery(() => db.sync_state.get(calendarId), [calendarId])
@@ -132,14 +141,6 @@ export function useSseWithOffline(config: UseSseWithOfflineConfig): UseSseWithOf
       lastEventIdRef.current = syncState.lastEventId
     }
   }, [syncState?.lastEventId, connectionState])
-
-  /**
-   * Update connection state and notify callback.
-   */
-  const updateConnectionState = useCallback((state: SseConnectionState) => {
-    setConnectionState(state)
-    callbacksRef.current.onConnectionChange?.(state)
-  }, [])
 
   /**
    * Save the last event ID to sync state.
@@ -158,73 +159,41 @@ export function useSseWithOffline(config: UseSseWithOfflineConfig): UseSseWithOf
 
   /**
    * Handle entry_added event.
-   * Adds or updates the entry in Dexie with synced status.
+   * Updates Dexie via shared handler, then calls user callback.
    */
   const handleEntryAdded = useCallback(
     async (data: EntryAddedEvent, eventId: string) => {
-      const localEntry = serverToLocalEntry(data.entry)
-
-      // Check if this is our own pending entry being confirmed
-      const existing = await db.entries.get(data.entry.id)
-      if (existing?.pendingOperation === "create") {
-        // Our create was confirmed - mark as synced
-        await db.entries.update(data.entry.id, {
-          ...localEntry,
-          syncStatus: "synced",
-          pendingOperation: null,
-        })
-      } else {
-        // New entry from another client - add it
-        await db.entries.put(localEntry)
-      }
-
+      await dexieHandleAdded(data.entry)
       await saveLastEventId(eventId)
-      callbacksRef.current.onEntryAdded?.(data.entry, data.date)
+      eventCallbacksRef.current.onEntryAdded?.(data.entry, data.date)
     },
-    [saveLastEventId],
+    [dexieHandleAdded, saveLastEventId],
   )
 
   /**
    * Handle entry_updated event.
-   * Updates the entry in Dexie with synced status.
+   * Updates Dexie via shared handler, then calls user callback.
    */
   const handleEntryUpdated = useCallback(
     async (data: EntryUpdatedEvent, eventId: string) => {
-      const localEntry = serverToLocalEntry(data.entry)
-
-      // Check if this is our own pending entry being confirmed
-      const existing = await db.entries.get(data.entry.id)
-      if (existing?.pendingOperation === "update") {
-        // Our update was confirmed - mark as synced
-        await db.entries.update(data.entry.id, {
-          ...localEntry,
-          syncStatus: "synced",
-          pendingOperation: null,
-        })
-      } else {
-        // Update from another client - apply it
-        await db.entries.put(localEntry)
-      }
-
+      await dexieHandleUpdated(data.entry)
       await saveLastEventId(eventId)
-      callbacksRef.current.onEntryUpdated?.(data.entry, data.date)
+      eventCallbacksRef.current.onEntryUpdated?.(data.entry, data.date)
     },
-    [saveLastEventId],
+    [dexieHandleUpdated, saveLastEventId],
   )
 
   /**
    * Handle entry_deleted event.
-   * Removes the entry from Dexie.
+   * Updates Dexie via shared handler, then calls user callback.
    */
   const handleEntryDeleted = useCallback(
     async (data: EntryDeletedEvent, eventId: string) => {
-      // Delete from local database
-      await db.entries.delete(data.entry_id)
-
+      await dexieHandleDeleted(data.entry_id)
       await saveLastEventId(eventId)
-      callbacksRef.current.onEntryDeleted?.(data.entry_id, data.date)
+      eventCallbacksRef.current.onEntryDeleted?.(data.entry_id, data.date)
     },
-    [saveLastEventId],
+    [dexieHandleDeleted, saveLastEventId],
   )
 
   /**

@@ -155,6 +155,9 @@ export {
   easeOutCubic,
   isAnimationComplete,
 } from "./scrollAnimation"
+// Re-export selection functions
+export type { CalendarSelection, InitialView } from "./selection"
+export { determineInitialView, selectCalendar } from "./selection"
 // Re-export settings functions
 export type { CalendarSettings, EntryStyle, ViewMode } from "./settings"
 export {

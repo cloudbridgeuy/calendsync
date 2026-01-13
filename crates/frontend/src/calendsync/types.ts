@@ -17,6 +17,11 @@ export {
   MONTH_NAMES,
 } from "@core/calendar/types"
 
+// Re-export SSE types from core
+export type { SseConnectionState } from "@core/sse/types"
+
+import type { SseConnectionState } from "@core/sse/types"
+
 /**
  * Modal state from SSR or URL parsing.
  * Determines whether the entry modal is open and in what mode.
@@ -66,9 +71,6 @@ export interface CalendarProps {
   /** Initial data from SSR */
   initialData: InitialData
 }
-
-/** SSE connection states */
-export type SseConnectionState = "connecting" | "connected" | "disconnected" | "error"
 
 /** Entry change type for flash animations */
 export type EntryChangeType = "added" | "updated" | "deleted"
@@ -143,8 +145,6 @@ export interface CalendarActions {
   goToToday: () => void
   /** Jump to a specific date */
   goToDate: (date: Date) => void
-  /** Refresh calendar data from API */
-  refresh: () => Promise<void>
   /** Update layout based on viewport width */
   updateLayout: (width: number) => void
   /** Remove a toast notification */

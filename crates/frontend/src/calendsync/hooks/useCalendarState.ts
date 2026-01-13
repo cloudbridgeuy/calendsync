@@ -23,6 +23,7 @@ import { addDays, formatDateKey, isSameDay } from "@core/calendar/dates"
 import { mergeEntryCache, serverDaysToMap } from "@core/calendar/entries"
 import { calculateVisibleDays } from "@core/calendar/layout"
 import type { ServerEntry } from "@core/calendar/types"
+import { useTransport } from "@core/transport"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import type {
@@ -34,7 +35,6 @@ import type {
   SseConnectionState,
   ToastData,
 } from "../types"
-import { fetchEntries } from "./useApi"
 
 /** Number of days prefetched from server (before and after highlighted day) */
 const PREFETCH_DAYS = 365
@@ -91,6 +91,8 @@ export interface UseCalendarStateConfig {
  */
 export function useCalendarState(config: UseCalendarStateConfig): [CalendarState, CalendarActions] {
   const { initialData, onNotification } = config
+  const transport = useTransport()
+
   // Parse initial highlighted day, correcting for server/client timezone mismatch
   const initialHighlightedDay = useMemo(() => {
     const serverDate = parseDateKey(initialData.highlightedDay)
@@ -197,8 +199,6 @@ export function useCalendarState(config: UseCalendarStateConfig): [CalendarState
    */
   const handleEntryAdded = useCallback(
     (entry: ServerEntry, date: string) => {
-      console.log("[Calendar] Entry added:", entry.title, "on", date)
-
       // Update cache
       setEntryCache((prev) => {
         const next = new Map(prev)
@@ -225,8 +225,6 @@ export function useCalendarState(config: UseCalendarStateConfig): [CalendarState
    */
   const handleEntryUpdated = useCallback(
     (entry: ServerEntry, date: string) => {
-      console.log("[Calendar] Entry updated:", entry.title, "on", date)
-
       // Update cache
       setEntryCache((prev) => {
         const next = new Map(prev)
@@ -268,8 +266,6 @@ export function useCalendarState(config: UseCalendarStateConfig): [CalendarState
    */
   const handleEntryDeleted = useCallback(
     (entryId: string, date: string) => {
-      console.log("[Calendar] Entry deleted:", entryId, "on", date)
-
       // Find the entry title before deleting and trigger notifications
       setEntryCache((prev) => {
         const existing = prev.get(date) || []
@@ -332,7 +328,7 @@ export function useCalendarState(config: UseCalendarStateConfig): [CalendarState
       setError(null)
 
       try {
-        const days = await fetchEntries({
+        const days = await transport.fetchEntries({
           calendarId: initialData.calendarId,
           highlightedDay,
           before,
@@ -359,7 +355,7 @@ export function useCalendarState(config: UseCalendarStateConfig): [CalendarState
         console.error("[Calendar] Failed to load entries:", err)
       }
     },
-    [initialData.calendarId],
+    [transport, initialData.calendarId],
   )
 
   /**
@@ -425,15 +421,6 @@ export function useCalendarState(config: UseCalendarStateConfig): [CalendarState
     },
     [ensureDataForDate],
   )
-
-  /**
-   * Refresh - currently a no-op since SSE is handled by useSseWithOffline.
-   * @deprecated This function is kept for API compatibility but does nothing.
-   */
-  const refresh = useCallback(async () => {
-    // SSE reconnect is now handled by useSseWithOffline in Calendar.tsx
-    // This function is kept for API compatibility
-  }, [])
 
   /**
    * Add entry to cache optimistically (before SSE confirmation).
@@ -526,7 +513,6 @@ export function useCalendarState(config: UseCalendarStateConfig): [CalendarState
     navigateDays,
     goToToday,
     goToDate,
-    refresh,
     updateLayout,
     removeToast,
     addEntryOptimistic,

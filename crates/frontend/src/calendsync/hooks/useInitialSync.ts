@@ -12,11 +12,13 @@
  */
 
 import type { ServerDay } from "@core/calendar/types"
+import { decideSyncStrategy } from "@core/sync/strategy"
 import { serverToLocalEntry } from "@core/sync/types"
+import { useTransport } from "@core/transport"
+import type { Transport } from "@core/transport/types"
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import { db } from "../db"
-import { fetchEntries } from "./useApi"
 
 /**
  * Configuration for useInitialSync hook.
@@ -60,12 +62,13 @@ function getTodayDateKey(): string {
  * Fetches all entries for the calendar and stores them locally.
  */
 async function performFullSync(
+  transport: Transport,
   calendarId: string,
   highlightedDay: string,
   bufferDays: number,
 ): Promise<void> {
-  // Fetch entries from server
-  const days = await fetchEntries({
+  // Fetch entries from server via transport
+  const days = await transport.fetchEntries({
     calendarId,
     highlightedDay,
     before: bufferDays,
@@ -154,6 +157,7 @@ async function hydrateFromSsr(calendarId: string, days: ServerDay[]): Promise<vo
  */
 export function useInitialSync(config: UseInitialSyncConfig): UseInitialSyncResult {
   const { calendarId, initialDays, bufferDays = 7 } = config
+  const transport = useTransport()
 
   const [isReady, setIsReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -174,7 +178,7 @@ export function useInitialSync(config: UseInitialSyncConfig): UseInitialSyncResu
 
     try {
       const highlightedDay = getTodayDateKey()
-      await performFullSync(calendarId, highlightedDay, bufferDays)
+      await performFullSync(transport, calendarId, highlightedDay, bufferDays)
       if (mountedRef.current) {
         setIsReady(true)
       }
@@ -189,7 +193,7 @@ export function useInitialSync(config: UseInitialSyncConfig): UseInitialSyncResu
         setIsSyncing(false)
       }
     }
-  }, [calendarId, bufferDays])
+  }, [transport, calendarId, bufferDays])
 
   useEffect(() => {
     let cancelled = false
@@ -213,29 +217,31 @@ export function useInitialSync(config: UseInitialSyncConfig): UseInitialSyncResu
         const syncState = await db.sync_state.get(calendarId)
         const localEntryCount = await db.entries.where("calendarId").equals(calendarId).count()
 
-        // Determine if we need to sync
+        // Determine sync strategy using pure function
         const hasLocalData = localEntryCount > 0
         const hasSyncState = syncState !== null
+        const hasSsrDays = initialDays !== undefined && initialDays.length > 0
+        const strategy = decideSyncStrategy(hasLocalData, hasSyncState, hasSsrDays)
 
-        if (hasLocalData && hasSyncState) {
+        if (strategy.type === "use_local") {
           // We have local data - ready to render
           if (!cancelled) {
             setIsReady(true)
           }
-        } else if (initialDays && initialDays.length > 0) {
+        } else if (strategy.type === "hydrate_ssr") {
           // Hydrate from SSR data
-          await hydrateFromSsr(calendarId, initialDays)
+          await hydrateFromSsr(calendarId, initialDays!)
           if (!cancelled) {
             setIsReady(true)
           }
         } else {
-          // No local data and no SSR data - fetch from server
+          // full_sync: No local data and no SSR data - fetch from server
           if (!cancelled) {
             setIsSyncing(true)
           }
 
           const highlightedDay = getTodayDateKey()
-          await performFullSync(calendarId, highlightedDay, bufferDays)
+          await performFullSync(transport, calendarId, highlightedDay, bufferDays)
 
           if (!cancelled) {
             setIsSyncing(false)
@@ -259,7 +265,7 @@ export function useInitialSync(config: UseInitialSyncConfig): UseInitialSyncResu
       cancelled = true
       mountedRef.current = false
     }
-  }, [calendarId, initialDays, bufferDays])
+  }, [calendarId, initialDays, bufferDays, transport])
 
   return {
     isReady,

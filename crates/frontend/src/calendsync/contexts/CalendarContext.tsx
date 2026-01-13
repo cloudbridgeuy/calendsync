@@ -56,8 +56,8 @@ export interface CalendarContextValue {
   goToToday: () => void
   /** Get entries for a specific date */
   getEntriesForDate: (date: Date) => ServerEntry[]
-  /** Refresh calendar data from API */
-  refresh: () => Promise<void>
+  /** Reconnect to SSE stream */
+  refresh: () => void
 
   // New - modal state
   /** Open create modal for a specific date */
