@@ -5,10 +5,12 @@
 //! - Last calendar ID storage (get/set)
 //! - OAuth login initiation
 //! - HTTP proxy commands for server communication
+//! - SSE real-time update commands
 
-use tauri::AppHandle;
+use tauri::{AppHandle, State};
 
 use crate::http::{self, CalendarWithRole, CreateEntryPayload, ServerDay, ServerEntry};
+use crate::SseState;
 
 /// Get the current session ID from persistent storage.
 ///
@@ -164,4 +166,101 @@ pub async fn delete_entry(app: AppHandle, id: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn toggle_entry(app: AppHandle, id: String) -> Result<ServerEntry, String> {
     http::toggle_entry(&app, &id).await
+}
+
+/// Fetch a single entry by ID (calls server GET /api/entries/{id}).
+#[tauri::command]
+pub async fn fetch_entry(app: AppHandle, id: String) -> Result<ServerEntry, String> {
+    http::fetch_entry(&app, &id).await
+}
+
+// SSE commands
+
+/// Start SSE subscription for real-time calendar updates.
+///
+/// Connects to the server's SSE endpoint and emits Tauri events when
+/// entries are added, updated, or deleted.
+///
+/// # Arguments
+///
+/// * `calendar_id` - Calendar to subscribe to
+/// * `last_event_id` - Optional last event ID for reconnection catch-up.
+///   If `None`, uses the last tracked event ID from state.
+///
+/// # Emitted Events
+///
+/// * `sse:connection_state` - Connection state changes ("connecting", "connected", "disconnected", "error")
+/// * `sse:entry_added` - Entry added event with entry data
+/// * `sse:entry_updated` - Entry updated event with entry data
+/// * `sse:entry_deleted` - Entry deleted event with entry ID
+#[tauri::command]
+pub async fn start_sse(
+    app: AppHandle,
+    state: State<'_, SseState>,
+    calendar_id: String,
+    last_event_id: Option<String>,
+) -> Result<(), String> {
+    let session_id = crate::auth::get_session(&app).ok_or("No session")?;
+
+    // Cancel existing connection if any
+    if let Some(tx) = state.cancel_tx.lock().unwrap().take() {
+        let _ = tx.send(());
+    }
+
+    // Use provided last_event_id or fall back to tracked state
+    let effective_last_event_id =
+        last_event_id.or_else(|| state.last_event_id.lock().unwrap().clone());
+
+    // Create new cancel channel
+    let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel();
+    *state.cancel_tx.lock().unwrap() = Some(cancel_tx);
+
+    // Clone the state's last_event_id mutex for use in the spawned task
+    // We need to use a static reference pattern here since State doesn't implement Clone
+    let last_event_id_state = std::sync::Arc::new(std::sync::Mutex::new(
+        state.last_event_id.lock().unwrap().clone(),
+    ));
+    let last_event_id_state_clone = last_event_id_state.clone();
+
+    // Spawn SSE connection task
+    let app_clone = app.clone();
+    tokio::spawn(async move {
+        if let Err(e) = crate::sse::start_connection(
+            app_clone,
+            &calendar_id,
+            effective_last_event_id,
+            &session_id,
+            cancel_rx,
+            &last_event_id_state_clone,
+        )
+        .await
+        {
+            tracing::error!("SSE connection error: {}", e);
+        }
+    });
+
+    // Note: The last_event_id in state will be updated by the spawned task
+    // The Arc<Mutex<>> pattern allows the spawned task to update the value
+
+    Ok(())
+}
+
+/// Get the last event ID received from the SSE stream.
+///
+/// Returns the last event ID if one has been received, or `None`.
+/// Used by the frontend for tracking sync state.
+#[tauri::command]
+pub fn get_last_event_id(state: State<'_, SseState>) -> Option<String> {
+    state.last_event_id.lock().unwrap().clone()
+}
+
+/// Stop SSE subscription.
+///
+/// Cancels the current SSE connection if one exists.
+#[tauri::command]
+pub fn stop_sse(state: State<'_, SseState>) -> Result<(), String> {
+    if let Some(tx) = state.cancel_tx.lock().unwrap().take() {
+        let _ = tx.send(());
+    }
+    Ok(())
 }
