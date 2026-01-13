@@ -1057,6 +1057,7 @@ dependencies = [
 name = "calendsync_tauri"
 version = "0.0.0"
 dependencies = [
+ "futures-util",
  "open",
  "reqwest 0.12.24",
  "serde",
@@ -1066,6 +1067,7 @@ dependencies = [
  "tauri-plugin-deep-link",
  "tauri-plugin-http",
  "tauri-plugin-store",
+ "tokio",
  "tracing",
  "url",
  "urlencoding",
