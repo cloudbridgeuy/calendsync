@@ -44,6 +44,7 @@ export type { DayDisplayInfo } from "./dayContainer"
 export { getDayDisplayInfo, isDayToday } from "./dayContainer"
 // Re-export entry functions
 export {
+  deriveEntryTypeFromFlags,
   expandMultiDayEntries,
   filterAllDayEntries,
   filterByCalendar,
@@ -61,6 +62,8 @@ export {
   serverDaysToMap,
   sortDayEntries,
 } from "./entries"
+// Re-export form data conversion functions
+export { createPayloadToFormData, updatePayloadToFormData } from "./forms"
 // Re-export layout functions
 export {
   calculateAnimationDuration,
