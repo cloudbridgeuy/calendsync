@@ -7,7 +7,6 @@
 export {
   buildSseUrl,
   calculateReconnectDelay,
-  deriveEntryTypeFromFlags,
   MAX_RECONNECT_ATTEMPTS,
   parseEventData,
   RECONNECT_DELAY_MS,

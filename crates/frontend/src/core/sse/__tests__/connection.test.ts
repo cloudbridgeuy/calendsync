@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test"
 import {
   buildSseUrl,
   calculateReconnectDelay,
-  deriveEntryTypeFromFlags,
   MAX_RECONNECT_ATTEMPTS,
   parseEventData,
   RECONNECT_DELAY_MS,
@@ -105,35 +104,5 @@ describe("buildSseUrl", () => {
     expect(url).toBe(
       "http://localhost:3000/api/events?calendar_id=cal-123&last_event_id=evt%26id%3D456",
     )
-  })
-})
-
-describe("deriveEntryTypeFromFlags", () => {
-  test("returns 'timed' when isTimed is true", () => {
-    expect(deriveEntryTypeFromFlags({ isTimed: true })).toBe("timed")
-  })
-
-  test("returns 'task' when isTask is true", () => {
-    expect(deriveEntryTypeFromFlags({ isTask: true })).toBe("task")
-  })
-
-  test("returns 'multi_day' when isMultiDay is true", () => {
-    expect(deriveEntryTypeFromFlags({ isMultiDay: true })).toBe("multi_day")
-  })
-
-  test("returns 'all_day' when no flags are true", () => {
-    expect(deriveEntryTypeFromFlags({})).toBe("all_day")
-    expect(deriveEntryTypeFromFlags({ isTimed: false, isTask: false, isMultiDay: false })).toBe(
-      "all_day",
-    )
-  })
-
-  test("prioritizes isTimed over other flags", () => {
-    expect(deriveEntryTypeFromFlags({ isTimed: true, isTask: true })).toBe("timed")
-    expect(deriveEntryTypeFromFlags({ isTimed: true, isMultiDay: true })).toBe("timed")
-  })
-
-  test("prioritizes isTask over isMultiDay", () => {
-    expect(deriveEntryTypeFromFlags({ isTask: true, isMultiDay: true })).toBe("task")
   })
 })

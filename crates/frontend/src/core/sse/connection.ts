@@ -75,21 +75,3 @@ export function buildSseUrl(
   }
   return url
 }
-
-/**
- * Derive entry type string from ServerEntry boolean flags.
- * Used for API payloads that require entry_type as a string.
- *
- * @param entry - Partial ServerEntry with boolean type flags
- * @returns Entry type string for API payload
- */
-export function deriveEntryTypeFromFlags(entry: {
-  isTimed?: boolean
-  isTask?: boolean
-  isMultiDay?: boolean
-}): "all_day" | "timed" | "task" | "multi_day" {
-  if (entry.isTimed) return "timed"
-  if (entry.isTask) return "task"
-  if (entry.isMultiDay) return "multi_day"
-  return "all_day"
-}
