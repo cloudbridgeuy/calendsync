@@ -20,6 +20,16 @@ export {
 import type { SseConnectionState } from "@core/sse/types"
 
 /**
+ * User info from SSR authentication.
+ */
+export interface UserInfo {
+  /** User's display name */
+  name: string
+  /** User's email address */
+  email: string
+}
+
+/**
  * Modal state from SSR or URL parsing.
  * Determines whether the entry modal is open and in what mode.
  */
@@ -59,6 +69,8 @@ export interface InitialData {
   devMode?: boolean
   /** Whether SSE real-time updates are enabled (default: true, false for Tauri) */
   sseEnabled?: boolean
+  /** Logged-in user info (from SSR) */
+  user?: UserInfo
 }
 
 /**

@@ -5,6 +5,7 @@
  */
 
 export { TransportProvider, useTransport } from "./context"
+export { createSsrTransport } from "./ssr"
 export { createTauriTransport } from "./tauri"
 export type {
   CalendarWithRole,

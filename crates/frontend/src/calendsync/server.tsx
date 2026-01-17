@@ -3,9 +3,11 @@
  * Uses React 19's prerender API to render the app to HTML.
  */
 
+import { createSsrTransport, TransportProvider } from "@core/transport"
 import { prerender } from "react-dom/static"
 
 import { App } from "./App"
+import { SyncEngineProvider } from "./contexts"
 import type { InitialData, SSRConfig } from "./types"
 
 // Declare the custom ops provided by Rust
@@ -50,6 +52,7 @@ async function main() {
 
   // Get initial data from Rust via global config
   const initialData: InitialData = __SSR_CONFIG__.initialData
+  const transport = createSsrTransport()
 
   console.log(`[SSR] Calendar ID: ${initialData.calendarId}`)
   console.log(`[SSR] Highlighted day: ${initialData.highlightedDay}`)
@@ -57,7 +60,14 @@ async function main() {
 
   try {
     // Use React 19's prerender API
-    const { prelude } = await prerender(<App initialData={initialData} />)
+    // Wrap with same providers as client to match hydration tree
+    const { prelude } = await prerender(
+      <TransportProvider transport={transport}>
+        <SyncEngineProvider>
+          <App initialData={initialData} />
+        </SyncEngineProvider>
+      </TransportProvider>,
+    )
 
     console.log("[SSR] Prerender complete, collecting stream...")
 

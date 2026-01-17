@@ -17,16 +17,37 @@ use axum::{
 use axum::response::Redirect;
 
 #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
-use calendsync_auth::OptionalUser;
-
-#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
 use super::flash::{redirect_with_flash, FlashMessage};
+
+use crate::context::RequestContext;
 use chrono::Local;
 use uuid::Uuid;
 
-use calendsync_core::calendar::CalendarEntry;
+use calendsync_core::calendar::{CalendarEntry, User};
 use calendsync_core::storage::DateRange;
 use calendsync_ssr::{sanitize_error, SsrConfig, SsrError};
+
+/// User info subset for SSR props (serialized to frontend).
+///
+/// This is intentionally a **security projection** of `User` - it only includes
+/// fields safe to expose to the client (name, email). Sensitive fields like
+/// `id`, `provider`, `provider_subject`, and timestamps are excluded.
+///
+/// Matches the TypeScript `UserInfo` interface in `frontend/src/calendsync/types.ts`.
+#[derive(serde::Serialize)]
+struct SsrUserInfo {
+    name: String,
+    email: String,
+}
+
+impl From<&User> for SsrUserInfo {
+    fn from(user: &User) -> Self {
+        Self {
+            name: user.name.clone(),
+            email: user.email.clone(),
+        }
+    }
+}
 
 use super::entries::entry_to_server_entry;
 use crate::state::AppState;
@@ -315,11 +336,13 @@ fn error_html(
 #[axum::debug_handler]
 pub async fn calendar_react_ssr(
     State(state): State<AppState>,
+    ctx: RequestContext,
     Path(calendar_id): Path<Uuid>,
-    OptionalUser(user): OptionalUser,
 ) -> Response {
+    tracing::debug!(request_id = %ctx.request_id, "Rendering calendar");
+
     // Auth check: redirect to login if not authenticated
-    let user = match user {
+    let user = match ctx.user {
         Some(u) => u,
         None => {
             let path = format!("/calendar/{}", calendar_id);
@@ -339,19 +362,21 @@ pub async fn calendar_react_ssr(
                 tracing::warn!(
                     user_id = %user.id,
                     calendar_id = %calendar_id,
+                    request_id = %ctx.request_id,
                     "User attempted to access calendar without membership"
                 );
                 return redirect_to_first_calendar_with_flash(&state, user.id).await;
             }
             Err(e) => {
-                tracing::error!(error = %e, "Failed to check calendar membership");
+                tracing::error!(error = %e, request_id = %ctx.request_id, "Failed to check calendar membership");
                 // On error, still try to redirect to user's calendar
                 return redirect_to_first_calendar_with_flash(&state, user.id).await;
             }
         }
     }
 
-    calendar_react_ssr_impl(state, calendar_id).await
+    let user_info = Some(SsrUserInfo::from(&user));
+    calendar_react_ssr_impl(state, calendar_id, user_info).await
 }
 
 /// SSR handler for `/calendar/{calendar_id}` (no auth).
@@ -361,9 +386,11 @@ pub async fn calendar_react_ssr(
 #[axum::debug_handler]
 pub async fn calendar_react_ssr(
     State(state): State<AppState>,
+    ctx: RequestContext,
     Path(calendar_id): Path<Uuid>,
 ) -> Response {
-    calendar_react_ssr_impl(state, calendar_id).await
+    tracing::debug!(request_id = %ctx.request_id, "Rendering calendar");
+    calendar_react_ssr_impl(state, calendar_id, None).await
 }
 
 /// Redirect user to their first calendar with a flash message about no access.
@@ -400,7 +427,25 @@ async fn redirect_to_first_calendar_with_flash(state: &AppState, user_id: Uuid) 
 ///
 /// Renders the React calendar server-side using the SSR worker pool.
 /// If the calendar doesn't exist, shows an error page.
-async fn calendar_react_ssr_impl(state: AppState, calendar_id: Uuid) -> Response {
+///
+/// # Design Note: user_info Parameter
+///
+/// The `user_info` parameter is passed explicitly rather than stored in `AppState`
+/// because of axum's architecture separation:
+///
+/// - **`AppState`**: Holds application-scoped resources shared across all requests
+///   (repositories, SSR pool, event channels). Cloned for each request.
+///
+/// - **User info**: Request-scoped data extracted by authentication middleware via
+///   the `OptionalUser` extractor. Different for each request based on session.
+///
+/// This pattern is standard in axum - shared services in state, per-request auth
+/// data from extractors. The public handlers extract the user and pass it here.
+async fn calendar_react_ssr_impl(
+    state: AppState,
+    calendar_id: Uuid,
+    user_info: Option<SsrUserInfo>,
+) -> Response {
     // Get bundle URLs and dev mode early (needed for error pages)
     let urls = get_bundle_urls();
     let dev_mode = is_dev_mode();
@@ -502,6 +547,7 @@ async fn calendar_react_ssr_impl(state: AppState, calendar_id: Uuid) -> Response
         "cssBundleUrl": urls.css,
         "controlPlaneUrl": "",
         "devMode": dev_mode,
+        "user": user_info,
     });
 
     // Create SSR config (with payload size validation)
@@ -533,12 +579,14 @@ async fn calendar_react_ssr_impl(state: AppState, calendar_id: Uuid) -> Response
 #[axum::debug_handler]
 pub async fn calendar_react_ssr_entry(
     State(state): State<AppState>,
+    ctx: RequestContext,
     Path(calendar_id): Path<Uuid>,
     Query(query): Query<EntryModalQuery>,
-    OptionalUser(user): OptionalUser,
 ) -> Response {
+    tracing::debug!(request_id = %ctx.request_id, "Rendering calendar entry modal");
+
     // Auth check: redirect to login if not authenticated
-    let user = match user {
+    let user = match ctx.user {
         Some(u) => u,
         None => {
             // Include entry_id in return_to if present (for edit mode)
@@ -563,18 +611,20 @@ pub async fn calendar_react_ssr_entry(
                 tracing::warn!(
                     user_id = %user.id,
                     calendar_id = %calendar_id,
+                    request_id = %ctx.request_id,
                     "User attempted to access calendar entry without membership"
                 );
                 return redirect_to_first_calendar_with_flash(&state, user.id).await;
             }
             Err(e) => {
-                tracing::error!(error = %e, "Failed to check calendar membership");
+                tracing::error!(error = %e, request_id = %ctx.request_id, "Failed to check calendar membership");
                 return redirect_to_first_calendar_with_flash(&state, user.id).await;
             }
         }
     }
 
-    calendar_react_ssr_entry_impl(state, calendar_id, query).await
+    let user_info = Some(SsrUserInfo::from(&user));
+    calendar_react_ssr_entry_impl(state, calendar_id, query, user_info).await
 }
 
 /// SSR handler for `/calendar/{calendar_id}/entry` (no auth).
@@ -584,10 +634,12 @@ pub async fn calendar_react_ssr_entry(
 #[axum::debug_handler]
 pub async fn calendar_react_ssr_entry(
     State(state): State<AppState>,
+    ctx: RequestContext,
     Path(calendar_id): Path<Uuid>,
     Query(query): Query<EntryModalQuery>,
 ) -> Response {
-    calendar_react_ssr_entry_impl(state, calendar_id, query).await
+    tracing::debug!(request_id = %ctx.request_id, "Rendering calendar entry modal");
+    calendar_react_ssr_entry_impl(state, calendar_id, query, None).await
 }
 
 /// Implementation of SSR handler for `/calendar/{calendar_id}/entry`.
@@ -595,10 +647,14 @@ pub async fn calendar_react_ssr_entry(
 /// Renders the React calendar with entry modal open for creating or editing.
 /// - Without `entry_id` query param: Create mode (modal open with highlighted day)
 /// - With `entry_id=uuid` query param: Edit mode (modal open with entry data)
+///
+/// See `calendar_react_ssr_impl` for why `user_info` is a parameter (request-scoped
+/// auth data vs application-scoped state).
 async fn calendar_react_ssr_entry_impl(
     state: AppState,
     calendar_id: Uuid,
     query: EntryModalQuery,
+    user_info: Option<SsrUserInfo>,
 ) -> Response {
     // Get bundle URLs and dev mode early (needed for error pages)
     let urls = get_bundle_urls();
@@ -745,6 +801,7 @@ async fn calendar_react_ssr_entry_impl(
         "controlPlaneUrl": "",
         "modal": modal,
         "devMode": dev_mode,
+        "user": user_info,
     });
 
     // Create SSR config (with payload size validation)
