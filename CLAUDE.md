@@ -642,6 +642,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | Authentication       | `.claude/context/authentication.md`    |
 | OIDC Setup Guide     | `.claude/context/oidc-setup.md`        |
 | Lazy SSR Init        | `.claude/context/lazy-ssr-init.md`     |
+| User Profile Settings| `.claude/context/user-profile-settings.md` |
 
 ### Local Working Directories (gitignored)
 
