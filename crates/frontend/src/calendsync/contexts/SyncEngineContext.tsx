@@ -49,14 +49,13 @@ export function SyncEngineProvider({ children }: SyncEngineProviderProps) {
   const transport = useTransport()
   const engineRef = useRef<SyncEngine | null>(null)
 
-  // Create engine on first render
-  if (!engineRef.current) {
+  // Only create engine on client (requires IndexedDB)
+  if (typeof window !== "undefined" && !engineRef.current) {
     engineRef.current = new SyncEngine(db)
   }
 
-  // Initialize transport when available
-  // This is safe because transport from TransportProvider is stable
-  if (transport && !engineRef.current.hasTransport()) {
+  // Initialize transport when available (client-side only)
+  if (engineRef.current && transport && !engineRef.current.hasTransport()) {
     engineRef.current.initTransport(transport)
   }
 
@@ -77,20 +76,24 @@ export function SyncEngineProvider({ children }: SyncEngineProviderProps) {
  *
  * Must be used within a SyncEngineProvider.
  *
- * @throws Error if used outside of SyncEngineProvider
- * @returns The SyncEngine instance
+ * @throws Error if used outside of SyncEngineProvider (on client)
+ * @returns The SyncEngine instance, or null during SSR
  *
  * @example
  * ```tsx
  * function MyComponent() {
  *   const engine = useSyncEngineContext()
- *   // Use engine directly for low-level access
+ *   // Engine is null during SSR, check before use
+ *   if (engine) {
+ *     // Use engine for low-level access
+ *   }
  * }
  * ```
  */
-export function useSyncEngineContext(): SyncEngine {
+export function useSyncEngineContext(): SyncEngine | null {
   const engine = useContext(SyncEngineContext)
-  if (!engine) {
+  // During SSR, engine will be null - that's expected
+  if (typeof window !== "undefined" && !engine) {
     throw new Error("useSyncEngineContext must be used within a SyncEngineProvider")
   }
   return engine

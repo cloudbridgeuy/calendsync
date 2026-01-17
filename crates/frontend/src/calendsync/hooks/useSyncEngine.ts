@@ -75,10 +75,14 @@ export function useSyncEngine(): UseSyncEngineResult {
   const [lastError, setLastError] = useState<string | null>(null)
 
   // Use Dexie's liveQuery for reactive pending count (no polling needed)
+  // During SSR, this returns the initial value (0)
   const pendingCount = useLiveQuery(() => db.pending_operations.count(), [], 0) ?? 0
 
-  // Subscribe to engine state changes
+  // Subscribe to engine state changes (client-side only)
   useEffect(() => {
+    // During SSR, engine is null - skip subscription
+    if (!engine) return
+
     // Initial state
     setIsOnline(engine.getIsOnline())
     setIsSyncing(engine.getIsSyncing())
@@ -101,6 +105,10 @@ export function useSyncEngine(): UseSyncEngineResult {
       operation: PendingOperationType,
       payload: Partial<ServerEntry> | null,
     ): Promise<void> => {
+      if (!engine) {
+        throw new Error("SyncEngine not available during SSR")
+      }
+
       setLastError(null)
 
       try {
@@ -119,6 +127,10 @@ export function useSyncEngine(): UseSyncEngineResult {
    * Manually trigger sync.
    */
   const syncNow = useCallback(async (): Promise<void> => {
+    if (!engine) {
+      throw new Error("SyncEngine not available during SSR")
+    }
+
     setIsSyncing(true)
     try {
       await engine.syncPending()
