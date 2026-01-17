@@ -35,7 +35,7 @@ import { DayContainer } from "./DayContainer"
 import { EntryModal } from "./EntryModal"
 import { NotificationCenter } from "./NotificationCenter"
 import { ScheduleGrid } from "./ScheduleGrid"
-import { SettingsMenu } from "./SettingsMenu"
+import { SettingsMenuWrapper } from "./SettingsMenuWrapper"
 import { TodayButton } from "./TodayButton"
 
 interface CalendarProps {
@@ -362,6 +362,8 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
       isSyncing,
       offlineEnabled,
       getLocalEntry,
+      // User info
+      user: initialData.user,
     }),
     [
       flashStates,
@@ -401,6 +403,7 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
       offlineEnabled,
       getLocalEntry,
       sseReconnect,
+      initialData.user,
     ],
   )
 
@@ -413,31 +416,6 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
         {children}
       </div>
     </CalendarProvider>
-  )
-}
-
-/**
- * SettingsMenu wrapper sub-component
- */
-function SettingsMenuWrapper() {
-  const { settings, setViewMode, toggleShowTasks, setEntryStyle } = useCalendarContext()
-
-  return (
-    <SettingsMenu
-      viewMode={settings.viewMode}
-      showTasks={settings.showTasks}
-      entryStyle={settings.entryStyle}
-      onViewModeChange={setViewMode}
-      onToggleShowTasks={toggleShowTasks}
-      onEntryStyleChange={setEntryStyle}
-    >
-      <SettingsMenu.Trigger />
-      <SettingsMenu.Panel>
-        <SettingsMenu.ViewToggle />
-        <SettingsMenu.StyleToggle />
-        <SettingsMenu.TaskToggle />
-      </SettingsMenu.Panel>
-    </SettingsMenu>
   )
 }
 

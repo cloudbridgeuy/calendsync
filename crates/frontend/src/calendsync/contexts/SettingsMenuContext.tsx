@@ -6,6 +6,7 @@
 import { buildAriaIds } from "@core/calendar"
 import type { EntryStyle, ViewMode } from "@core/calendar/settings"
 import { createContext, useCallback, useContext, useId, useMemo, useState } from "react"
+import type { UserInfo } from "../types"
 
 /** Settings menu state */
 export interface SettingsMenuState {
@@ -17,6 +18,8 @@ export interface SettingsMenuState {
   showTasks: boolean
   /** Entry color style */
   entryStyle: EntryStyle
+  /** Logged-in user info */
+  user?: UserInfo
 }
 
 /** Settings menu actions */
@@ -31,6 +34,8 @@ export interface SettingsMenuActions {
   toggleShowTasks: () => void
   /** Set the entry color style */
   setEntryStyle: (style: EntryStyle) => void
+  /** Log out the current user */
+  logout: () => Promise<void>
 }
 
 /** Context value shared with settings menu sub-components */
@@ -61,12 +66,16 @@ export interface SettingsMenuProviderProps {
   showTasks: boolean
   /** Current entry style from calendar settings */
   entryStyle: EntryStyle
+  /** Logged-in user info */
+  user?: UserInfo
   /** Callback to set view mode */
   onViewModeChange: (mode: ViewMode) => void
   /** Callback to toggle showTasks */
   onToggleShowTasks: () => void
   /** Callback to set entry style */
   onEntryStyleChange: (style: EntryStyle) => void
+  /** Callback to log out */
+  onLogout: () => Promise<void>
 }
 
 /**
@@ -77,9 +86,11 @@ export function SettingsMenuProvider({
   viewMode,
   showTasks,
   entryStyle,
+  user,
   onViewModeChange,
   onToggleShowTasks,
   onEntryStyleChange,
+  onLogout,
 }: SettingsMenuProviderProps) {
   const id = useId()
   const { triggerId, contentId } = buildAriaIds(`settings-menu-${id}`)
@@ -92,24 +103,6 @@ export function SettingsMenuProvider({
   const close = useCallback(() => {
     setIsOpen(false)
   }, [])
-
-  const setViewMode = useCallback(
-    (mode: ViewMode) => {
-      onViewModeChange(mode)
-    },
-    [onViewModeChange],
-  )
-
-  const toggleShowTasks = useCallback(() => {
-    onToggleShowTasks()
-  }, [onToggleShowTasks])
-
-  const setEntryStyle = useCallback(
-    (style: EntryStyle) => {
-      onEntryStyleChange(style)
-    },
-    [onEntryStyleChange],
-  )
 
   // Ref callbacks for sub-components
   const panelRef = useCallback((_node: HTMLDivElement | null) => {
@@ -126,19 +119,21 @@ export function SettingsMenuProvider({
       viewMode,
       showTasks,
       entryStyle,
+      user,
     }),
-    [isOpen, viewMode, showTasks, entryStyle],
+    [isOpen, viewMode, showTasks, entryStyle, user],
   )
 
   const actions: SettingsMenuActions = useMemo(
     () => ({
       toggleOpen,
       close,
-      setViewMode,
-      toggleShowTasks,
-      setEntryStyle,
+      setViewMode: onViewModeChange,
+      toggleShowTasks: onToggleShowTasks,
+      setEntryStyle: onEntryStyleChange,
+      logout: onLogout,
     }),
-    [toggleOpen, close, setViewMode, toggleShowTasks, setEntryStyle],
+    [toggleOpen, close, onViewModeChange, onToggleShowTasks, onEntryStyleChange, onLogout],
   )
 
   const value = useMemo<SettingsMenuContextValue>(

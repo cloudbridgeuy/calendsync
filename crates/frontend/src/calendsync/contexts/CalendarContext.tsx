@@ -14,7 +14,7 @@ import type {
   NotificationCenterActions,
   NotificationCenterState,
 } from "../hooks"
-import type { FlashState, ModalState } from "../types"
+import type { FlashState, ModalState, UserInfo } from "../types"
 
 /** Context value shared with calendar sub-components */
 export interface CalendarContextValue {
@@ -119,6 +119,10 @@ export interface CalendarContextValue {
   offlineEnabled: boolean
   /** Get entry with local sync status (for displaying pending/conflict indicators) */
   getLocalEntry: (entryId: string) => LocalEntry | undefined
+
+  // User info
+  /** Logged-in user info (from SSR) */
+  user?: UserInfo
 }
 
 /** CalendarContext - null when not inside provider */

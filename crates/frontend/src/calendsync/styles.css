@@ -2086,6 +2086,51 @@ body {
   color: var(--text-primary);
 }
 
+/* Settings profile section */
+.settings-profile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0 1rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0.75rem;
+}
+
+.settings-profile-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.settings-profile-name {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.settings-profile-email {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.settings-logout-button {
+  align-self: flex-start;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
+}
+
+.settings-logout-button:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--text-secondary);
+}
+
 /* Mobile: full-width panel from bottom */
 @media (max-width: 767px) {
   .settings-backdrop {

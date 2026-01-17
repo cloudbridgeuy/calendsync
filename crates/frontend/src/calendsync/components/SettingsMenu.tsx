@@ -6,6 +6,8 @@
 import type { EntryStyle, ViewMode } from "@core/calendar/settings"
 import { useCallback, useEffect } from "react"
 import { SettingsMenuProvider, useSettingsMenuContext } from "../contexts/SettingsMenuContext"
+import type { UserInfo } from "../types"
+import { Profile as ProfileComponent } from "./Profile"
 
 // ============================================================================
 // Trigger Sub-Component
@@ -240,6 +242,19 @@ function StyleToggle() {
 }
 
 // ============================================================================
+// Profile Sub-Component
+// ============================================================================
+
+/**
+ * SettingsMenu.Profile - displays user name, email, and logout button.
+ * Wraps the standalone Profile component with context access.
+ */
+function Profile() {
+  const { state, actions } = useSettingsMenuContext()
+  return <ProfileComponent user={state.user} onLogout={actions.logout} />
+}
+
+// ============================================================================
 // Main Component + Compound Export
 // ============================================================================
 
@@ -250,12 +265,16 @@ interface SettingsMenuProps {
   showTasks: boolean
   /** Current entry style */
   entryStyle: EntryStyle
+  /** Logged-in user info */
+  user?: UserInfo
   /** Callback to change view mode */
   onViewModeChange: (mode: ViewMode) => void
   /** Callback to toggle showTasks */
   onToggleShowTasks: () => void
   /** Callback to change entry style */
   onEntryStyleChange: (style: EntryStyle) => void
+  /** Callback to log out */
+  onLogout: () => Promise<void>
   /** Children (sub-components) */
   children: React.ReactNode
 }
@@ -284,9 +303,11 @@ function SettingsMenuRoot({
   viewMode,
   showTasks,
   entryStyle,
+  user,
   onViewModeChange,
   onToggleShowTasks,
   onEntryStyleChange,
+  onLogout,
   children,
 }: SettingsMenuProps) {
   return (
@@ -294,9 +315,11 @@ function SettingsMenuRoot({
       viewMode={viewMode}
       showTasks={showTasks}
       entryStyle={entryStyle}
+      user={user}
       onViewModeChange={onViewModeChange}
       onToggleShowTasks={onToggleShowTasks}
       onEntryStyleChange={onEntryStyleChange}
+      onLogout={onLogout}
     >
       <div className="settings-menu">{children}</div>
     </SettingsMenuProvider>
@@ -307,6 +330,7 @@ function SettingsMenuRoot({
 export const SettingsMenu = Object.assign(SettingsMenuRoot, {
   Trigger,
   Panel,
+  Profile,
   ViewToggle,
   StyleToggle,
   TaskToggle,
