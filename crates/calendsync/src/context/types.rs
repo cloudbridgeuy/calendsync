@@ -42,4 +42,10 @@ pub struct RequestContext {
     pub user: Option<User>,
     /// Unique request identifier for tracing.
     pub request_id: RequestId,
+    /// Session ID from auth cookie (only sent to frontend in dev mode).
+    #[cfg_attr(
+        not(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock")),
+        allow(dead_code)
+    )]
+    pub session_id: Option<String>,
 }

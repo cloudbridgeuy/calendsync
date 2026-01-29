@@ -5,7 +5,7 @@
 
 use std::sync::Mutex;
 
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tauri_plugin_deep_link::DeepLinkExt;
 use tokio::sync::oneshot;
 use tracing::info;
@@ -81,6 +81,23 @@ pub fn run() {
                 if let Some(window) = app.get_webview_window("main") {
                     window.open_devtools();
                 }
+            }
+
+            // Check for dev session from environment variable
+            // This allows developers to transfer a session from the web app to the desktop app
+            // when deep links don't work (e.g., dev builds without URL scheme registration)
+            if let Ok(session_id) = std::env::var("CALENDSYNC_DEV_SESSION") {
+                info!("Dev session detected from environment variable");
+                let handle = app.handle().clone();
+                // Emit event for frontend to handle after a short delay.
+                // The delay ensures the React app has mounted and registered event listeners.
+                // Without this, the event may fire before the frontend is ready to receive it.
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                    if let Err(e) = handle.emit("dev-session-detected", session_id) {
+                        tracing::error!("Failed to emit dev-session-detected event: {}", e);
+                    }
+                });
             }
 
             // Check if the app was launched via a deep link

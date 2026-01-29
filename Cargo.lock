@@ -930,6 +930,7 @@ dependencies = [
  "aws-config",
  "aws-sdk-dynamodb",
  "axum",
+ "axum-extra",
  "calendsync_auth",
  "calendsync_core",
  "calendsync_frontend",

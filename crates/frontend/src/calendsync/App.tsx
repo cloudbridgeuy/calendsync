@@ -3,7 +3,7 @@
  * Renders the full HTML document for SSR.
  */
 
-import { Calendar } from "./components"
+import { Calendar, DevMenu } from "./components"
 import { FlashMessage } from "./components/FlashMessage"
 import type { InitialData } from "./types"
 
@@ -28,26 +28,8 @@ export function App({ initialData }: AppProps) {
         {/* Flash message for server-to-client notifications */}
         <FlashMessage />
 
-        {/* Dev mode indicator badge */}
-        {initialData.devMode && (
-          <div
-            style={{
-              position: "fixed",
-              top: "8px",
-              right: "8px",
-              background: "#ef4444",
-              color: "white",
-              padding: "4px 8px",
-              borderRadius: "4px",
-              fontSize: "12px",
-              fontWeight: "bold",
-              zIndex: 9999,
-              fontFamily: "system-ui, sans-serif",
-            }}
-          >
-            DEV
-          </div>
-        )}
+        {/* Dev mode menu with tools */}
+        <DevMenu initialData={initialData} />
 
         <Calendar initialData={initialData}>
           <Calendar.Header />

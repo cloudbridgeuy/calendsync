@@ -29,9 +29,9 @@ redis = ["dep:redis", "dep:futures-util"]
 inmemory = []
 
 # Auth feature flags
-auth-sqlite = ["dep:calendsync_auth", "calendsync_auth/sqlite", "dep:sqlx", "dep:urlencoding"]
-auth-redis = ["dep:calendsync_auth", "calendsync_auth/redis", "dep:fred", "dep:urlencoding"]
-auth-mock = ["dep:calendsync_auth", "calendsync_auth/mock", "dep:urlencoding"]
+auth-sqlite = ["dep:calendsync_auth", "calendsync_auth/sqlite", "dep:sqlx", "dep:urlencoding", "dep:axum-extra"]
+auth-redis = ["dep:calendsync_auth", "calendsync_auth/redis", "dep:fred", "dep:urlencoding", "dep:axum-extra"]
+auth-mock = ["dep:calendsync_auth", "calendsync_auth/mock", "dep:urlencoding", "dep:axum-extra"]
 
 [dependencies]
 # Internal dependencies
@@ -77,6 +77,9 @@ fred = { workspace = true, optional = true }
 
 # URL encoding for auth redirects (optional)
 urlencoding = { workspace = true, optional = true }
+
+# Cookie extraction for session ID (auth features only)
+axum-extra = { workspace = true, optional = true }
 
 # LRU cache
 lru = { workspace = true }

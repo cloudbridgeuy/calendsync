@@ -13,6 +13,8 @@ use super::types::{RequestContext, RequestId};
 #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
 use axum::extract::FromRef;
 #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+use axum_extra::extract::CookieJar;
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
 use calendsync_auth::{AuthState, OptionalUser};
 
 fn extract_request_id(headers: &HeaderMap) -> RequestId {
@@ -39,7 +41,18 @@ where
 
         let request_id = extract_request_id(&parts.headers);
 
-        Ok(RequestContext { user, request_id })
+        // Extract session ID from cookie for dev tools
+        let auth_state = AuthState::from_ref(state);
+        let jar = CookieJar::from_headers(&parts.headers);
+        let session_id = jar
+            .get(&auth_state.config.cookie_name)
+            .map(|cookie| cookie.value().to_string());
+
+        Ok(RequestContext {
+            user,
+            request_id,
+            session_id,
+        })
     }
 }
 
@@ -55,6 +68,7 @@ where
         Ok(RequestContext {
             user: None,
             request_id,
+            session_id: None,
         })
     }
 }
