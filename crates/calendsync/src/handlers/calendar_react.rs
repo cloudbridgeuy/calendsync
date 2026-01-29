@@ -71,6 +71,127 @@ struct BundleUrls {
     css: String,
 }
 
+/// Common data prepared for SSR rendering.
+/// Extracted to reduce duplication between calendar view and entry modal handlers.
+struct SsrPreparedData {
+    urls: BundleUrls,
+    dev_mode: bool,
+    ssr_pool: Arc<SsrPool>,
+    highlighted_day: String,
+    days: Vec<serde_json::Value>,
+}
+
+/// Prepare common SSR data: fetch calendar, validate, get entries.
+///
+/// This extracts the common setup logic shared between `calendar_react_ssr_impl`
+/// and `calendar_react_ssr_entry_impl` to avoid code duplication.
+async fn prepare_ssr_data(
+    state: &AppState,
+    calendar_id: Uuid,
+) -> Result<SsrPreparedData, Response> {
+    let urls = get_bundle_urls();
+    let dev_mode = is_dev_mode();
+
+    // Validate calendar exists
+    match state.calendar_repo.get_calendar(calendar_id).await {
+        Ok(Some(_)) => {} // Calendar exists, continue
+        Ok(None) => {
+            tracing::warn!(calendar_id = %calendar_id, "Calendar not found");
+            return Err(Html(error_html(
+                "Calendar not found",
+                &calendar_id.to_string(),
+                &urls.client_js,
+                &urls.css,
+                dev_mode,
+            ))
+            .into_response());
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to fetch calendar");
+            return Err(Html(error_html(
+                &format!("Failed to load calendar: {e}"),
+                &calendar_id.to_string(),
+                &urls.client_js,
+                &urls.css,
+                dev_mode,
+            ))
+            .into_response());
+        }
+    };
+
+    // Check if SSR pool is available (async for lazy initialization support)
+    let ssr_pool = match state.get_ssr_pool().await {
+        Some(pool) => pool,
+        None => {
+            // SSR still initializing - return 503 with retry hint
+            tracing::info!("SSR pool still initializing, returning 503");
+            return Err((
+                StatusCode::SERVICE_UNAVAILABLE,
+                [("Retry-After", "5")],
+                Html(initializing_html(
+                    "Calendar Loading",
+                    "The calendar view is initializing. Please refresh in a few seconds.",
+                )),
+            )
+                .into_response());
+        }
+    };
+
+    // Get today's date as the highlighted day
+    let today = Local::now().date_naive();
+    let highlighted_day = today.to_string();
+
+    // Calculate date range (before=365, after=365)
+    let start = today - chrono::Duration::days(365);
+    let end = today + chrono::Duration::days(365);
+
+    // Fetch entries for the date range
+    let date_range = match DateRange::new(start, end) {
+        Ok(range) => range,
+        Err(e) => {
+            tracing::error!(error = %e, "Invalid date range");
+            return Err(Html(error_html(
+                "Invalid date range",
+                &calendar_id.to_string(),
+                &urls.client_js,
+                &urls.css,
+                dev_mode,
+            ))
+            .into_response());
+        }
+    };
+
+    let entries = match state
+        .entry_repo
+        .get_entries_by_calendar(calendar_id, date_range)
+        .await
+    {
+        Ok(entries) => entries,
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to fetch entries");
+            return Err(Html(error_html(
+                &format!("Failed to load entries: {e}"),
+                &calendar_id.to_string(),
+                &urls.client_js,
+                &urls.css,
+                dev_mode,
+            ))
+            .into_response());
+        }
+    };
+
+    let entry_refs: Vec<&CalendarEntry> = entries.iter().collect();
+    let days = entries_to_server_days(&entry_refs, start, end);
+
+    Ok(SsrPreparedData {
+        urls,
+        dev_mode,
+        ssr_pool,
+        highlighted_day,
+        days,
+    })
+}
+
 /// Get bundle URLs from the manifest.
 ///
 /// In dev mode (DEV_MODE env var set), reads manifest from disk to pick up
@@ -376,7 +497,7 @@ pub async fn calendar_react_ssr(
     }
 
     let user_info = Some(SsrUserInfo::from(&user));
-    calendar_react_ssr_impl(state, calendar_id, user_info).await
+    calendar_react_ssr_impl(state, calendar_id, user_info, ctx.session_id).await
 }
 
 /// SSR handler for `/calendar/{calendar_id}` (no auth).
@@ -390,7 +511,7 @@ pub async fn calendar_react_ssr(
     Path(calendar_id): Path<Uuid>,
 ) -> Response {
     tracing::debug!(request_id = %ctx.request_id, "Rendering calendar");
-    calendar_react_ssr_impl(state, calendar_id, None).await
+    calendar_react_ssr_impl(state, calendar_id, None, None).await
 }
 
 /// Redirect user to their first calendar with a flash message about no access.
@@ -445,109 +566,32 @@ async fn calendar_react_ssr_impl(
     state: AppState,
     calendar_id: Uuid,
     user_info: Option<SsrUserInfo>,
+    session_id: Option<String>,
 ) -> Response {
-    // Get bundle URLs and dev mode early (needed for error pages)
-    let urls = get_bundle_urls();
-    let dev_mode = is_dev_mode();
-
-    // Validate calendar exists
-    let calendar = match state.calendar_repo.get_calendar(calendar_id).await {
-        Ok(Some(cal)) => cal,
-        Ok(None) => {
-            tracing::warn!(calendar_id = %calendar_id, "Calendar not found");
-            return Html(error_html(
-                "Calendar not found",
-                &calendar_id.to_string(),
-                &urls.client_js,
-                &urls.css,
-                dev_mode,
-            ))
-            .into_response();
-        }
-        Err(e) => {
-            tracing::error!(error = %e, "Failed to fetch calendar");
-            return Html(error_html(
-                &format!("Failed to load calendar: {e}"),
-                &calendar_id.to_string(),
-                &urls.client_js,
-                &urls.css,
-                dev_mode,
-            ))
-            .into_response();
-        }
+    // Prepare common SSR data (calendar validation, SSR pool, entries)
+    let data = match prepare_ssr_data(&state, calendar_id).await {
+        Ok(d) => d,
+        Err(response) => return response,
     };
-
-    // Check if SSR pool is available (async for lazy initialization support)
-    let Some(ssr_pool) = state.get_ssr_pool().await else {
-        // SSR still initializing - return 503 with retry hint
-        tracing::info!("SSR pool still initializing, returning 503");
-        return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            [("Retry-After", "5")],
-            Html(initializing_html(
-                "Calendar Loading",
-                "The calendar view is initializing. Please refresh in a few seconds.",
-            )),
-        )
-            .into_response();
-    };
-
-    // Get today's date as the highlighted day
-    let today = Local::now().date_naive();
-    let highlighted_day = today.to_string();
-
-    // Calculate date range (before=365, after=365)
-    let start = today - chrono::Duration::days(365);
-    let end = today + chrono::Duration::days(365);
-
-    // Fetch entries for the date range
-    let date_range = match DateRange::new(start, end) {
-        Ok(range) => range,
-        Err(e) => {
-            tracing::error!(error = %e, "Invalid date range");
-            return Html(error_html(
-                "Invalid date range",
-                &calendar_id.to_string(),
-                &urls.client_js,
-                &urls.css,
-                dev_mode,
-            ))
-            .into_response();
-        }
-    };
-
-    let entries = match state
-        .entry_repo
-        .get_entries_by_calendar(calendar.id, date_range)
-        .await
-    {
-        Ok(entries) => entries,
-        Err(e) => {
-            tracing::error!(error = %e, "Failed to fetch entries");
-            return Html(error_html(
-                &format!("Failed to load entries: {e}"),
-                &calendar_id.to_string(),
-                &urls.client_js,
-                &urls.css,
-                dev_mode,
-            ))
-            .into_response();
-        }
-    };
-
-    let entry_refs: Vec<&CalendarEntry> = entries.iter().collect();
-    let days = entries_to_server_days(&entry_refs, start, end);
 
     // Build initial data for SSR
+    // Session ID is only included in dev mode for dev tools
+    // Double-check with cfg!(debug_assertions) to prevent accidental production exposure
+    let session_id_for_ssr = if cfg!(debug_assertions) && data.dev_mode {
+        session_id
+    } else {
+        None
+    };
     let initial_data = serde_json::json!({
         "calendarId": calendar_id.to_string(),
-        "highlightedDay": highlighted_day,
-        "days": days,
-        "clientBundleUrl": urls.client_js,
-        "cssBundleUrl": urls.css,
+        "highlightedDay": data.highlighted_day,
+        "days": data.days,
+        "clientBundleUrl": data.urls.client_js,
+        "cssBundleUrl": data.urls.css,
         "controlPlaneUrl": "",
-        "devMode": dev_mode,
+        "devMode": data.dev_mode,
         "user": user_info,
+        "sessionId": session_id_for_ssr,
     });
 
     // Create SSR config (with payload size validation)
@@ -558,16 +602,23 @@ async fn calendar_react_ssr_impl(
             return Html(error_html(
                 &sanitize_error(&SsrError::Core(e)),
                 &calendar_id.to_string(),
-                &urls.client_js,
-                &urls.css,
-                dev_mode,
+                &data.urls.client_js,
+                &data.urls.css,
+                data.dev_mode,
             ))
             .into_response();
         }
     };
 
     // Render using SSR pool
-    render_with_ssr_pool(&ssr_pool, config, &calendar_id.to_string(), &urls, dev_mode).await
+    render_with_ssr_pool(
+        &data.ssr_pool,
+        config,
+        &calendar_id.to_string(),
+        &data.urls,
+        data.dev_mode,
+    )
+    .await
 }
 
 /// SSR handler for `/calendar/{calendar_id}/entry` (with auth check).
@@ -624,7 +675,7 @@ pub async fn calendar_react_ssr_entry(
     }
 
     let user_info = Some(SsrUserInfo::from(&user));
-    calendar_react_ssr_entry_impl(state, calendar_id, query, user_info).await
+    calendar_react_ssr_entry_impl(state, calendar_id, query, user_info, ctx.session_id).await
 }
 
 /// SSR handler for `/calendar/{calendar_id}/entry` (no auth).
@@ -639,7 +690,7 @@ pub async fn calendar_react_ssr_entry(
     Query(query): Query<EntryModalQuery>,
 ) -> Response {
     tracing::debug!(request_id = %ctx.request_id, "Rendering calendar entry modal");
-    calendar_react_ssr_entry_impl(state, calendar_id, query, None).await
+    calendar_react_ssr_entry_impl(state, calendar_id, query, None, None).await
 }
 
 /// Implementation of SSR handler for `/calendar/{calendar_id}/entry`.
@@ -655,98 +706,13 @@ async fn calendar_react_ssr_entry_impl(
     calendar_id: Uuid,
     query: EntryModalQuery,
     user_info: Option<SsrUserInfo>,
+    session_id: Option<String>,
 ) -> Response {
-    // Get bundle URLs and dev mode early (needed for error pages)
-    let urls = get_bundle_urls();
-    let dev_mode = is_dev_mode();
-
-    // Validate calendar exists
-    let calendar = match state.calendar_repo.get_calendar(calendar_id).await {
-        Ok(Some(cal)) => cal,
-        Ok(None) => {
-            tracing::warn!(calendar_id = %calendar_id, "Calendar not found");
-            return Html(error_html(
-                "Calendar not found",
-                &calendar_id.to_string(),
-                &urls.client_js,
-                &urls.css,
-                dev_mode,
-            ))
-            .into_response();
-        }
-        Err(e) => {
-            tracing::error!(error = %e, "Failed to fetch calendar");
-            return Html(error_html(
-                &format!("Failed to load calendar: {e}"),
-                &calendar_id.to_string(),
-                &urls.client_js,
-                &urls.css,
-                dev_mode,
-            ))
-            .into_response();
-        }
+    // Prepare common SSR data (calendar validation, SSR pool, entries)
+    let data = match prepare_ssr_data(&state, calendar_id).await {
+        Ok(d) => d,
+        Err(response) => return response,
     };
-
-    // Check if SSR pool is available (async for lazy initialization support)
-    let Some(ssr_pool) = state.get_ssr_pool().await else {
-        // SSR still initializing - return 503 with retry hint
-        tracing::info!("SSR pool still initializing, returning 503");
-        return (
-            StatusCode::SERVICE_UNAVAILABLE,
-            [("Retry-After", "5")],
-            Html(initializing_html(
-                "Calendar Loading",
-                "The calendar view is initializing. Please refresh in a few seconds.",
-            )),
-        )
-            .into_response();
-    };
-
-    // Get today's date as the highlighted day
-    let today = Local::now().date_naive();
-    let highlighted_day = today.to_string();
-
-    // Calculate date range (before=365, after=365)
-    let start = today - chrono::Duration::days(365);
-    let end = today + chrono::Duration::days(365);
-
-    // Fetch entries for the date range
-    let date_range = match DateRange::new(start, end) {
-        Ok(range) => range,
-        Err(e) => {
-            tracing::error!(error = %e, "Invalid date range");
-            return Html(error_html(
-                "Invalid date range",
-                &calendar_id.to_string(),
-                &urls.client_js,
-                &urls.css,
-                dev_mode,
-            ))
-            .into_response();
-        }
-    };
-
-    let entries = match state
-        .entry_repo
-        .get_entries_by_calendar(calendar.id, date_range)
-        .await
-    {
-        Ok(entries) => entries,
-        Err(e) => {
-            tracing::error!(error = %e, "Failed to fetch entries");
-            return Html(error_html(
-                &format!("Failed to load entries: {e}"),
-                &calendar_id.to_string(),
-                &urls.client_js,
-                &urls.css,
-                dev_mode,
-            ))
-            .into_response();
-        }
-    };
-
-    let entry_refs: Vec<&CalendarEntry> = entries.iter().collect();
-    let days = entries_to_server_days(&entry_refs, start, end);
 
     // Build modal state based on query params
     let modal = if let Some(entry_id) = query.entry_id {
@@ -764,9 +730,9 @@ async fn calendar_react_ssr_entry_impl(
                     Html(error_html(
                         "Entry not found",
                         &calendar_id.to_string(),
-                        &urls.client_js,
-                        &urls.css,
-                        dev_mode,
+                        &data.urls.client_js,
+                        &data.urls.css,
+                        data.dev_mode,
                     )),
                 )
                     .into_response();
@@ -776,9 +742,9 @@ async fn calendar_react_ssr_entry_impl(
                 return Html(error_html(
                     &format!("Failed to load entry: {e}"),
                     &calendar_id.to_string(),
-                    &urls.client_js,
-                    &urls.css,
-                    dev_mode,
+                    &data.urls.client_js,
+                    &data.urls.css,
+                    data.dev_mode,
                 ))
                 .into_response();
             }
@@ -787,21 +753,29 @@ async fn calendar_react_ssr_entry_impl(
         // Create mode: pre-fill with highlighted day
         serde_json::json!({
             "mode": "create",
-            "defaultDate": highlighted_day,
+            "defaultDate": data.highlighted_day,
         })
     };
 
     // Build initial data for SSR with modal state
+    // Session ID is only included in dev mode for dev tools
+    // Double-check with cfg!(debug_assertions) to prevent accidental production exposure
+    let session_id_for_ssr = if cfg!(debug_assertions) && data.dev_mode {
+        session_id
+    } else {
+        None
+    };
     let initial_data = serde_json::json!({
         "calendarId": calendar_id.to_string(),
-        "highlightedDay": highlighted_day,
-        "days": days,
-        "clientBundleUrl": urls.client_js,
-        "cssBundleUrl": urls.css,
+        "highlightedDay": data.highlighted_day,
+        "days": data.days,
+        "clientBundleUrl": data.urls.client_js,
+        "cssBundleUrl": data.urls.css,
         "controlPlaneUrl": "",
         "modal": modal,
-        "devMode": dev_mode,
+        "devMode": data.dev_mode,
         "user": user_info,
+        "sessionId": session_id_for_ssr,
     });
 
     // Create SSR config (with payload size validation)
@@ -812,16 +786,23 @@ async fn calendar_react_ssr_entry_impl(
             return Html(error_html(
                 &sanitize_error(&SsrError::Core(e)),
                 &calendar_id.to_string(),
-                &urls.client_js,
-                &urls.css,
-                dev_mode,
+                &data.urls.client_js,
+                &data.urls.css,
+                data.dev_mode,
             ))
             .into_response();
         }
     };
 
     // Render using SSR pool
-    render_with_ssr_pool(&ssr_pool, config, &calendar_id.to_string(), &urls, dev_mode).await
+    render_with_ssr_pool(
+        &data.ssr_pool,
+        config,
+        &calendar_id.to_string(),
+        &data.urls,
+        data.dev_mode,
+    )
+    .await
 }
 
 /// Helper to render with SSR pool and handle errors consistently.
