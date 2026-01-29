@@ -254,3 +254,43 @@ export function deriveEntryTypeFromFlags(entry: {
   if (entry.isMultiDay) return "multi_day"
   return "all_day"
 }
+
+/**
+ * Update an entry in the cache, handling date changes.
+ *
+ * This function:
+ * 1. Removes the entry from any existing date (in case the date changed)
+ * 2. Adds/updates the entry at its current startDate
+ *
+ * @param cache - The current entry cache
+ * @param entry - The entry to update
+ * @returns A new Map with the entry updated
+ */
+export function updateEntryInCache(
+  cache: Map<string, ServerEntry[]>,
+  entry: ServerEntry,
+): Map<string, ServerEntry[]> {
+  const next = new Map(cache)
+  const date = entry.startDate
+
+  // First, remove the entry from any existing date (in case date changed)
+  for (const [key, entries] of next.entries()) {
+    const filtered = entries.filter((e) => e.id !== entry.id)
+    if (filtered.length !== entries.length) {
+      next.set(key, filtered)
+    }
+  }
+
+  // Then add/update at the correct date
+  const existing = next.get(date) || []
+  const index = existing.findIndex((e) => e.id === entry.id)
+  if (index >= 0) {
+    const updated = [...existing]
+    updated[index] = entry
+    next.set(date, updated)
+  } else {
+    next.set(date, [...existing, entry])
+  }
+
+  return next
+}
