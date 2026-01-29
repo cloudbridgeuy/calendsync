@@ -45,7 +45,7 @@ export function useAppInit(options: UseAppInitOptions) {
         await loadCalendar()
       } catch (e) {
         if (mounted) {
-          setError(`Failed to initialize: ${e}`)
+          setError(`Failed to initialize: ${e instanceof Error ? e.message : String(e)}`)
           setView("login")
         }
       }
@@ -90,7 +90,7 @@ export function useAppInit(options: UseAppInitOptions) {
           setView("calendar")
         }
       } catch (e: unknown) {
-        const error = e as Error
+        const error = e instanceof Error ? e : new Error(String(e))
         if (error.message === "UNAUTHORIZED") {
           await transport.clearSession()
           if (mounted) {
@@ -131,12 +131,44 @@ export function useAppInit(options: UseAppInitOptions) {
       if (mounted) setError(`Authentication failed: ${event.payload.error}`)
     })
 
+    // Listen for dev session from environment variable
+    // This is used to transfer a session from web app to desktop app in dev mode
+    const unlistenDevSessionPromise = listen<string>("dev-session-detected", async (event) => {
+      if (!mounted) return
+      const sessionId = event.payload
+      console.log("[Dev] Dev session detected from environment")
+
+      try {
+        // Save the session
+        await transport.setSession(sessionId)
+        setSession(sessionId)
+
+        // Validate it works
+        const isValid = await transport.validateSession()
+        if (!isValid) {
+          console.warn("[Dev] Dev session is invalid or expired")
+          setError("Dev session is invalid or expired. Please log in again via web.")
+          await transport.clearSession()
+          setSession(null)
+          setView("login")
+          return
+        }
+
+        // Load the calendar
+        await loadCalendar()
+      } catch (e) {
+        console.error("[Dev] Failed to use dev session:", e)
+        setError(`Failed to use dev session: ${e instanceof Error ? e.message : String(e)}`)
+      }
+    })
+
     init()
 
     return () => {
       mounted = false
       unlistenCodePromise.then((fn) => fn())
       unlistenErrorPromise.then((fn) => fn())
+      unlistenDevSessionPromise.then((fn) => fn())
     }
   }, [transport, setView, setSession, setCalendar, setError])
 }
