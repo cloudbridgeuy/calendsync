@@ -71,6 +71,8 @@ export interface InitialData {
   sseEnabled?: boolean
   /** Logged-in user info (from SSR) */
   user?: UserInfo
+  /** Session ID for dev tools (only in dev mode) */
+  sessionId?: string
 }
 
 /**
@@ -81,29 +83,15 @@ export interface CalendarProps {
   initialData: InitialData
 }
 
-/** Entry change type for flash animations */
-export type EntryChangeType = "added" | "updated" | "deleted"
-
-/** Toast notification for entry changes */
-export interface Toast {
-  id: string
-  type: EntryChangeType
-  title: string
-  timestamp: number
-}
-
-/** Flash state for entry animations */
-export type FlashState = "added" | "updated" | "deleted"
-
-/** Notification type for notification center */
-export type NotificationType = "added" | "updated" | "deleted"
+/** Represents the type of change for entries, notifications, and flash states */
+export type ChangeType = "added" | "updated" | "deleted"
 
 /** Notification stored in the notification center */
 export interface Notification {
   /** Unique notification ID */
   id: string
   /** Type of change */
-  type: NotificationType
+  type: ChangeType
   /** ID of the entry that changed */
   entryId: string
   /** Title of the entry that changed */
@@ -119,7 +107,7 @@ export interface Notification {
 /** Toast notification data */
 export interface ToastData {
   id: string
-  type: FlashState
+  type: ChangeType
   title: string
   date: string
 }
@@ -139,7 +127,7 @@ export interface CalendarState {
   /** Error message if data loading failed */
   error: string | null
   /** Map of entry IDs to their flash animation state */
-  flashStates: Map<string, FlashState>
+  flashStates: Map<string, ChangeType>
   /** Active toast notifications */
   toasts: ToastData[]
 }

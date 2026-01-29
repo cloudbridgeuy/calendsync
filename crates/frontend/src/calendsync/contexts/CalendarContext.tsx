@@ -14,13 +14,13 @@ import type {
   NotificationCenterActions,
   NotificationCenterState,
 } from "../hooks"
-import type { FlashState, ModalState, UserInfo } from "../types"
+import type { ChangeType, ModalState, UserInfo } from "../types"
 
 /** Context value shared with calendar sub-components */
 export interface CalendarContextValue {
   // Existing - entry display
   /** Map of entry IDs to their flash animation state */
-  flashStates: Map<string, FlashState>
+  flashStates: Map<string, ChangeType>
   /** Callback when an entry is clicked (opens edit modal) */
   onEntryClick: (entry: ServerEntry) => void
   /** Callback when a task entry checkbox is toggled */

@@ -3,7 +3,7 @@
  * No side effects (localStorage operations happen in the imperative shell).
  */
 
-import type { Notification, NotificationType } from "@calendsync/types"
+import type { ChangeType, Notification } from "@calendsync/types"
 
 /** localStorage key prefix for notifications */
 export const NOTIFICATION_STORAGE_PREFIX = "calendsync_notifications_"
@@ -15,7 +15,7 @@ export const MAX_NOTIFICATIONS = 50
  * Create a new notification.
  */
 export function createNotification(
-  type: NotificationType,
+  type: ChangeType,
   entryId: string,
   entryTitle: string,
   date: string,
@@ -137,7 +137,7 @@ export function formatNotificationTime(timestamp: number): string {
 /**
  * Get the icon for a notification type.
  */
-export function getNotificationIcon(type: NotificationType): string {
+export function getNotificationIcon(type: ChangeType): string {
   switch (type) {
     case "added":
       return "+"
@@ -151,7 +151,7 @@ export function getNotificationIcon(type: NotificationType): string {
 /**
  * Get a human-readable label for a notification type.
  */
-export function getNotificationLabel(type: NotificationType): string {
+export function getNotificationLabel(type: ChangeType): string {
   switch (type) {
     case "added":
       return "Added"

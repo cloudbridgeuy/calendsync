@@ -7,13 +7,13 @@ import { formatNotificationTime, getNotificationLabel } from "@core/calendar"
 import { useCallback, useEffect } from "react"
 import { NotificationCenterProvider, useNotificationContext } from "../contexts/NotificationContext"
 import type { NotificationCenterActions, NotificationCenterState } from "../hooks"
-import type { Notification, NotificationType } from "../types"
+import type { ChangeType, Notification } from "../types"
 
 /**
  * Get SVG icon for notification type.
  * These are decorative icons - the notification type is already conveyed via the label text.
  */
-function NotificationIcon({ type }: { type: NotificationType }) {
+function NotificationIcon({ type }: { type: ChangeType }) {
   switch (type) {
     case "added":
       return (

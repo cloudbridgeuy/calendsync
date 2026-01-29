@@ -15,7 +15,7 @@ import {
   serializeNotifications,
 } from "@core/calendar/notifications"
 import { useCallback, useEffect, useMemo, useState } from "react"
-import type { Notification, NotificationType } from "../types"
+import type { ChangeType, Notification } from "../types"
 
 /** Configuration for useNotificationCenter hook */
 export interface UseNotificationCenterConfig {
@@ -51,7 +51,7 @@ export interface NotificationCenterActions {
 
 /** Function to add a new notification */
 export type AddNotificationFn = (
-  type: NotificationType,
+  type: ChangeType,
   entryId: string,
   entryTitle: string,
   date: string,

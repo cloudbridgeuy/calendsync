@@ -19,22 +19,15 @@
  * @see .claude/context/offline-first.md
  */
 
-import { addDays, formatDateKey, isSameDay } from "@core/calendar/dates"
-import { mergeEntryCache, serverDaysToMap } from "@core/calendar/entries"
+import { addDays, formatDateKey, isSameDay, parseDateKey } from "@core/calendar/dates"
+import { mergeEntryCache, serverDaysToMap, updateEntryInCache } from "@core/calendar/entries"
 import { calculateVisibleDays } from "@core/calendar/layout"
 import type { ServerEntry } from "@core/calendar/types"
 import type { SseConnectionState } from "@core/sse/types"
 import { useTransport } from "@core/transport"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
-import type {
-  CalendarActions,
-  CalendarState,
-  FlashState,
-  InitialData,
-  NotificationType,
-  ToastData,
-} from "../types"
+import type { CalendarActions, CalendarState, ChangeType, InitialData, ToastData } from "../types"
 
 /** Number of days prefetched from server (before and after highlighted day) */
 const PREFETCH_DAYS = 365
@@ -55,14 +48,6 @@ function generateToastId(): string {
 }
 
 /**
- * Parse a date string (YYYY-MM-DD) to a Date object at midnight local time.
- */
-function parseDateKey(dateKey: string): Date {
-  const [year, month, day] = dateKey.split("-").map(Number)
-  return new Date(year, month - 1, day)
-}
-
-/**
  * Calculate the number of days between two dates.
  */
 function daysBetween(a: Date, b: Date): number {
@@ -75,12 +60,7 @@ export interface UseCalendarStateConfig {
   /** Initial data from SSR */
   initialData: InitialData
   /** Optional callback when entry changes occur (for notification center) */
-  onNotification?: (
-    type: NotificationType,
-    entryId: string,
-    entryTitle: string,
-    date: string,
-  ) => void
+  onNotification?: (type: ChangeType, entryId: string, entryTitle: string, date: string) => void
 }
 
 /**
@@ -129,7 +109,7 @@ export function useCalendarState(config: UseCalendarStateConfig): [CalendarState
   const [error, setError] = useState<string | null>(null)
 
   // Flash states for entry animations
-  const [flashStates, setFlashStates] = useState<Map<string, FlashState>>(() => new Map())
+  const [flashStates, setFlashStates] = useState<Map<string, ChangeType>>(() => new Map())
 
   // Toast notifications
   const [toasts, setToasts] = useState<ToastData[]>([])
@@ -155,7 +135,7 @@ export function useCalendarState(config: UseCalendarStateConfig): [CalendarState
   /**
    * Add a flash state for an entry.
    */
-  const addFlashState = useCallback((entryId: string, state: FlashState) => {
+  const addFlashState = useCallback((entryId: string, state: ChangeType) => {
     setFlashStates((prev) => {
       const next = new Map(prev)
       next.set(entryId, state)
@@ -175,7 +155,7 @@ export function useCalendarState(config: UseCalendarStateConfig): [CalendarState
   /**
    * Add a toast notification.
    */
-  const addToast = useCallback((type: FlashState, title: string, date: string) => {
+  const addToast = useCallback((type: ChangeType, title: string, date: string) => {
     const id = generateToastId()
     const toast: ToastData = { id, type, title, date }
 
@@ -225,31 +205,8 @@ export function useCalendarState(config: UseCalendarStateConfig): [CalendarState
    */
   const handleEntryUpdated = useCallback(
     (entry: ServerEntry, date: string) => {
-      // Update cache
-      setEntryCache((prev) => {
-        const next = new Map(prev)
-
-        // First, remove the entry from any existing date (in case date changed)
-        for (const [key, entries] of next.entries()) {
-          const filtered = entries.filter((e) => e.id !== entry.id)
-          if (filtered.length !== entries.length) {
-            next.set(key, filtered)
-          }
-        }
-
-        // Then add/update at the correct date
-        const existing = next.get(date) || []
-        const index = existing.findIndex((e) => e.id === entry.id)
-        if (index >= 0) {
-          const updated = [...existing]
-          updated[index] = entry
-          next.set(date, updated)
-        } else {
-          next.set(date, [...existing, entry])
-        }
-
-        return next
-      })
+      // Update cache using pure helper function
+      setEntryCache((prev) => updateEntryInCache(prev, entry))
 
       // Add flash animation and toast
       addFlashState(entry.id, "updated")
@@ -446,31 +403,8 @@ export function useCalendarState(config: UseCalendarStateConfig): [CalendarState
    * SSE handler will reconcile if server data differs.
    */
   const updateEntryOptimistic = useCallback((entry: ServerEntry) => {
-    const date = entry.startDate
-    setEntryCache((prev) => {
-      const next = new Map(prev)
-
-      // First, remove the entry from any existing date (in case date changed)
-      for (const [key, entries] of next.entries()) {
-        const filtered = entries.filter((e) => e.id !== entry.id)
-        if (filtered.length !== entries.length) {
-          next.set(key, filtered)
-        }
-      }
-
-      // Then add/update at the correct date
-      const existing = next.get(date) || []
-      const index = existing.findIndex((e) => e.id === entry.id)
-      if (index >= 0) {
-        const updated = [...existing]
-        updated[index] = entry
-        next.set(date, updated)
-      } else {
-        next.set(date, [...existing, entry])
-      }
-
-      return next
-    })
+    // Update cache using pure helper function
+    setEntryCache((prev) => updateEntryInCache(prev, entry))
   }, [])
 
   // Initialize layout on mount - useLayoutEffect ensures layout is calculated
