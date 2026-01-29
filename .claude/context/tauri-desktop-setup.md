@@ -117,11 +117,38 @@ EventSource's response has a MIME type ("text/html") that is not "text/event-str
 
 **Fix:** Ensure `sseEnabled: false` is set in Tauri's `App.tsx` and only `useSseWithOffline` (not `useSse`) is used for SSE.
 
+## Debugging with Authenticated Session
+
+When developing the Tauri desktop app, you may need to test features that require authentication. The `CALENDSYNC_DEV_SESSION` environment variable allows you to transfer an authenticated session from the web app to the desktop app.
+
+### How It Works
+
+1. Log in to the web app at `http://localhost:3000`
+2. Open the Dev Menu (visible in dev mode)
+3. Click "Copy Desktop Command" to copy the command with your session ID
+4. Run the copied command in your terminal
+
+### Usage
+
+```bash
+# Copy this command from the web app's Dev Menu
+CALENDSYNC_DEV_SESSION=<session_id> cargo xtask dev desktop
+```
+
+The session ID is a UUID that identifies your authenticated session. When set, the Tauri app will use this session to authenticate HTTP requests instead of requiring a separate login.
+
+### Security Notes
+
+- Session IDs are only exposed in dev mode (not in production builds)
+- The session transfer is one-time and for development only
+- Sessions expire according to normal session timeout rules
+
 ## Build Commands
 
 | Command | Description |
 |---------|-------------|
 | `cargo xtask dev desktop` | Run desktop app in dev mode |
+| `CALENDSYNC_DEV_SESSION=<id> cargo xtask dev desktop` | Run with transferred auth session |
 | `cargo tauri build` | Build desktop app for distribution |
 | `cargo tauri dev` | Alternative to xtask (direct Tauri CLI) |
 
