@@ -53,7 +53,7 @@ listenfd = "1.0"
 lru = "0.16"
 
 # File watching dependencies (for hot-reload)
-notify = "7.0"
+notify = "8.2"
 notify-debouncer-mini = "0.5"
 open = "5"
 rand = "0.9"
