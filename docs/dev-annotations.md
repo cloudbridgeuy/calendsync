@@ -11,9 +11,9 @@ The dev annotation overlay lets you click on any UI element in the browser, capt
   ```
 - **calendsync dev server** running:
   ```bash
-  cargo xtask dev server --seed
+  cargo xtask dev server
   ```
-- **Browser** open to `http://localhost:3000/calendar/<id>` (the `--seed` command prints the calendar URL)
+- **Browser** open to `http://localhost:3000/calendar/<id>` (create a calendar first, then optionally seed it with `cargo xtask seed <CALENDAR_ID> --session <SESSION_ID>`)
 
 ## Creating Annotations (Browser)
 

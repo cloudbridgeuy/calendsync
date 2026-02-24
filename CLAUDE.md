@@ -63,17 +63,18 @@ cargo build -p calendsync --release --no-default-features --features dynamodb,re
 
 # Unified dev command (server, desktop, iOS)
 cargo xtask dev server                    # Run server (inmemory + memory, no containers)
-cargo xtask dev server --seed             # Run with demo data seeded via HTTP
-cargo xtask dev server --seed --open      # Seed and open browser to calendar (macOS)
 cargo xtask dev server --storage sqlite   # Use SQLite storage
 cargo xtask dev server --storage dynamodb # Use DynamoDB (auto-starts container)
 cargo xtask dev server --cache redis      # Use Redis cache (auto-starts container)
-cargo xtask dev server --flush --seed     # Fresh start: remove volumes, seed data
+cargo xtask dev server --flush            # Fresh start: remove volumes before starting
 cargo xtask dev desktop                   # Run Tauri desktop app
 cargo xtask dev ios                       # Run iOS simulator
 cargo xtask dev ios --list-devices        # List available iOS simulators
 cargo xtask dev ios --device "iPhone 16"  # Run on specific simulator
 cargo xtask dev ios --open                # Open Xcode instead
+
+# Seed a calendar with demo data (requires running server + auth session)
+cargo xtask seed <CALENDAR_ID> --session <SESSION_ID>
 
 # Tauri direct commands (alternative to xtask dev)
 cargo tauri dev                           # Run desktop app in dev mode
@@ -130,7 +131,7 @@ src/
 The project uses the [cargo-xtask](https://github.com/matklad/cargo-xtask/) pattern for development tasks:
 
 - `cargo xtask dev server` - Run the development server with hot-reload
-- `cargo xtask dev server --storage dynamodb --seed` - Run with DynamoDB and demo data
+- `cargo xtask dev server --storage dynamodb` - Run with DynamoDB (auto-starts container)
 - `cargo xtask dev desktop` - Run the Tauri desktop app
 - `cargo xtask dev ios` - Run the Tauri iOS app in simulator
 - `cargo xtask dev ios --list-devices` - List available iOS simulators
