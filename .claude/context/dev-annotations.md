@@ -2,6 +2,18 @@
 
 UI annotation system for dev mode that captures structured data about UI elements (CSS selectors, React component names, computed styles, bounding boxes, and free-text notes) and exposes them via REST API for MCP integration with Claude Code.
 
+## Setup
+
+For the full human-facing guide, see [`docs/dev-annotations.md`](../../docs/dev-annotations.md).
+
+**Register mcptools in Claude Code:**
+
+```bash
+claude mcp add mcptools -- mcptools mcp stdio
+```
+
+**Environment variable:** Set `CALENDSYNC_DEV_URL` if the dev server runs on a non-default address (default: `http://localhost:3000`).
+
 ## Architecture
 
 Three layers following Functional Core - Imperative Shell:
