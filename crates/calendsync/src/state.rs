@@ -118,6 +118,9 @@ pub struct AppState {
     /// Only used when DEV_MODE is set.
     pub dev_css_reload_tx: broadcast::Sender<CssReload>,
 
+    /// Dev mode annotation storage (in-memory, ephemeral).
+    pub dev_annotations: Arc<RwLock<Vec<crate::handlers::dev::DevAnnotation>>>,
+
     /// Authentication state (optional, enabled via auth-* features).
     #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
     pub auth: Option<AuthState>,
@@ -153,6 +156,7 @@ impl AppState {
             dev_reload_tx,
             dev_error_tx,
             dev_css_reload_tx,
+            dev_annotations: Arc::new(RwLock::new(Vec::new())),
             #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
             auth: None,
         }

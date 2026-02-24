@@ -100,13 +100,27 @@ pub fn create_app(state: AppState, config: &Config) -> Router {
     // Dev-only routes (when DEV_MODE is set and debug build)
     #[cfg(debug_assertions)]
     if std::env::var("DEV_MODE").is_ok() {
-        use crate::handlers::dev::{dev_events_sse, reload_ssr, report_build_error};
+        use crate::handlers::dev::{
+            clear_annotations, create_annotation, delete_annotation, dev_events_sse,
+            get_annotation, list_annotations, reload_ssr, report_build_error, resolve_annotation,
+        };
         router = router
             .route("/_dev/reload", post(reload_ssr))
             .route("/_dev/events", get(dev_events_sse))
-            .route("/_dev/error", post(report_build_error));
+            .route("/_dev/error", post(report_build_error))
+            .route(
+                "/_dev/annotations",
+                get(list_annotations)
+                    .post(create_annotation)
+                    .delete(clear_annotations),
+            )
+            .route(
+                "/_dev/annotations/{id}",
+                get(get_annotation).delete(delete_annotation),
+            )
+            .route("/_dev/annotations/{id}/resolve", patch(resolve_annotation));
         tracing::info!(
-            "Dev mode enabled: /_dev/reload, /_dev/events, /_dev/error endpoints available"
+            "Dev mode enabled: /_dev/reload, /_dev/events, /_dev/error, /_dev/annotations endpoints available"
         );
     }
 
