@@ -8,13 +8,25 @@ import type { InitialData } from "../types"
 
 interface DevMenuProps {
   initialData: InitialData
+  onToggleAnnotations?: () => void
+  onClearAnnotations?: () => void
+  onCopyAnnotations?: () => void
+  annotationCount?: number
+  isAnnotating?: boolean
 }
 
 /**
  * Dev menu with dropdown for development tools.
  * Shows a red "DEV" button that opens a dropdown with dev utilities.
  */
-export function DevMenu({ initialData }: DevMenuProps) {
+export function DevMenu({
+  initialData,
+  onToggleAnnotations,
+  onClearAnnotations,
+  onCopyAnnotations,
+  annotationCount = 0,
+  isAnnotating = false,
+}: DevMenuProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -72,6 +84,53 @@ export function DevMenu({ initialData }: DevMenuProps) {
       {isOpen && (
         <div className="dev-menu-dropdown">
           <div className="dev-menu-header">Dev Tools</div>
+
+          {/* Annotation toggle */}
+          <button
+            type="button"
+            onClick={() => {
+              onToggleAnnotations?.()
+              setIsOpen(false)
+            }}
+            className="dev-menu-item"
+          >
+            <div className="dev-menu-item-title">
+              {isAnnotating ? "Stop Annotating" : "Annotate UI"}
+            </div>
+            <div className="dev-menu-item-subtitle">
+              {annotationCount ? `${annotationCount} annotation(s)` : "Click elements to annotate"}
+            </div>
+          </button>
+
+          {/* Clear and copy annotations when there are annotations */}
+          {annotationCount > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  onCopyAnnotations?.()
+                  setIsOpen(false)
+                }}
+                className="dev-menu-item"
+              >
+                <div className="dev-menu-item-title">Copy Annotations</div>
+                <div className="dev-menu-item-subtitle">Copy as markdown to clipboard</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onClearAnnotations?.()
+                  setIsOpen(false)
+                }}
+                className="dev-menu-item"
+              >
+                <div className="dev-menu-item-title">Clear All Annotations</div>
+                <div className="dev-menu-item-subtitle">
+                  Remove all {annotationCount} annotation(s)
+                </div>
+              </button>
+            </>
+          )}
 
           {initialData.sessionId ? (
             <button type="button" onClick={copyDesktopCommand} className="dev-menu-item">

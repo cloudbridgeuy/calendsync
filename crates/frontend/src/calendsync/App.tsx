@@ -3,7 +3,9 @@
  * Renders the full HTML document for SSR.
  */
 
-import { Calendar, DevMenu } from "./components"
+import { Calendar } from "./components"
+import { DevAnnotationLayer } from "./components/DevAnnotationLayer"
+import { DevMenu } from "./components/DevMenu"
 import { FlashMessage } from "./components/FlashMessage"
 import type { InitialData } from "./types"
 
@@ -28,8 +30,12 @@ export function App({ initialData }: AppProps) {
         {/* Flash message for server-to-client notifications */}
         <FlashMessage />
 
-        {/* Dev mode menu with tools */}
-        <DevMenu initialData={initialData} />
+        {/* Dev mode menu with tools + annotation overlay */}
+        {initialData.devMode ? (
+          <DevAnnotationLayer initialData={initialData} />
+        ) : (
+          <DevMenu initialData={initialData} />
+        )}
 
         <Calendar initialData={initialData}>
           <Calendar.Header />
