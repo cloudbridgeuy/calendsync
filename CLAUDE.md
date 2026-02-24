@@ -643,6 +643,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | OIDC Setup Guide     | `.claude/context/oidc-setup.md`        |
 | Lazy SSR Init        | `.claude/context/lazy-ssr-init.md`     |
 | User Profile Settings| `.claude/context/user-profile-settings.md` |
+| Dev Annotations      | `.claude/context/dev-annotations.md`     |
 
 ### Local Working Directories (gitignored)
 
