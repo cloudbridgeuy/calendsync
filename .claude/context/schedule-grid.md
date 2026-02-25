@@ -80,8 +80,11 @@ interface ScheduleGridContextValue {
   dayWidth: number
   highlightedDate: Date
   scrollToDate: (date: Date) => void
+  now: Date
 }
 ```
+
+The `now` field drives the now-indicator (see `.claude/context/now-indicator.md`).
 
 ## All-Day Section
 

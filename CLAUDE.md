@@ -645,6 +645,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | Lazy SSR Init        | `.claude/context/lazy-ssr-init.md`     |
 | User Profile Settings| `.claude/context/user-profile-settings.md` |
 | Dev Annotations      | `.claude/context/dev-annotations.md`     |
+| Now Indicator        | `.claude/context/now-indicator.md`       |
 
 ### Local Working Directories (gitignored)
 
