@@ -13,6 +13,7 @@ export type {
 export { useCalendarSettings } from "./useCalendarSettings"
 export type { UseCalendarStateConfig } from "./useCalendarState"
 export { isOnToday, useCalendarState } from "./useCalendarState"
+export { useCurrentTime } from "./useCurrentTime"
 export type { UseEntryApiConfig, UseEntryApiResult } from "./useEntryApi"
 export { useEntryApi } from "./useEntryApi"
 export type { UseEntryFormOptions, UseEntryFormReturn } from "./useEntryForm"

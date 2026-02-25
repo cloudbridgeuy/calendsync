@@ -116,6 +116,13 @@ export {
   removeNotification,
   serializeNotifications,
 } from "./notifications"
+// Re-export now indicator functions
+export {
+  calculateNowPositionPercent,
+  calculateScrollToCurrentTime,
+  findTodayColumnIndex,
+  formatNowLabel,
+} from "./nowIndicator"
 // Re-export schedule layout functions
 export type {
   OverlapColumn,

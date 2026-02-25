@@ -5,11 +5,12 @@
 
 import {
   addDays,
-  calculateScrollToHour,
-  DEFAULT_SCROLL_HOUR,
+  calculateScrollToCurrentTime,
   filterByTaskVisibility,
   formatDateKey,
   getEntriesForDate as getEntriesForDatePure,
+  HOUR_HEIGHT_PX,
+  HOURS_IN_DAY,
   isSameCalendarDay,
 } from "@core/calendar"
 import type { ServerEntry } from "@core/calendar/types"
@@ -491,11 +492,21 @@ function Days() {
   const prevViewModeRef = useRef(settings.viewMode)
   const isScheduleMode = settings.viewMode === "schedule"
 
-  // Scroll to 8 AM when switching to schedule mode (account for day header height)
+  // Scroll to current time when switching to schedule mode
   useEffect(() => {
     if (settings.viewMode === "schedule" && prevViewModeRef.current !== "schedule") {
-      const scrollTop = calculateScrollToHour(DEFAULT_SCROLL_HOUR)
-      scrollContainerRef.current?.scrollTo({ top: scrollTop })
+      const container = scrollContainerRef.current
+      if (container) {
+        const now = new Date()
+        const totalHeight = HOURS_IN_DAY * HOUR_HEIGHT_PX
+        const scrollTop = calculateScrollToCurrentTime(
+          now.getHours(),
+          now.getMinutes(),
+          container.clientHeight,
+          totalHeight,
+        )
+        container.scrollTo({ top: scrollTop })
+      }
     }
     prevViewModeRef.current = settings.viewMode
   }, [settings.viewMode, scrollContainerRef])

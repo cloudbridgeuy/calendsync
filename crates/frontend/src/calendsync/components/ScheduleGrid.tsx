@@ -14,11 +14,14 @@
  */
 
 import {
+  calculateNowPositionPercent,
   computeAllDaySummary,
   filterAllDayEntries,
   filterTimedEntries,
+  findTodayColumnIndex,
   formatDateKey,
   formatHourLabel,
+  formatNowLabel,
   formatOverflowToggle,
   formatTasksToggle,
   getDayDisplayInfo,
@@ -29,6 +32,7 @@ import {
 import type { ServerEntry } from "@core/calendar/types"
 import { createContext, useContext, useMemo } from "react"
 import { useCalendarContext } from "../contexts"
+import { useCurrentTime } from "../hooks"
 import { AllDayEntryTile } from "./AllDayEntryTile"
 import { AllDayToggle } from "./AllDayToggle"
 import { ScheduleDayContent } from "./DayColumn"
@@ -43,6 +47,7 @@ interface ScheduleGridContextValue {
   dayWidth: number
   highlightedDate: Date
   scrollToDate: (date: Date) => void
+  now: Date
 }
 
 const ScheduleGridContext = createContext<ScheduleGridContextValue | null>(null)
@@ -66,6 +71,7 @@ interface ScheduleGridRootProps {
 function ScheduleGridRoot({ children }: ScheduleGridRootProps) {
   const { renderedDates, getEntriesForDate, dayWidth, highlightedDate, scrollToDate } =
     useCalendarContext()
+  const now = useCurrentTime(30_000)
 
   const contextValue = useMemo<ScheduleGridContextValue>(
     () => ({
@@ -74,8 +80,9 @@ function ScheduleGridRoot({ children }: ScheduleGridRootProps) {
       dayWidth,
       highlightedDate,
       scrollToDate,
+      now,
     }),
-    [renderedDates, getEntriesForDate, dayWidth, highlightedDate, scrollToDate],
+    [renderedDates, getEntriesForDate, dayWidth, highlightedDate, scrollToDate, now],
   )
 
   return (
@@ -232,6 +239,12 @@ function AllDayEvents() {
  * Uses CSS flexbox for height - rows expand proportionally with the grid.
  */
 function HourColumn() {
+  const { now } = useScheduleGridContext()
+  const hours = now.getHours()
+  const minutes = now.getMinutes()
+  const percent = calculateNowPositionPercent(hours, minutes)
+  const label = formatNowLabel(hours, minutes)
+
   return (
     <div className="schedule-hour-column">
       {Array.from({ length: HOURS_IN_DAY }, (_, hour) => (
@@ -239,6 +252,9 @@ function HourColumn() {
           <span className="schedule-hour-label">{formatHourLabel(hour)}</span>
         </div>
       ))}
+      <span className="now-time-label" style={{ top: `${percent}%` }}>
+        {label}
+      </span>
     </div>
   )
 }
@@ -247,7 +263,9 @@ function HourColumn() {
  * Timed grid - main content area with timed entries.
  */
 function TimedGrid() {
-  const { renderedDates, getEntriesForDate, dayWidth } = useScheduleGridContext()
+  const { renderedDates, getEntriesForDate, dayWidth, now } = useScheduleGridContext()
+  const percent = calculateNowPositionPercent(now.getHours(), now.getMinutes())
+  const todayIdx = findTodayColumnIndex(renderedDates, now)
 
   return (
     <div className="schedule-timed-grid">
@@ -264,6 +282,13 @@ function TimedGrid() {
           />
         )
       })}
+      <div className="now-indicator-line" style={{ top: `${percent}%` }} />
+      {todayIdx !== null && (
+        <div
+          className="now-indicator-dot"
+          style={{ top: `${percent}%`, left: todayIdx * dayWidth }}
+        />
+      )}
     </div>
   )
 }
