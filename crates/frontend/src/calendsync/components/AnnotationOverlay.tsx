@@ -79,7 +79,9 @@ export function AnnotationOverlay({
 
       const target = e.target as Element
       // Skip our own overlay elements
-      if (target.closest(".annotation-overlay, .annotation-marker, .annotation-note-popup")) {
+      if (
+        target.closest(".annotation-overlay, .annotation-marker, .annotation-note-popup, .dev-menu")
+      ) {
         setHoveredRect(null)
         return
       }
@@ -100,7 +102,9 @@ export function AnnotationOverlay({
       if (!isActive || notePopup) return
 
       const target = e.target as Element
-      if (target.closest(".annotation-overlay, .annotation-marker, .annotation-note-popup")) {
+      if (
+        target.closest(".annotation-overlay, .annotation-marker, .annotation-note-popup, .dev-menu")
+      ) {
         return
       }
 
