@@ -66,6 +66,7 @@ cargo xtask dev server                    # Run server (inmemory + memory, no co
 cargo xtask dev server --storage sqlite   # Use SQLite storage
 cargo xtask dev server --storage dynamodb # Use DynamoDB (auto-starts container)
 cargo xtask dev server --cache redis      # Use Redis cache (auto-starts container)
+cargo xtask dev server --annotations      # Enable dev annotation overlay (SQLite-backed)
 cargo xtask dev server --flush            # Fresh start: remove volumes before starting
 cargo xtask dev desktop                   # Run Tauri desktop app
 cargo xtask dev ios                       # Run iOS simulator
