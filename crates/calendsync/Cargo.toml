@@ -28,6 +28,9 @@ redis = ["dep:redis", "dep:futures-util"]
 # In-memory storage backend (for testing)
 inmemory = []
 
+# Dev annotations SQLite store (opt-in, uses rusqlite/tokio-rusqlite)
+dev-annotations = ["dep:rusqlite", "dep:tokio-rusqlite"]
+
 # Auth feature flags
 auth-sqlite = ["dep:calendsync_auth", "calendsync_auth/sqlite", "dep:sqlx", "dep:urlencoding", "dep:axum-extra"]
 auth-redis = ["dep:calendsync_auth", "calendsync_auth/redis", "dep:fred", "dep:urlencoding", "dep:axum-extra"]

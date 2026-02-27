@@ -100,27 +100,58 @@ pub fn create_app(state: AppState, config: &Config) -> Router {
     // Dev-only routes (when DEV_MODE is set and debug build)
     #[cfg(debug_assertions)]
     if std::env::var("DEV_MODE").is_ok() {
-        use crate::handlers::dev::{
-            clear_annotations, create_annotation, delete_annotation, dev_events_sse,
-            get_annotation, list_annotations, reload_ssr, report_build_error, resolve_annotation,
-        };
+        use crate::handlers::dev::hot_reload::{dev_events_sse, reload_ssr, report_build_error};
         router = router
+            // Hot-reload endpoints
             .route("/_dev/reload", post(reload_ssr))
             .route("/_dev/events", get(dev_events_sse))
-            .route("/_dev/error", post(report_build_error))
-            .route(
-                "/_dev/annotations",
-                get(list_annotations)
-                    .post(create_annotation)
-                    .delete(clear_annotations),
-            )
-            .route(
-                "/_dev/annotations/{id}",
-                get(get_annotation).delete(delete_annotation),
-            )
-            .route("/_dev/annotations/{id}/resolve", patch(resolve_annotation));
+            .route("/_dev/error", post(report_build_error));
+
+        #[cfg(feature = "dev-annotations")]
+        {
+            use crate::handlers::dev::{
+                annotations::{
+                    acknowledge_annotation, add_thread_message, clear_annotations,
+                    create_annotation, delete_annotation, dev_annotations_sse, dismiss_annotation,
+                    get_annotation, list_annotations, list_pending_annotations, resolve_annotation,
+                    watch_annotations,
+                },
+                sessions::{close_session, get_session, list_sessions},
+            };
+            router = router
+                // Annotation CRUD
+                .route(
+                    "/_dev/annotations",
+                    get(list_annotations)
+                        .post(create_annotation)
+                        .delete(clear_annotations),
+                )
+                .route("/_dev/annotations/pending", get(list_pending_annotations))
+                .route("/_dev/annotations/watch", get(watch_annotations))
+                .route("/_dev/annotations/events", get(dev_annotations_sse))
+                .route(
+                    "/_dev/annotations/{id}",
+                    get(get_annotation).delete(delete_annotation),
+                )
+                .route(
+                    "/_dev/annotations/{id}/acknowledge",
+                    patch(acknowledge_annotation),
+                )
+                .route("/_dev/annotations/{id}/resolve", patch(resolve_annotation))
+                .route("/_dev/annotations/{id}/dismiss", patch(dismiss_annotation))
+                .route("/_dev/annotations/{id}/thread", post(add_thread_message))
+                // Session endpoints
+                .route("/_dev/sessions", get(list_sessions))
+                .route("/_dev/sessions/{id}", get(get_session))
+                .route("/_dev/sessions/{id}/close", patch(close_session));
+        }
+
         tracing::info!(
-            "Dev mode enabled: /_dev/reload, /_dev/events, /_dev/error, /_dev/annotations endpoints available"
+            "Dev mode enabled: /_dev/reload, /_dev/events, /_dev/error endpoints available"
+        );
+        #[cfg(feature = "dev-annotations")]
+        tracing::info!(
+            "Dev annotations enabled: /_dev/annotations, /_dev/sessions endpoints available"
         );
     }
 

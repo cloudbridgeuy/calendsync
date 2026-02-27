@@ -23,6 +23,11 @@ use calendsync_ssr::SsrPool;
 #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
 use calendsync_auth::AuthState;
 
+#[cfg(feature = "dev-annotations")]
+use crate::dev::DevAnnotationStore;
+#[cfg(feature = "dev-annotations")]
+use crate::handlers::dev::types::DevAnnotationEvent;
+
 use crate::config::Config;
 
 // ============================================================================
@@ -118,8 +123,12 @@ pub struct AppState {
     /// Only used when DEV_MODE is set.
     pub dev_css_reload_tx: broadcast::Sender<CssReload>,
 
-    /// Dev mode annotation storage (in-memory, ephemeral).
-    pub dev_annotations: Arc<RwLock<Vec<crate::handlers::dev::DevAnnotation>>>,
+    /// Dev annotation SQLite store (when `dev-annotations` feature is enabled).
+    #[cfg(feature = "dev-annotations")]
+    pub dev_store: Option<Arc<DevAnnotationStore>>,
+    /// Dev annotation event broadcaster (for SSE and watch).
+    #[cfg(feature = "dev-annotations")]
+    pub dev_annotation_tx: broadcast::Sender<DevAnnotationEvent>,
 
     /// Authentication state (optional, enabled via auth-* features).
     #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
@@ -140,6 +149,8 @@ impl AppState {
         let (dev_reload_tx, _) = broadcast::channel(1);
         let (dev_error_tx, _) = broadcast::channel(1);
         let (dev_css_reload_tx, _) = broadcast::channel(1);
+        #[cfg(feature = "dev-annotations")]
+        let (dev_annotation_tx, _) = broadcast::channel(64);
 
         Self {
             entry_repo,
@@ -156,7 +167,10 @@ impl AppState {
             dev_reload_tx,
             dev_error_tx,
             dev_css_reload_tx,
-            dev_annotations: Arc::new(RwLock::new(Vec::new())),
+            #[cfg(feature = "dev-annotations")]
+            dev_store: None,
+            #[cfg(feature = "dev-annotations")]
+            dev_annotation_tx,
             #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
             auth: None,
         }
@@ -371,6 +385,12 @@ impl AppState {
     pub fn signal_dev_css_reload(&self, filename: String) {
         let _ = self.dev_css_reload_tx.send(CssReload { filename });
         tracing::debug!("Dev CSS reload signal sent");
+    }
+
+    /// Set the dev annotation store after initialization.
+    #[cfg(feature = "dev-annotations")]
+    pub fn set_dev_store(&mut self, store: DevAnnotationStore) {
+        self.dev_store = Some(Arc::new(store));
     }
 }
 

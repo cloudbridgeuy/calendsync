@@ -2,6 +2,8 @@ mod app;
 mod cache;
 mod config;
 mod context;
+#[cfg(feature = "dev-annotations")]
+mod dev;
 mod handlers;
 mod models;
 mod state;
@@ -59,6 +61,25 @@ async fn main() -> Result<()> {
 
     // Create application state WITHOUT SSR pool (starts as None, initialized in background)
     let state = AppState::new(&config).await?;
+
+    // Initialize dev annotation store when in dev mode
+    #[cfg(feature = "dev-annotations")]
+    let state = {
+        let mut state = state;
+        if std::env::var("DEV_MODE").is_ok() {
+            // Ensure the parent directory exists
+            if let Some(parent) = std::path::Path::new(&config.dev_annotations_db_path).parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            let dev_store = dev::DevAnnotationStore::new(&config.dev_annotations_db_path).await?;
+            state.set_dev_store(dev_store);
+            tracing::info!(
+                path = %config.dev_annotations_db_path,
+                "Dev annotation store initialized"
+            );
+        }
+        state
+    };
 
     // Spawn Mock IdP server when auth-mock feature is enabled
     #[cfg(feature = "auth-mock")]

@@ -25,6 +25,10 @@ pub struct Config {
     /// Allowed CORS origins (comma-separated, default: "http://localhost:5173,tauri://localhost")
     /// Used when credentials are needed (cookies for auth).
     pub cors_origins: Vec<String>,
+    /// Path to SQLite database for dev annotations (default: "data/dev-annotations.db")
+    /// Note: Only used when the `dev-annotations` feature is enabled.
+    #[allow(dead_code)]
+    pub dev_annotations_db_path: String,
 }
 
 impl Config {
@@ -66,6 +70,8 @@ impl Config {
                         "tauri://localhost".to_string(),
                     ]
                 }),
+            dev_annotations_db_path: env::var("DEV_ANNOTATIONS_DB_PATH")
+                .unwrap_or_else(|_| "data/dev-annotations.db".to_string()),
         }
     }
 
@@ -96,6 +102,7 @@ mod tests {
             redis_url: "redis://localhost:6379".to_string(),
             auth_sqlite_path: "data/sessions.db".to_string(),
             cors_origins: vec!["http://localhost:5173".to_string()],
+            dev_annotations_db_path: "data/dev-annotations.db".to_string(),
         };
 
         assert_eq!(config.cache_ttl(), Duration::from_secs(600));
