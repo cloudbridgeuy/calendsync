@@ -1,7 +1,9 @@
 use async_trait::async_trait;
 use uuid::Uuid;
 
-use crate::calendar::{Calendar, CalendarEntry, CalendarMembership, CalendarRole, User};
+use crate::calendar::{
+    Calendar, CalendarEntry, CalendarMembership, CalendarRole, CalendarSettings, User,
+};
 
 use super::{DateRange, Result};
 
@@ -88,4 +90,23 @@ pub trait MembershipRepository: Send + Sync {
 
     /// Deletes a membership.
     async fn delete_membership(&self, calendar_id: Uuid, user_id: Uuid) -> Result<()>;
+}
+
+/// Repository for per-user, per-calendar display settings.
+#[async_trait]
+pub trait SettingsRepository: Send + Sync {
+    /// Gets the settings for a user in a calendar.
+    async fn get_settings(
+        &self,
+        calendar_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<Option<CalendarSettings>>;
+
+    /// Creates or updates settings for a user in a calendar.
+    async fn upsert_settings(
+        &self,
+        calendar_id: Uuid,
+        user_id: Uuid,
+        settings: &CalendarSettings,
+    ) -> Result<()>;
 }

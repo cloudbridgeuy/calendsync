@@ -483,6 +483,50 @@ impl DayData {
     }
 }
 
+/// Calendar view mode.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ViewMode {
+    /// Compact weekly view (default).
+    #[default]
+    Compact,
+    /// Schedule view showing time slots.
+    Schedule,
+}
+
+/// Entry color style for rendering.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum EntryStyle {
+    /// Border accent only (default).
+    #[default]
+    Compact,
+    /// Filled background color.
+    Filled,
+}
+
+/// Per-user, per-calendar display settings.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarSettings {
+    /// Current view mode.
+    pub view_mode: ViewMode,
+    /// Whether to show task entries.
+    pub show_tasks: bool,
+    /// Entry color style (compact = border, filled = background).
+    pub entry_style: EntryStyle,
+}
+
+impl Default for CalendarSettings {
+    fn default() -> Self {
+        Self {
+            view_mode: ViewMode::Compact,
+            show_tasks: true,
+            entry_style: EntryStyle::Compact,
+        }
+    }
+}
+
 /// SSE event types for real-time calendar updates.
 ///
 /// These events are sent from the server to clients via Server-Sent Events (SSE)
@@ -630,5 +674,127 @@ mod tests {
 
         assert!(!day_with_entry.is_empty());
         assert_eq!(day_with_entry.entry_count(), 1);
+    }
+
+    #[test]
+    fn test_view_mode_default() {
+        assert_eq!(ViewMode::default(), ViewMode::Compact);
+    }
+
+    #[test]
+    fn test_entry_style_default() {
+        assert_eq!(EntryStyle::default(), EntryStyle::Compact);
+    }
+
+    #[test]
+    fn test_calendar_settings_default() {
+        let settings = CalendarSettings::default();
+        assert_eq!(settings.view_mode, ViewMode::Compact);
+        assert!(settings.show_tasks);
+        assert_eq!(settings.entry_style, EntryStyle::Compact);
+    }
+
+    #[test]
+    fn test_view_mode_serialization() {
+        assert_eq!(
+            serde_json::to_string(&ViewMode::Compact).unwrap(),
+            r#""compact""#
+        );
+        assert_eq!(
+            serde_json::to_string(&ViewMode::Schedule).unwrap(),
+            r#""schedule""#
+        );
+    }
+
+    #[test]
+    fn test_view_mode_deserialization() {
+        assert_eq!(
+            serde_json::from_str::<ViewMode>(r#""compact""#).unwrap(),
+            ViewMode::Compact
+        );
+        assert_eq!(
+            serde_json::from_str::<ViewMode>(r#""schedule""#).unwrap(),
+            ViewMode::Schedule
+        );
+    }
+
+    #[test]
+    fn test_entry_style_serialization() {
+        assert_eq!(
+            serde_json::to_string(&EntryStyle::Compact).unwrap(),
+            r#""compact""#
+        );
+        assert_eq!(
+            serde_json::to_string(&EntryStyle::Filled).unwrap(),
+            r#""filled""#
+        );
+    }
+
+    #[test]
+    fn test_entry_style_deserialization() {
+        assert_eq!(
+            serde_json::from_str::<EntryStyle>(r#""compact""#).unwrap(),
+            EntryStyle::Compact
+        );
+        assert_eq!(
+            serde_json::from_str::<EntryStyle>(r#""filled""#).unwrap(),
+            EntryStyle::Filled
+        );
+    }
+
+    #[test]
+    fn test_calendar_settings_serialization_matches_typescript() {
+        let settings = CalendarSettings {
+            view_mode: ViewMode::Schedule,
+            show_tasks: false,
+            entry_style: EntryStyle::Filled,
+        };
+
+        let json = serde_json::to_value(&settings).unwrap();
+
+        // Field names must be camelCase to match TypeScript interface
+        assert_eq!(json["viewMode"], "schedule");
+        assert_eq!(json["showTasks"], false);
+        assert_eq!(json["entryStyle"], "filled");
+
+        // Must not contain snake_case keys
+        assert!(json.get("view_mode").is_none());
+        assert!(json.get("show_tasks").is_none());
+        assert!(json.get("entry_style").is_none());
+    }
+
+    #[test]
+    fn test_calendar_settings_deserialization_from_camel_case() {
+        let json = r#"{"viewMode":"schedule","showTasks":false,"entryStyle":"filled"}"#;
+        let settings: CalendarSettings = serde_json::from_str(json).unwrap();
+
+        assert_eq!(settings.view_mode, ViewMode::Schedule);
+        assert!(!settings.show_tasks);
+        assert_eq!(settings.entry_style, EntryStyle::Filled);
+    }
+
+    #[test]
+    fn test_calendar_settings_roundtrip() {
+        let original = CalendarSettings {
+            view_mode: ViewMode::Schedule,
+            show_tasks: false,
+            entry_style: EntryStyle::Filled,
+        };
+
+        let json = serde_json::to_string(&original).unwrap();
+        let restored: CalendarSettings = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(original, restored);
+    }
+
+    #[test]
+    fn test_calendar_settings_default_serialization_matches_typescript() {
+        let settings = CalendarSettings::default();
+        let json = serde_json::to_value(&settings).unwrap();
+
+        // Must match TypeScript DEFAULT_SETTINGS
+        assert_eq!(json["viewMode"], "compact");
+        assert_eq!(json["showTasks"], true);
+        assert_eq!(json["entryStyle"], "compact");
     }
 }

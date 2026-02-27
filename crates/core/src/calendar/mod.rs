@@ -22,6 +22,6 @@ pub use sorting::{
     group_entries_by_date, sort_entries_by_hierarchy,
 };
 pub use types::{
-    Calendar, CalendarEntry, CalendarEvent, CalendarMembership, CalendarRole, DayData, EntryKind,
-    User,
+    Calendar, CalendarEntry, CalendarEvent, CalendarMembership, CalendarRole, CalendarSettings,
+    DayData, EntryKind, EntryStyle, User, ViewMode,
 };
