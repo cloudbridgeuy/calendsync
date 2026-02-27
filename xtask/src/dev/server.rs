@@ -63,6 +63,10 @@ pub struct ServerOptions {
     /// Keep containers running on error (default: stop containers)
     #[arg(long)]
     pub keep_containers: bool,
+
+    /// Enable dev-annotations feature (UI annotation overlay)
+    #[arg(long)]
+    pub annotations: bool,
 }
 
 pub async fn run(opts: ServerOptions, global: crate::Global) -> Result<()> {
@@ -70,6 +74,11 @@ pub async fn run(opts: ServerOptions, global: crate::Global) -> Result<()> {
     // Stage 1: Option Resolution
     // =========================================================================
     let features = containers::cargo_features(opts.storage, opts.cache);
+    let features = if opts.annotations {
+        format!("{features},dev-annotations")
+    } else {
+        features
+    };
     let required = containers::required_containers(opts.storage, opts.cache);
 
     if !global.is_silent() {
