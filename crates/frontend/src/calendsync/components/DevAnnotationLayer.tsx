@@ -13,8 +13,22 @@ interface DevAnnotationLayerProps {
 }
 
 export function DevAnnotationLayer({ initialData }: DevAnnotationLayerProps) {
-  const { annotations, isActive, toggle, create, remove, clearAll, copyToClipboard } =
-    useAnnotations()
+  const {
+    annotations,
+    isActive,
+    selectedAnnotation,
+    toggle,
+    create,
+    remove,
+    clearAll,
+    copyToClipboard,
+    acknowledge,
+    resolve,
+    dismiss,
+    reply,
+    selectAnnotation,
+    deselectAnnotation,
+  } = useAnnotations()
 
   return (
     <>
@@ -29,8 +43,15 @@ export function DevAnnotationLayer({ initialData }: DevAnnotationLayerProps) {
       <AnnotationOverlay
         annotations={annotations}
         isActive={isActive}
+        selectedAnnotation={selectedAnnotation}
         onCreate={create}
         onRemove={remove}
+        onSelectAnnotation={selectAnnotation}
+        onDeselectAnnotation={deselectAnnotation}
+        onAcknowledge={acknowledge}
+        onResolve={resolve}
+        onDismiss={dismiss}
+        onReply={reply}
       />
     </>
   )

@@ -6,21 +6,29 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
   type Annotation,
+  type AnnotationIntent,
+  type AnnotationSeverity,
   type BoundingBox,
   buildCreateAnnotationBody,
   extractComputedStyles,
   generateSelector,
 } from "../../core/calendar/annotations"
+import { AnnotationDetailPopup } from "./AnnotationDetailPopup"
 import { AnnotationMarker } from "./AnnotationMarker"
 import { AnnotationNotePopup } from "./AnnotationNotePopup"
 
 interface AnnotationOverlayProps {
   annotations: Annotation[]
   isActive: boolean
-  onCreate: (
-    data: Omit<Annotation, "id" | "timestamp" | "resolved" | "resolution_summary">,
-  ) => Promise<void>
+  selectedAnnotation: Annotation | null
+  onCreate: (data: Record<string, unknown>) => Promise<void>
   onRemove: (id: string) => void
+  onSelectAnnotation: (annotation: Annotation) => void
+  onDeselectAnnotation: () => void
+  onAcknowledge: (id: string) => void
+  onResolve: (id: string, summary: string) => void
+  onDismiss: (id: string, reason: string) => void
+  onReply: (id: string, message: string) => void
 }
 
 /** Get parent selectors for an element (up to 3 levels). */
@@ -62,8 +70,15 @@ function getReactComponentName(element: Element): string | null {
 export function AnnotationOverlay({
   annotations,
   isActive,
+  selectedAnnotation,
   onCreate,
   onRemove,
+  onSelectAnnotation,
+  onDeselectAnnotation,
+  onAcknowledge,
+  onResolve,
+  onDismiss,
+  onReply,
 }: AnnotationOverlayProps) {
   const [hoveredRect, setHoveredRect] = useState<DOMRect | null>(null)
   const [hoveredInfo, setHoveredInfo] = useState<string>("")
@@ -136,14 +151,14 @@ export function AnnotationOverlay({
   }, [isActive, handleMouseMove, handleClick])
 
   const handleSaveNote = useCallback(
-    async (note: string) => {
+    async (comment: string, intent: AnnotationIntent, severity: AnnotationSeverity) => {
       if (!notePopup) return
 
       const el = notePopup.element
       const rect = el.getBoundingClientRect()
 
       const parentSelectors = getParentSelectors(el)
-      const selector = generateSelector(
+      const elementPath = generateSelector(
         el.tagName,
         Array.from(el.classList),
         el.id || null,
@@ -172,14 +187,15 @@ export function AnnotationOverlay({
       }
 
       const body = buildCreateAnnotationBody(
-        selector,
+        elementPath,
         getReactComponentName(el),
         el.tagName.toLowerCase(),
         el.textContent ?? "",
-        note,
+        comment,
         boundingBox,
         computedStyles,
         null, // skip screenshot for now
+        { intent, severity },
       )
 
       await onCreate(body)
@@ -190,11 +206,9 @@ export function AnnotationOverlay({
 
   const handleMarkerClick = useCallback(
     (annotation: Annotation) => {
-      if (window.confirm(`Remove annotation?\n\n"${annotation.note}"`)) {
-        onRemove(annotation.id)
-      }
+      onSelectAnnotation(annotation)
     },
-    [onRemove],
+    [onSelectAnnotation],
   )
 
   return (
@@ -241,6 +255,19 @@ export function AnnotationOverlay({
           position={notePopup.position}
           onSave={handleSaveNote}
           onCancel={() => setNotePopup(null)}
+        />
+      )}
+
+      {/* Annotation detail popup */}
+      {selectedAnnotation && (
+        <AnnotationDetailPopup
+          annotation={selectedAnnotation}
+          onAcknowledge={onAcknowledge}
+          onResolve={onResolve}
+          onDismiss={onDismiss}
+          onReply={onReply}
+          onDelete={onRemove}
+          onClose={onDeselectAnnotation}
         />
       )}
 

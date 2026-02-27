@@ -1,8 +1,10 @@
 /**
  * Numbered circle marker positioned on an annotated element.
+ * Color-coded by annotation status.
  */
 
 import type { Annotation } from "../../core/calendar/annotations"
+import { statusColor } from "../../core/calendar/annotations"
 
 interface AnnotationMarkerProps {
   annotation: Annotation
@@ -16,17 +18,18 @@ export function AnnotationMarker({ annotation, index, onClick }: AnnotationMarke
   return (
     <button
       type="button"
-      className={`annotation-marker ${annotation.resolved ? "annotation-marker--resolved" : ""}`}
+      className="annotation-marker"
       style={{
         position: "fixed",
         top: box.top - 12,
         left: box.left + box.width - 12,
+        backgroundColor: statusColor(annotation.status),
       }}
       onClick={(e) => {
         e.stopPropagation()
         onClick(annotation)
       }}
-      title={annotation.note}
+      title={annotation.comment}
     >
       {index + 1}
     </button>
