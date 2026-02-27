@@ -548,24 +548,201 @@ impl MembershipRepository for SqliteRepository {
     }
 }
 
+// ============================================================================
+// SettingsRepository implementation
+// ============================================================================
+
 #[async_trait]
 impl SettingsRepository for SqliteRepository {
     async fn get_settings(
         &self,
-        _calendar_id: Uuid,
-        _user_id: Uuid,
+        calendar_id: Uuid,
+        user_id: Uuid,
     ) -> Result<Option<CalendarSettings>> {
-        // TODO: Implement SQLite settings storage (V3)
-        Ok(None)
+        let calendar_id_str = calendar_id.to_string();
+        let user_id_str = user_id.to_string();
+
+        self.conn
+            .call(move |conn| {
+                let mut stmt = conn.prepare(schema::SELECT_SETTINGS).map_err(wrap_err)?;
+                match stmt.query_row([&calendar_id_str, &user_id_str], |row| {
+                    row.get::<_, String>(0)
+                }) {
+                    Ok(json_str) => {
+                        let settings: CalendarSettings =
+                            serde_json::from_str(&json_str).map_err(|e| {
+                                wrap_err(rusqlite::Error::FromSqlConversionFailure(
+                                    0,
+                                    rusqlite::types::Type::Text,
+                                    Box::new(e),
+                                ))
+                            })?;
+                        Ok(Some(settings))
+                    }
+                    Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+                    Err(e) => Err(wrap_err(e)),
+                }
+            })
+            .await
+            .map_err(|e| {
+                map_tokio_rusqlite_error_with_id(
+                    e,
+                    "CalendarSettings",
+                    format!("{}:{}", calendar_id, user_id),
+                )
+            })
     }
 
     async fn upsert_settings(
         &self,
-        _calendar_id: Uuid,
-        _user_id: Uuid,
-        _settings: &CalendarSettings,
+        calendar_id: Uuid,
+        user_id: Uuid,
+        settings: &CalendarSettings,
     ) -> Result<()> {
-        // TODO: Implement SQLite settings storage (V3)
-        Ok(())
+        let calendar_id_str = calendar_id.to_string();
+        let user_id_str = user_id.to_string();
+        let settings_json = serde_json::to_string(settings)
+            .map_err(|e| RepositoryError::InvalidData(e.to_string()))?;
+        let updated_at = chrono::Utc::now().to_rfc3339();
+        let id_for_error = format!("{}:{}", calendar_id, user_id);
+
+        self.conn
+            .call(move |conn| {
+                conn.execute(
+                    schema::UPSERT_SETTINGS,
+                    rusqlite::params![calendar_id_str, user_id_str, settings_json, updated_at],
+                )
+                .map_err(wrap_err)?;
+                Ok(())
+            })
+            .await
+            .map_err(|e| map_tokio_rusqlite_error_with_id(e, "CalendarSettings", id_for_error))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use calendsync_core::calendar::{EntryStyle, ViewMode};
+    use calendsync_core::storage::{CalendarRepository, UserRepository};
+
+    async fn create_stub_calendar(repo: &SqliteRepository, id: Uuid) {
+        repo.create_calendar(&Calendar {
+            id,
+            name: "test".to_string(),
+            color: "#000".to_string(),
+            description: None,
+            is_default: false,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        })
+        .await
+        .unwrap();
+    }
+
+    async fn create_stub_user(repo: &SqliteRepository, id: Uuid) {
+        repo.create_user(&User {
+            id,
+            name: "test".to_string(),
+            email: format!("{}@test.com", id),
+            provider: None,
+            provider_subject: None,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        })
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_settings_get_nonexistent() {
+        let repo = SqliteRepository::new_in_memory().await.unwrap();
+        let result = repo
+            .get_settings(Uuid::new_v4(), Uuid::new_v4())
+            .await
+            .unwrap();
+        assert_eq!(result, None);
+    }
+
+    #[tokio::test]
+    async fn test_settings_upsert_and_get() {
+        let repo = SqliteRepository::new_in_memory().await.unwrap();
+        let calendar_id = Uuid::new_v4();
+        let user_id = Uuid::new_v4();
+        create_stub_calendar(&repo, calendar_id).await;
+        create_stub_user(&repo, user_id).await;
+
+        let settings = CalendarSettings::default();
+        repo.upsert_settings(calendar_id, user_id, &settings)
+            .await
+            .unwrap();
+
+        let retrieved = repo.get_settings(calendar_id, user_id).await.unwrap();
+        assert_eq!(retrieved, Some(settings));
+    }
+
+    #[tokio::test]
+    async fn test_settings_upsert_overwrites() {
+        let repo = SqliteRepository::new_in_memory().await.unwrap();
+        let calendar_id = Uuid::new_v4();
+        let user_id = Uuid::new_v4();
+        create_stub_calendar(&repo, calendar_id).await;
+        create_stub_user(&repo, user_id).await;
+
+        let initial = CalendarSettings::default();
+        repo.upsert_settings(calendar_id, user_id, &initial)
+            .await
+            .unwrap();
+
+        let updated = CalendarSettings {
+            view_mode: ViewMode::Schedule,
+            show_tasks: false,
+            entry_style: EntryStyle::Filled,
+        };
+        repo.upsert_settings(calendar_id, user_id, &updated)
+            .await
+            .unwrap();
+
+        let retrieved = repo.get_settings(calendar_id, user_id).await.unwrap();
+        assert_eq!(retrieved, Some(updated));
+    }
+
+    #[tokio::test]
+    async fn test_settings_isolated_per_user_and_calendar() {
+        let repo = SqliteRepository::new_in_memory().await.unwrap();
+        let calendar_id = Uuid::new_v4();
+        let user1_id = Uuid::new_v4();
+        let user2_id = Uuid::new_v4();
+        create_stub_calendar(&repo, calendar_id).await;
+        create_stub_user(&repo, user1_id).await;
+        create_stub_user(&repo, user2_id).await;
+
+        let settings1 = CalendarSettings::default();
+        let settings2 = CalendarSettings {
+            view_mode: ViewMode::Schedule,
+            show_tasks: false,
+            entry_style: EntryStyle::Filled,
+        };
+
+        repo.upsert_settings(calendar_id, user1_id, &settings1)
+            .await
+            .unwrap();
+        repo.upsert_settings(calendar_id, user2_id, &settings2)
+            .await
+            .unwrap();
+
+        let retrieved1 = repo
+            .get_settings(calendar_id, user1_id)
+            .await
+            .unwrap()
+            .unwrap();
+        let retrieved2 = repo
+            .get_settings(calendar_id, user2_id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(retrieved1, settings1);
+        assert_eq!(retrieved2, settings2);
     }
 }

@@ -72,7 +72,7 @@ pub trait SettingsRepository: Send + Sync {
 | Backend | Status | Notes |
 |---------|--------|-------|
 | In-memory | Implemented | `HashMap<(Uuid, Uuid), CalendarSettings>` |
-| SQLite | Stub (no-op) | Returns `Ok(None)` / `Ok(())` |
+| SQLite | Implemented | JSON in `calendar_settings` table, UPSERT with ON CONFLICT |
 | DynamoDB | Stub (no-op) | Returns `Ok(None)` / `Ok(())` |
 
 ## API Endpoint

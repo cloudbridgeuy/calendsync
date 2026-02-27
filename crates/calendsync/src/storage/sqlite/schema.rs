@@ -63,6 +63,17 @@ CREATE INDEX IF NOT EXISTS idx_entries_calendar_id ON entries(calendar_id);
 CREATE INDEX IF NOT EXISTS idx_entries_calendar_range ON entries(calendar_id, start_date, end_date);
 CREATE INDEX IF NOT EXISTS idx_memberships_user_id ON memberships(user_id);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+-- Calendar settings table (per-user, per-calendar display preferences)
+CREATE TABLE IF NOT EXISTS calendar_settings (
+    calendar_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    settings_json TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (calendar_id, user_id),
+    FOREIGN KEY (calendar_id) REFERENCES calendars(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
 "#;
 
 // User queries
@@ -181,6 +192,20 @@ DELETE FROM memberships
 WHERE calendar_id = ?1 AND user_id = ?2
 "#;
 
+// Settings queries
+pub const SELECT_SETTINGS: &str = r#"
+SELECT settings_json
+FROM calendar_settings
+WHERE calendar_id = ?1 AND user_id = ?2
+"#;
+
+pub const UPSERT_SETTINGS: &str = r#"
+INSERT INTO calendar_settings (calendar_id, user_id, settings_json, updated_at)
+VALUES (?1, ?2, ?3, ?4)
+ON CONFLICT (calendar_id, user_id)
+DO UPDATE SET settings_json = excluded.settings_json, updated_at = excluded.updated_at
+"#;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -192,6 +217,7 @@ mod tests {
         assert!(CREATE_TABLES.contains("CREATE TABLE IF NOT EXISTS calendars"));
         assert!(CREATE_TABLES.contains("CREATE TABLE IF NOT EXISTS entries"));
         assert!(CREATE_TABLES.contains("CREATE TABLE IF NOT EXISTS memberships"));
+        assert!(CREATE_TABLES.contains("CREATE TABLE IF NOT EXISTS calendar_settings"));
     }
 
     #[test]
@@ -229,5 +255,11 @@ mod tests {
         assert!(SELECT_CALENDARS_FOR_USER.contains("JOIN"));
         assert!(SELECT_USERS_FOR_CALENDAR.contains("JOIN"));
         assert!(DELETE_MEMBERSHIP.contains("DELETE"));
+
+        // Settings queries
+        assert!(SELECT_SETTINGS.contains("SELECT"));
+        assert!(SELECT_SETTINGS.contains("calendar_settings"));
+        assert!(UPSERT_SETTINGS.contains("INSERT"));
+        assert!(UPSERT_SETTINGS.contains("ON CONFLICT"));
     }
 }
