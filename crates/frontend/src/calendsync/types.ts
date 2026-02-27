@@ -67,6 +67,8 @@ export interface InitialData {
   modal?: ModalState
   /** Whether dev mode is enabled (for hot-reload auto-refresh) */
   devMode?: boolean
+  /** Whether dev annotations feature is compiled in (for annotation overlay) */
+  annotationsEnabled?: boolean
   /** Whether SSE real-time updates are enabled (default: true, false for Tauri) */
   sseEnabled?: boolean
   /** Logged-in user info (from SSR) */

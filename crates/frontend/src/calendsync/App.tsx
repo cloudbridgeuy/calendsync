@@ -31,7 +31,7 @@ export function App({ initialData }: AppProps) {
         <FlashMessage />
 
         {/* Dev mode menu with tools + annotation overlay */}
-        {initialData.devMode ? (
+        {initialData.annotationsEnabled ? (
           <DevAnnotationLayer initialData={initialData} />
         ) : (
           <DevMenu initialData={initialData} />

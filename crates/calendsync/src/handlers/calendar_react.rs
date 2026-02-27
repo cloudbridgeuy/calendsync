@@ -590,6 +590,7 @@ async fn calendar_react_ssr_impl(
         "cssBundleUrl": data.urls.css,
         "controlPlaneUrl": "",
         "devMode": data.dev_mode,
+        "annotationsEnabled": cfg!(feature = "dev-annotations"),
         "user": user_info,
         "sessionId": session_id_for_ssr,
     });
@@ -774,6 +775,7 @@ async fn calendar_react_ssr_entry_impl(
         "controlPlaneUrl": "",
         "modal": modal,
         "devMode": data.dev_mode,
+        "annotationsEnabled": cfg!(feature = "dev-annotations"),
         "user": user_info,
         "sessionId": session_id_for_ssr,
     });

@@ -87,8 +87,10 @@ Three layers following Functional Core - Imperative Shell:
 - `groupByStatus()`, `formatAnnotationsMarkdown()` — grouping and export
 - `buildCreateAnnotationBody()` — assembles request body from element data
 
+**Feature detection:** Backend sends `annotationsEnabled: cfg!(feature = "dev-annotations")` in SSR initial data. `DevAnnotationLayer` only renders when this flag is true, preventing 404s when the feature isn't compiled in.
+
 **Components (`calendsync/components/`):**
-- `DevAnnotationLayer` — client-only wrapper connecting hook to overlay
+- `DevAnnotationLayer` — client-only wrapper connecting hook to overlay (gated on `annotationsEnabled`)
 - `AnnotationOverlay` — hover highlight, click-to-annotate, renders markers
 - `AnnotationMarker` — color-coded numbered circles on annotated elements
 - `AnnotationNotePopup` — note input with intent/severity dropdowns

@@ -1,6 +1,6 @@
 /**
  * Client-only wrapper that connects annotation overlay + DevMenu annotation props.
- * Only rendered when devMode is true.
+ * Only rendered when annotationsEnabled is true.
  */
 
 import { useAnnotations } from "../hooks/useAnnotations"
