@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use axum::{
     http::{header, HeaderValue, Method, StatusCode},
-    routing::{get, patch, post},
+    routing::{get, patch, post, put},
     Router,
 };
 use tower_http::{cors::CorsLayer, timeout::TimeoutLayer, trace::TraceLayer};
@@ -21,6 +21,7 @@ use crate::{
         },
         events::events_sse,
         health::{healthz, livez, readyz},
+        settings::update_settings,
         static_files::serve_static,
     },
     state::AppState,
@@ -65,6 +66,7 @@ pub fn create_app(state: AppState, config: &Config) -> Router {
                 .put(update_calendar)
                 .delete(delete_calendar),
         )
+        .route("/calendars/{id}/settings", put(update_settings))
         // Entry routes
         .route("/entries", get(list_entries).post(create_entry))
         .route(

@@ -7,9 +7,12 @@ use aws_sdk_dynamodb::types::AttributeValue;
 use aws_sdk_dynamodb::Client;
 use uuid::Uuid;
 
-use calendsync_core::calendar::{Calendar, CalendarEntry, CalendarMembership, CalendarRole, User};
+use calendsync_core::calendar::{
+    Calendar, CalendarEntry, CalendarMembership, CalendarRole, CalendarSettings, User,
+};
 use calendsync_core::storage::{
-    CalendarRepository, DateRange, EntryRepository, MembershipRepository, Result, UserRepository,
+    CalendarRepository, DateRange, EntryRepository, MembershipRepository, RepositoryError, Result,
+    SettingsRepository, UserRepository,
 };
 
 use super::conversions::{
@@ -476,6 +479,28 @@ impl MembershipRepository for DynamoDbRepository {
                 )
             })?;
 
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl SettingsRepository for DynamoDbRepository {
+    async fn get_settings(
+        &self,
+        _calendar_id: Uuid,
+        _user_id: Uuid,
+    ) -> Result<Option<CalendarSettings>> {
+        // TODO: Implement DynamoDB settings storage (V4)
+        Ok(None)
+    }
+
+    async fn upsert_settings(
+        &self,
+        _calendar_id: Uuid,
+        _user_id: Uuid,
+        _settings: &CalendarSettings,
+    ) -> Result<()> {
+        // TODO: Implement DynamoDB settings storage (V4)
         Ok(())
     }
 }

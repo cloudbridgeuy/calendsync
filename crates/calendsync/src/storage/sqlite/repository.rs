@@ -6,10 +6,12 @@ use async_trait::async_trait;
 use tokio_rusqlite::Connection;
 use uuid::Uuid;
 
-use calendsync_core::calendar::{Calendar, CalendarEntry, CalendarMembership, CalendarRole, User};
+use calendsync_core::calendar::{
+    Calendar, CalendarEntry, CalendarMembership, CalendarRole, CalendarSettings, User,
+};
 use calendsync_core::storage::{
     CalendarRepository, DateRange, EntryRepository, MembershipRepository, RepositoryError, Result,
-    UserRepository,
+    SettingsRepository, UserRepository,
 };
 
 use super::conversions::{
@@ -543,5 +545,27 @@ impl MembershipRepository for SqliteRepository {
             })
             .await
             .map_err(|e| map_tokio_rusqlite_error_with_id(e, "CalendarMembership", membership_id))
+    }
+}
+
+#[async_trait]
+impl SettingsRepository for SqliteRepository {
+    async fn get_settings(
+        &self,
+        _calendar_id: Uuid,
+        _user_id: Uuid,
+    ) -> Result<Option<CalendarSettings>> {
+        // TODO: Implement SQLite settings storage (V3)
+        Ok(None)
+    }
+
+    async fn upsert_settings(
+        &self,
+        _calendar_id: Uuid,
+        _user_id: Uuid,
+        _settings: &CalendarSettings,
+    ) -> Result<()> {
+        // TODO: Implement SQLite settings storage (V3)
+        Ok(())
     }
 }

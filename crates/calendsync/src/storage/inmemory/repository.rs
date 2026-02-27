@@ -7,10 +7,12 @@ use async_trait::async_trait;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use calendsync_core::calendar::{Calendar, CalendarEntry, CalendarMembership, CalendarRole, User};
+use calendsync_core::calendar::{
+    Calendar, CalendarEntry, CalendarMembership, CalendarRole, CalendarSettings, User,
+};
 use calendsync_core::storage::{
     CalendarRepository, DateRange, EntryRepository, MembershipRepository, RepositoryError, Result,
-    UserRepository,
+    SettingsRepository, UserRepository,
 };
 
 /// In-memory storage backend for testing.
@@ -23,6 +25,7 @@ pub struct InMemoryRepository {
     calendars: Arc<RwLock<HashMap<Uuid, Calendar>>>,
     users: Arc<RwLock<HashMap<Uuid, User>>>,
     memberships: Arc<RwLock<HashMap<(Uuid, Uuid), CalendarMembership>>>,
+    settings: Arc<RwLock<HashMap<(Uuid, Uuid), CalendarSettings>>>,
 }
 
 impl Default for InMemoryRepository {
@@ -39,6 +42,7 @@ impl InMemoryRepository {
             calendars: Arc::new(RwLock::new(HashMap::new())),
             users: Arc::new(RwLock::new(HashMap::new())),
             memberships: Arc::new(RwLock::new(HashMap::new())),
+            settings: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 }
@@ -258,9 +262,33 @@ impl MembershipRepository for InMemoryRepository {
     }
 }
 
+#[async_trait]
+impl SettingsRepository for InMemoryRepository {
+    async fn get_settings(
+        &self,
+        calendar_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<Option<CalendarSettings>> {
+        let settings = self.settings.read().await;
+        Ok(settings.get(&(calendar_id, user_id)).cloned())
+    }
+
+    async fn upsert_settings(
+        &self,
+        calendar_id: Uuid,
+        user_id: Uuid,
+        settings: &CalendarSettings,
+    ) -> Result<()> {
+        let mut store = self.settings.write().await;
+        store.insert((calendar_id, user_id), settings.clone());
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use calendsync_core::calendar::{EntryStyle, ViewMode};
     use chrono::NaiveDate;
 
     // Helper to create test dates
@@ -623,5 +651,94 @@ mod tests {
 
         let bob_entry = users.iter().find(|(u, _)| u.name == "Bob").unwrap();
         assert_eq!(bob_entry.1, CalendarRole::Writer);
+    }
+
+    // ==================== Settings CRUD Tests ====================
+
+    #[tokio::test]
+    async fn test_settings_get_nonexistent() {
+        let repo = InMemoryRepository::new();
+        let result = repo
+            .get_settings(Uuid::new_v4(), Uuid::new_v4())
+            .await
+            .unwrap();
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_settings_upsert_and_get() {
+        let repo = InMemoryRepository::new();
+        let calendar_id = Uuid::new_v4();
+        let user_id = Uuid::new_v4();
+        let settings = CalendarSettings::default();
+
+        repo.upsert_settings(calendar_id, user_id, &settings)
+            .await
+            .unwrap();
+
+        let retrieved = repo.get_settings(calendar_id, user_id).await.unwrap();
+        assert_eq!(retrieved, Some(settings));
+    }
+
+    #[tokio::test]
+    async fn test_settings_upsert_overwrites() {
+        let repo = InMemoryRepository::new();
+        let calendar_id = Uuid::new_v4();
+        let user_id = Uuid::new_v4();
+
+        // Insert initial settings
+        let initial = CalendarSettings::default();
+        repo.upsert_settings(calendar_id, user_id, &initial)
+            .await
+            .unwrap();
+
+        // Overwrite with new settings
+        let updated = CalendarSettings {
+            view_mode: ViewMode::Schedule,
+            show_tasks: false,
+            entry_style: EntryStyle::Filled,
+        };
+        repo.upsert_settings(calendar_id, user_id, &updated)
+            .await
+            .unwrap();
+
+        let retrieved = repo.get_settings(calendar_id, user_id).await.unwrap();
+        assert_eq!(retrieved, Some(updated));
+    }
+
+    #[tokio::test]
+    async fn test_settings_isolated_per_user_and_calendar() {
+        let repo = InMemoryRepository::new();
+        let calendar_id = Uuid::new_v4();
+        let user1_id = Uuid::new_v4();
+        let user2_id = Uuid::new_v4();
+
+        let settings1 = CalendarSettings::default();
+        let settings2 = CalendarSettings {
+            view_mode: ViewMode::Schedule,
+            show_tasks: false,
+            entry_style: EntryStyle::Filled,
+        };
+
+        repo.upsert_settings(calendar_id, user1_id, &settings1)
+            .await
+            .unwrap();
+        repo.upsert_settings(calendar_id, user2_id, &settings2)
+            .await
+            .unwrap();
+
+        let retrieved1 = repo
+            .get_settings(calendar_id, user1_id)
+            .await
+            .unwrap()
+            .unwrap();
+        let retrieved2 = repo
+            .get_settings(calendar_id, user2_id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(retrieved1, settings1);
+        assert_eq!(retrieved2, settings2);
     }
 }

@@ -23,7 +23,7 @@ use crate::context::RequestContext;
 use chrono::Local;
 use uuid::Uuid;
 
-use calendsync_core::calendar::{CalendarEntry, User};
+use calendsync_core::calendar::{CalendarEntry, CalendarSettings, User};
 use calendsync_core::storage::DateRange;
 use calendsync_ssr::{sanitize_error, SsrConfig, SsrError};
 
@@ -496,8 +496,10 @@ pub async fn calendar_react_ssr(
         }
     }
 
+    let settings = get_settings_or_default(&state, calendar_id, user.id).await;
+
     let user_info = Some(SsrUserInfo::from(&user));
-    calendar_react_ssr_impl(state, calendar_id, user_info, ctx.session_id).await
+    calendar_react_ssr_impl(state, calendar_id, user_info, ctx.session_id, settings).await
 }
 
 /// SSR handler for `/calendar/{calendar_id}` (no auth).
@@ -511,7 +513,7 @@ pub async fn calendar_react_ssr(
     Path(calendar_id): Path<Uuid>,
 ) -> Response {
     tracing::debug!(request_id = %ctx.request_id, "Rendering calendar");
-    calendar_react_ssr_impl(state, calendar_id, None, None).await
+    calendar_react_ssr_impl(state, calendar_id, None, None, CalendarSettings::default()).await
 }
 
 /// Redirect user to their first calendar with a flash message about no access.
@@ -544,6 +546,26 @@ async fn redirect_to_first_calendar_with_flash(state: &AppState, user_id: Uuid) 
     }
 }
 
+/// Fetches user settings with fallback to defaults on missing or error.
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+async fn get_settings_or_default(
+    state: &AppState,
+    calendar_id: Uuid,
+    user_id: Uuid,
+) -> CalendarSettings {
+    match state.settings_repo.get_settings(calendar_id, user_id).await {
+        Ok(Some(s)) => s,
+        Ok(None) => CalendarSettings::default(),
+        Err(e) => {
+            tracing::warn!(
+                %calendar_id, %user_id, error = %e,
+                "Failed to fetch settings, using defaults"
+            );
+            CalendarSettings::default()
+        }
+    }
+}
+
 /// Implementation of SSR handler for `/calendar/{calendar_id}`.
 ///
 /// Renders the React calendar server-side using the SSR worker pool.
@@ -567,6 +589,7 @@ async fn calendar_react_ssr_impl(
     calendar_id: Uuid,
     user_info: Option<SsrUserInfo>,
     session_id: Option<String>,
+    settings: CalendarSettings,
 ) -> Response {
     // Prepare common SSR data (calendar validation, SSR pool, entries)
     let data = match prepare_ssr_data(&state, calendar_id).await {
@@ -593,6 +616,7 @@ async fn calendar_react_ssr_impl(
         "annotationsEnabled": cfg!(feature = "dev-annotations"),
         "user": user_info,
         "sessionId": session_id_for_ssr,
+        "settings": settings,
     });
 
     // Create SSR config (with payload size validation)
@@ -675,8 +699,18 @@ pub async fn calendar_react_ssr_entry(
         }
     }
 
+    let settings = get_settings_or_default(&state, calendar_id, user.id).await;
+
     let user_info = Some(SsrUserInfo::from(&user));
-    calendar_react_ssr_entry_impl(state, calendar_id, query, user_info, ctx.session_id).await
+    calendar_react_ssr_entry_impl(
+        state,
+        calendar_id,
+        query,
+        user_info,
+        ctx.session_id,
+        settings,
+    )
+    .await
 }
 
 /// SSR handler for `/calendar/{calendar_id}/entry` (no auth).
@@ -691,7 +725,15 @@ pub async fn calendar_react_ssr_entry(
     Query(query): Query<EntryModalQuery>,
 ) -> Response {
     tracing::debug!(request_id = %ctx.request_id, "Rendering calendar entry modal");
-    calendar_react_ssr_entry_impl(state, calendar_id, query, None, None).await
+    calendar_react_ssr_entry_impl(
+        state,
+        calendar_id,
+        query,
+        None,
+        None,
+        CalendarSettings::default(),
+    )
+    .await
 }
 
 /// Implementation of SSR handler for `/calendar/{calendar_id}/entry`.
@@ -708,6 +750,7 @@ async fn calendar_react_ssr_entry_impl(
     query: EntryModalQuery,
     user_info: Option<SsrUserInfo>,
     session_id: Option<String>,
+    settings: CalendarSettings,
 ) -> Response {
     // Prepare common SSR data (calendar validation, SSR pool, entries)
     let data = match prepare_ssr_data(&state, calendar_id).await {
@@ -778,6 +821,7 @@ async fn calendar_react_ssr_entry_impl(
         "annotationsEnabled": cfg!(feature = "dev-annotations"),
         "user": user_info,
         "sessionId": session_id_for_ssr,
+        "settings": settings,
     });
 
     // Create SSR config (with payload size validation)

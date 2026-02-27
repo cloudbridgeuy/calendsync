@@ -14,6 +14,7 @@ pub mod health;
 pub mod login;
 #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
 pub mod root;
+pub mod settings;
 pub mod static_files;
 
 pub use error::AppError;

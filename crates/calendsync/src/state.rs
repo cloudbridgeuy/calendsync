@@ -16,7 +16,7 @@ use uuid::Uuid;
 
 use calendsync_core::cache::CachePubSub;
 use calendsync_core::storage::{
-    CalendarRepository, EntryRepository, MembershipRepository, UserRepository,
+    CalendarRepository, EntryRepository, MembershipRepository, SettingsRepository, UserRepository,
 };
 use calendsync_ssr::SsrPool;
 
@@ -95,6 +95,13 @@ pub struct AppState {
     /// Note: Only used when auth features are enabled.
     #[allow(dead_code)]
     pub membership_repo: Arc<dyn MembershipRepository>,
+    /// Settings repository for per-user, per-calendar display settings.
+    /// Note: Only read when auth features are enabled (no-auth handler is a no-op).
+    #[cfg_attr(
+        not(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock")),
+        allow(dead_code)
+    )]
+    pub settings_repo: Arc<dyn SettingsRepository>,
     /// Cache pub/sub for cross-instance event propagation.
     pub cache_pubsub: Arc<dyn CachePubSub>,
 
@@ -142,6 +149,7 @@ impl AppState {
         calendar_repo: Arc<dyn CalendarRepository>,
         user_repo: Arc<dyn UserRepository>,
         membership_repo: Arc<dyn MembershipRepository>,
+        settings_repo: Arc<dyn SettingsRepository>,
         cache_pubsub: Arc<dyn CachePubSub>,
         config: &Config,
     ) -> Self {
@@ -157,6 +165,7 @@ impl AppState {
             calendar_repo,
             user_repo,
             membership_repo,
+            settings_repo,
             cache_pubsub,
             event_counter: Arc::new(AtomicU64::new(1)),
             event_history: Arc::new(RwLock::new(VecDeque::new())),
@@ -442,6 +451,7 @@ mod sqlite_memory {
                 cached_entry_repo,
                 cached_calendar_repo,
                 sqlite_repo.clone(),
+                sqlite_repo.clone(),
                 sqlite_repo,
                 memory_pubsub,
                 config,
@@ -480,6 +490,7 @@ mod sqlite_redis {
             Ok(Self::build(
                 cached_entry_repo,
                 cached_calendar_repo,
+                sqlite_repo.clone(),
                 sqlite_repo.clone(),
                 sqlite_repo,
                 redis_pubsub,
@@ -520,6 +531,7 @@ mod inmemory_memory {
             Ok(Self::build(
                 cached_entry_repo,
                 cached_calendar_repo,
+                inmemory_repo.clone(),
                 inmemory_repo.clone(),
                 inmemory_repo,
                 memory_pubsub,
@@ -566,6 +578,7 @@ mod dynamodb_memory {
                 cached_entry_repo,
                 cached_calendar_repo,
                 dynamodb_repo.clone(),
+                dynamodb_repo.clone(),
                 dynamodb_repo,
                 memory_pubsub,
                 config,
@@ -611,6 +624,7 @@ mod dynamodb_redis {
                 cached_entry_repo,
                 cached_calendar_repo,
                 dynamodb_repo.clone(),
+                dynamodb_repo.clone(),
                 dynamodb_repo,
                 redis_pubsub,
                 config,
@@ -634,11 +648,11 @@ mod test_support {
     use tokio::sync::RwLock;
 
     use calendsync_core::calendar::{
-        Calendar, CalendarEntry, CalendarMembership, CalendarRole, User,
+        Calendar, CalendarEntry, CalendarMembership, CalendarRole, CalendarSettings, User,
     };
     use calendsync_core::storage::{
         CalendarRepository, DateRange, EntryRepository, MembershipRepository, Result,
-        UserRepository,
+        SettingsRepository, UserRepository,
     };
 
     /// Minimal in-memory repository for tests.
@@ -649,6 +663,7 @@ mod test_support {
         calendars: RwLock<HashMap<Uuid, Calendar>>,
         users: RwLock<HashMap<Uuid, User>>,
         memberships: RwLock<HashMap<(Uuid, Uuid), CalendarMembership>>,
+        settings: RwLock<HashMap<(Uuid, Uuid), CalendarSettings>>,
     }
 
     #[async_trait]
@@ -816,6 +831,29 @@ mod test_support {
         }
     }
 
+    #[async_trait]
+    impl SettingsRepository for TestRepository {
+        async fn get_settings(
+            &self,
+            calendar_id: Uuid,
+            user_id: Uuid,
+        ) -> Result<Option<CalendarSettings>> {
+            let settings = self.settings.read().await;
+            Ok(settings.get(&(calendar_id, user_id)).cloned())
+        }
+
+        async fn upsert_settings(
+            &self,
+            calendar_id: Uuid,
+            user_id: Uuid,
+            settings: &CalendarSettings,
+        ) -> Result<()> {
+            let mut store = self.settings.write().await;
+            store.insert((calendar_id, user_id), settings.clone());
+            Ok(())
+        }
+    }
+
     impl Default for AppState {
         /// Creates an AppState with in-memory storage for testing.
         ///
@@ -828,6 +866,7 @@ mod test_support {
 
             // For tests, we use the test repository without caching
             Self::build(
+                test_repo.clone(),
                 test_repo.clone(),
                 test_repo.clone(),
                 test_repo.clone(),
