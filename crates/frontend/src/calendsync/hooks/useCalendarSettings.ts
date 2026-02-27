@@ -1,26 +1,28 @@
 /**
  * Calendar settings hook - Imperative Shell.
- * Handles localStorage persistence for view mode and task visibility settings.
+ * Reads initial settings from server data and saves changes via debounced PUT.
  */
 
 import {
   type CalendarSettings,
+  DEFAULT_SETTINGS,
   type EntryStyle,
-  getSettingsStorageKey,
-  parseSettingsJson,
-  serializeSettings,
   toggleShowTasks as toggleShowTasksPure,
   updateEntryStyle as updateEntryStylePure,
   updateShowTasks as updateShowTasksPure,
   updateViewMode as updateViewModePure,
   type ViewMode,
 } from "@core/calendar/settings"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 /** Configuration for useCalendarSettings hook */
 export interface UseCalendarSettingsConfig {
-  /** Calendar ID for localStorage key */
+  /** Initial settings from server (may be undefined if no-auth) */
+  initialSettings?: CalendarSettings
+  /** Calendar ID for the save endpoint */
   calendarId: string
+  /** Base URL for API calls */
+  controlPlaneUrl: string
 }
 
 /** State returned by useCalendarSettings */
@@ -46,7 +48,11 @@ export interface CalendarSettingsActions {
 }
 
 /**
- * Hook to manage calendar settings with localStorage persistence.
+ * Hook to manage calendar settings with debounced server persistence.
+ *
+ * Reads initial settings from server data (via initialData.settings).
+ * On change, optimistically updates local state and debounces a PUT
+ * request to save settings on the server (fire-and-forget).
  *
  * @param config - Hook configuration
  * @returns Tuple of [state, actions]
@@ -54,24 +60,35 @@ export interface CalendarSettingsActions {
 export function useCalendarSettings(
   config: UseCalendarSettingsConfig,
 ): [CalendarSettingsState, CalendarSettingsActions] {
-  const { calendarId } = config
-  const [settings, setSettings] = useState<CalendarSettings>(() => {
-    // Initialize from localStorage if available (SSR-safe)
-    if (typeof window === "undefined") {
-      return { viewMode: "compact", showTasks: true, entryStyle: "compact" }
-    }
-    const storageKey = getSettingsStorageKey(calendarId)
-    const stored = localStorage.getItem(storageKey)
-    return parseSettingsJson(stored)
-  })
+  const { initialSettings, calendarId, controlPlaneUrl } = config
 
-  // Persist to localStorage on change
+  const [settings, setSettings] = useState<CalendarSettings>(
+    () => initialSettings ?? DEFAULT_SETTINGS,
+  )
+
+  // Track whether this is the first render (don't save initial settings back)
+  const isFirstRender = useRef(true)
+
+  // Debounced save to server when settings change
   useEffect(() => {
-    if (typeof window === "undefined") return
-    const storageKey = getSettingsStorageKey(calendarId)
-    const serialized = serializeSettings(settings)
-    localStorage.setItem(storageKey, serialized)
-  }, [calendarId, settings])
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
+    }
+
+    const timer = setTimeout(() => {
+      fetch(`${controlPlaneUrl}/api/calendars/${calendarId}/settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(settings),
+      }).catch(() => {
+        // Fire-and-forget: swallow errors silently
+      })
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [settings, calendarId, controlPlaneUrl])
 
   const setViewMode = useCallback((mode: ViewMode) => {
     setSettings((prev) => updateViewModePure(prev, mode))

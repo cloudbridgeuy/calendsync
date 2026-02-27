@@ -51,7 +51,9 @@ interface CalendarProps {
 function CalendarRoot({ initialData, children }: CalendarProps) {
   // Settings hook
   const [settingsState, settingsActions] = useCalendarSettings({
+    initialSettings: initialData.settings,
     calendarId: initialData.calendarId,
+    controlPlaneUrl: initialData.controlPlaneUrl,
   })
 
   // Notification center hook
@@ -395,7 +397,6 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
       notificationActions,
       addNotification,
       settingsState,
-      settingsActions,
       showAllDayOverflow,
       showAllDayTasks,
       isOnline,
@@ -405,6 +406,10 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
       getLocalEntry,
       sseReconnect,
       initialData.user,
+      settingsActions.setEntryStyle,
+      settingsActions.setShowTasks,
+      settingsActions.setViewMode,
+      settingsActions.toggleShowTasks,
     ],
   )
 

@@ -172,10 +172,6 @@ export { determineInitialView, selectCalendar } from "./selection"
 export type { CalendarSettings, EntryStyle, ViewMode } from "./settings"
 export {
   DEFAULT_SETTINGS,
-  getSettingsStorageKey,
-  parseSettingsJson,
-  SETTINGS_STORAGE_PREFIX,
-  serializeSettings,
   toggleShowTasks,
   updateEntryStyle,
   updateShowTasks,

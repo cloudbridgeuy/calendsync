@@ -17,6 +17,7 @@ export {
   MONTH_NAMES,
 } from "@core/calendar/types"
 
+import type { CalendarSettings } from "@core/calendar/settings"
 import type { SseConnectionState } from "@core/sse/types"
 
 /**
@@ -75,6 +76,8 @@ export interface InitialData {
   user?: UserInfo
   /** Session ID for dev tools (only in dev mode) */
   sessionId?: string
+  /** Calendar settings from the server (view mode, show tasks, entry style) */
+  settings?: CalendarSettings
 }
 
 /**
