@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use aws_sdk_dynamodb::types::AttributeValue;
 use calendsync_core::calendar::{
-    Calendar, CalendarEntry, CalendarMembership, CalendarRole, EntryKind, User,
+    Calendar, CalendarEntry, CalendarMembership, CalendarRole, CalendarSettings, EntryKind, User,
 };
 use calendsync_core::storage::RepositoryError;
 use chrono::{DateTime, NaiveDate, Utc};
@@ -23,6 +23,7 @@ pub const ENTITY_TYPE_USER: &str = "USER";
 pub const ENTITY_TYPE_CALENDAR: &str = "CALENDAR";
 pub const ENTITY_TYPE_ENTRY: &str = "ENTRY";
 pub const ENTITY_TYPE_MEMBERSHIP: &str = "MEMBERSHIP";
+pub const ENTITY_TYPE_SETTINGS: &str = "SETTINGS";
 
 // ============================================================================
 // User conversions
@@ -341,6 +342,59 @@ pub fn item_to_membership(
 }
 
 // ============================================================================
+// Settings conversions
+// ============================================================================
+
+/// Convert CalendarSettings to a DynamoDB item.
+pub fn settings_to_item(
+    calendar_id: Uuid,
+    user_id: Uuid,
+    settings: &CalendarSettings,
+) -> Result<HashMap<String, AttributeValue>, RepositoryError> {
+    let mut item = HashMap::new();
+
+    // Keys
+    item.insert(
+        "PK".to_string(),
+        AttributeValue::S(keys::settings_pk(calendar_id)),
+    );
+    item.insert(
+        "SK".to_string(),
+        AttributeValue::S(keys::settings_sk(user_id)),
+    );
+
+    // Entity type
+    item.insert(
+        "entityType".to_string(),
+        AttributeValue::S(ENTITY_TYPE_SETTINGS.to_string()),
+    );
+
+    // Data
+    item.insert(
+        "calendarId".to_string(),
+        AttributeValue::S(calendar_id.to_string()),
+    );
+    item.insert("userId".to_string(), AttributeValue::S(user_id.to_string()));
+    let settings_json = serde_json::to_string(settings)
+        .map_err(|e| RepositoryError::Serialization(e.to_string()))?;
+    item.insert("settingsJson".to_string(), AttributeValue::S(settings_json));
+    item.insert(
+        "updatedAt".to_string(),
+        AttributeValue::S(chrono::Utc::now().to_rfc3339()),
+    );
+
+    Ok(item)
+}
+
+/// Convert a DynamoDB item to CalendarSettings.
+pub fn item_to_settings(
+    item: &HashMap<String, AttributeValue>,
+) -> Result<CalendarSettings, RepositoryError> {
+    let json_str = get_string(item, "settingsJson")?;
+    serde_json::from_str(&json_str).map_err(|e| RepositoryError::Serialization(e.to_string()))
+}
+
+// ============================================================================
 // Role conversions
 // ============================================================================
 
@@ -608,6 +662,35 @@ mod tests {
         assert_eq!(parse_role("OWNER").unwrap(), CalendarRole::Owner);
         assert_eq!(parse_role("Writer").unwrap(), CalendarRole::Writer);
         assert!(parse_role("invalid").is_err());
+    }
+
+    #[test]
+    fn test_settings_round_trip() {
+        let calendar_id = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440002").unwrap();
+        let user_id = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440001").unwrap();
+        let settings = CalendarSettings::default();
+        let item = settings_to_item(calendar_id, user_id, &settings).unwrap();
+        let parsed = item_to_settings(&item).unwrap();
+
+        assert_eq!(settings, parsed);
+    }
+
+    #[test]
+    fn test_settings_item_has_correct_keys() {
+        let calendar_id = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440002").unwrap();
+        let user_id = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440001").unwrap();
+        let settings = CalendarSettings::default();
+        let item = settings_to_item(calendar_id, user_id, &settings).unwrap();
+
+        assert_eq!(
+            item.get("PK").unwrap().as_s().unwrap(),
+            "CAL#550e8400-e29b-41d4-a716-446655440002"
+        );
+        assert_eq!(
+            item.get("SK").unwrap().as_s().unwrap(),
+            "SETTINGS#550e8400-e29b-41d4-a716-446655440001"
+        );
+        assert_eq!(item.get("entityType").unwrap().as_s().unwrap(), "SETTINGS");
     }
 
     #[test]

@@ -73,7 +73,7 @@ pub trait SettingsRepository: Send + Sync {
 |---------|--------|-------|
 | In-memory | Implemented | `HashMap<(Uuid, Uuid), CalendarSettings>` |
 | SQLite | Implemented | JSON in `calendar_settings` table, UPSERT with ON CONFLICT |
-| DynamoDB | Stub (no-op) | Returns `Ok(None)` / `Ok(())` |
+| DynamoDB | Implemented | `PK=CAL#<cal_id>`, `SK=SETTINGS#<user_id>`, JSON in `settingsJson` attr |
 
 ## API Endpoint
 

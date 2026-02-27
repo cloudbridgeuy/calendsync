@@ -11,13 +11,13 @@ use calendsync_core::calendar::{
     Calendar, CalendarEntry, CalendarMembership, CalendarRole, CalendarSettings, User,
 };
 use calendsync_core::storage::{
-    CalendarRepository, DateRange, EntryRepository, MembershipRepository, RepositoryError, Result,
+    CalendarRepository, DateRange, EntryRepository, MembershipRepository, Result,
     SettingsRepository, UserRepository,
 };
 
 use super::conversions::{
     calendar_to_item, entry_to_item, item_to_calendar, item_to_entry, item_to_membership,
-    item_to_user, membership_to_item, user_to_item,
+    item_to_settings, item_to_user, membership_to_item, settings_to_item, user_to_item,
 };
 use super::error::{
     map_delete_item_error, map_get_item_error, map_put_item_error, map_query_error,
@@ -483,24 +483,61 @@ impl MembershipRepository for DynamoDbRepository {
     }
 }
 
+// ============================================================================
+// SettingsRepository implementation
+// ============================================================================
+
 #[async_trait]
 impl SettingsRepository for DynamoDbRepository {
     async fn get_settings(
         &self,
-        _calendar_id: Uuid,
-        _user_id: Uuid,
+        calendar_id: Uuid,
+        user_id: Uuid,
     ) -> Result<Option<CalendarSettings>> {
-        // TODO: Implement DynamoDB settings storage (V4)
-        Ok(None)
+        let result = self
+            .client
+            .get_item()
+            .table_name(&self.table_name)
+            .key("PK", AttributeValue::S(keys::settings_pk(calendar_id)))
+            .key("SK", AttributeValue::S(keys::settings_sk(user_id)))
+            .send()
+            .await
+            .map_err(|e| {
+                map_get_item_error(
+                    e,
+                    "CalendarSettings",
+                    format!("{}:{}", calendar_id, user_id),
+                )
+            })?;
+
+        match result.item {
+            Some(item) => Ok(Some(item_to_settings(&item)?)),
+            None => Ok(None),
+        }
     }
 
     async fn upsert_settings(
         &self,
-        _calendar_id: Uuid,
-        _user_id: Uuid,
-        _settings: &CalendarSettings,
+        calendar_id: Uuid,
+        user_id: Uuid,
+        settings: &CalendarSettings,
     ) -> Result<()> {
-        // TODO: Implement DynamoDB settings storage (V4)
+        let item = settings_to_item(calendar_id, user_id, settings)?;
+
+        self.client
+            .put_item()
+            .table_name(&self.table_name)
+            .set_item(Some(item))
+            .send()
+            .await
+            .map_err(|e| {
+                map_put_item_error(
+                    e,
+                    "CalendarSettings",
+                    format!("{}:{}", calendar_id, user_id),
+                )
+            })?;
+
         Ok(())
     }
 }

@@ -14,6 +14,7 @@ pub const USER_PREFIX: &str = "USER#";
 pub const CALENDAR_PREFIX: &str = "CAL#";
 pub const ENTRY_PREFIX: &str = "ENTRY#";
 pub const MEMBER_PREFIX: &str = "MEMBER#";
+pub const SETTINGS_PREFIX: &str = "SETTINGS#";
 pub const EMAIL_PREFIX: &str = "EMAIL#";
 pub const PROVIDER_PREFIX: &str = "PROV#";
 
@@ -188,6 +189,24 @@ pub fn calendar_gsi1_sk_prefix() -> &'static str {
     CALENDAR_PREFIX
 }
 
+// ============================================================================
+// Settings keys
+// ============================================================================
+
+/// Generate primary key for CalendarSettings.
+///
+/// Pattern: `CAL#<calendar_id>` (shares partition with calendar and memberships)
+pub fn settings_pk(calendar_id: Uuid) -> String {
+    format!("{CALENDAR_PREFIX}{calendar_id}")
+}
+
+/// Generate sort key for CalendarSettings.
+///
+/// Pattern: `SETTINGS#<user_id>`
+pub fn settings_sk(user_id: Uuid) -> String {
+    format!("{SETTINGS_PREFIX}{user_id}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -283,6 +302,24 @@ mod tests {
         assert_eq!(
             membership_gsi1_sk(calendar_id),
             "CAL#550e8400-e29b-41d4-a716-446655440002"
+        );
+    }
+
+    #[test]
+    fn test_settings_pk() {
+        let calendar_id = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440002").unwrap();
+        assert_eq!(
+            settings_pk(calendar_id),
+            "CAL#550e8400-e29b-41d4-a716-446655440002"
+        );
+    }
+
+    #[test]
+    fn test_settings_sk() {
+        let user_id = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440001").unwrap();
+        assert_eq!(
+            settings_sk(user_id),
+            "SETTINGS#550e8400-e29b-41d4-a716-446655440001"
         );
     }
 
