@@ -647,6 +647,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | User Profile Settings| `.claude/context/user-profile-settings.md` |
 | Dev Annotations      | `.claude/context/dev-annotations.md`     |
 | Now Indicator        | `.claude/context/now-indicator.md`       |
+| Settings Persistence | `.claude/context/calendar-settings-persistence.md` |
 
 ### Local Working Directories (gitignored)
 
@@ -685,6 +686,8 @@ These directories are for temporary working artifacts. Move finalized documentat
 | **DynamoDB**            | AWS NoSQL database used for persistence (single-table design)                      |
 | **GSI**                 | Global Secondary Index - alternate query pattern in DynamoDB                       |
 | **CalendarMembership**  | Entity linking users to calendars with roles (owner/writer/reader)                 |
+| **CalendarSettings**    | Per-user, per-calendar display settings (viewMode, showTasks, entryStyle)           |
+| **SettingsRepository**  | Repository trait for persisting CalendarSettings server-side                        |
 
 ## Pommel - Semantic Code Search
 
