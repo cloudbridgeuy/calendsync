@@ -66,9 +66,10 @@ function useScheduleGridContext(): ScheduleGridContextValue {
 
 interface ScheduleGridRootProps {
   children: React.ReactNode
+  className?: string
 }
 
-function ScheduleGridRoot({ children }: ScheduleGridRootProps) {
+function ScheduleGridRoot({ children, className }: ScheduleGridRootProps) {
   const { renderedDates, getEntriesForDate, dayWidth, highlightedDate, scrollToDate } =
     useCalendarContext()
   const now = useCurrentTime(30_000)
@@ -87,7 +88,7 @@ function ScheduleGridRoot({ children }: ScheduleGridRootProps) {
 
   return (
     <ScheduleGridContext.Provider value={contextValue}>
-      <div className="schedule-grid">{children}</div>
+      <div className={`schedule-grid${className ? ` ${className}` : ""}`}>{children}</div>
     </ScheduleGridContext.Provider>
   )
 }
@@ -114,7 +115,7 @@ function Corner() {
  * Day headers row - sticky at top.
  */
 function DayHeaders() {
-  const { renderedDates, dayWidth, highlightedDate, scrollToDate } = useScheduleGridContext()
+  const { renderedDates, highlightedDate, scrollToDate } = useScheduleGridContext()
 
   return (
     <div className="schedule-day-headers">
@@ -128,7 +129,6 @@ function DayHeaders() {
           <div
             key={dateKey}
             className={`schedule-day-header${isHighlighted ? " highlighted" : ""}`}
-            style={{ width: dayWidth, minWidth: dayWidth }}
             onClick={() => scrollToDate(date)}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
@@ -161,7 +161,7 @@ function AllDayLabel() {
  * Sticky below day headers. Supports collapsible overflow and task toggles.
  */
 function AllDayEvents() {
-  const { renderedDates, getEntriesForDate, dayWidth } = useScheduleGridContext()
+  const { renderedDates, getEntriesForDate } = useScheduleGridContext()
   const { showAllDayOverflow, setShowAllDayOverflow, showAllDayTasks, setShowAllDayTasks } =
     useCalendarContext()
 
@@ -197,11 +197,7 @@ function AllDayEvents() {
         const columnTasksText = formatTasksToggle(summary.tasks.length, showAllDayTasks)
 
         return (
-          <div
-            key={dateKey}
-            className="schedule-all-day-column"
-            style={{ width: dayWidth, minWidth: dayWidth }}
-          >
+          <div key={dateKey} className="schedule-all-day-column">
             {/* Visible events */}
             {summary.visibleEvents.map((entry) => (
               <AllDayEntryTile key={entry.id} entry={entry} />
@@ -273,14 +269,7 @@ function TimedGrid() {
         const dateKey = formatDateKey(date)
         const entries = filterTimedEntries(getEntriesForDate(date))
 
-        return (
-          <ScheduleDayContent
-            key={dateKey}
-            entries={entries}
-            dayWidth={dayWidth}
-            dateKey={dateKey}
-          />
-        )
+        return <ScheduleDayContent key={dateKey} entries={entries} dateKey={dateKey} />
       })}
       <div className="now-indicator-line" style={{ top: `${percent}%` }} />
       {todayIdx !== null && (

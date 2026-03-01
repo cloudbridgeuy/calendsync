@@ -64,6 +64,8 @@ export interface UseVirtualScrollReturn {
   scrollToDate: (date: Date, animated?: boolean) => void
   /** Jump to today */
   scrollToToday: () => void
+  /** Whether the scroll content is pre-positioned via CSS transform (true during SSR, false after scroll init) */
+  scrollPrePositioned: boolean
 }
 
 /** Shift amount when re-centering (number of days) */
@@ -120,6 +122,8 @@ export function useVirtualScroll(options: UseVirtualScrollOptions): UseVirtualSc
   const isRecenteringRef = useRef(false)
   const prevHighlightedRef = useRef<Date>(initialCenterDate)
   const initialPositionSetRef = useRef(false)
+  // Pre-position state: true during SSR and initial render, false after scroll position is set
+  const [scrollPrePositioned, setScrollPrePositioned] = useState(true)
   // Pending scroll adjustments to apply synchronously after DOM update
   const pendingScrollAdjustmentRef = useRef<number | null>(null)
   const pendingScrollToRef = useRef<{ position: number; animated: boolean } | null>(null)
@@ -355,6 +359,9 @@ export function useVirtualScroll(options: UseVirtualScrollOptions): UseVirtualSc
       visibleDays,
     )
 
+    // Remove CSS pre-position transform and set real scroll position in one pass.
+    // Both happen before the browser paints, so the transition is invisible.
+    setScrollPrePositioned(false)
     scrollContainerRef.current.scrollLeft = initialScrollPosition
     initialPositionSetRef.current = true
   }, [containerWidth, dayWidth, highlightedDate, windowStartDate, visibleDays]) // Only depend on size changes, not state
@@ -391,5 +398,6 @@ export function useVirtualScroll(options: UseVirtualScrollOptions): UseVirtualSc
     visibleDays,
     scrollToDate,
     scrollToToday,
+    scrollPrePositioned,
   }
 }

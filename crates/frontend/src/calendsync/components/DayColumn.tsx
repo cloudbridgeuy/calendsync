@@ -13,6 +13,7 @@ import {
 import type { ViewMode } from "@core/calendar/settings"
 import type { ServerEntry } from "@core/calendar/types"
 import { useMemo } from "react"
+import { useCalendarContext } from "../contexts"
 
 import { EntryTile } from "./EntryTile"
 import { ScheduleTimedEntry } from "./ScheduleTimedEntry"
@@ -28,8 +29,6 @@ interface DayColumnProps {
   isLastVisible?: boolean
   /** View mode - compact (list) or schedule (24-hour grid) */
   viewMode?: ViewMode
-  /** Width of day column (needed for schedule mode entry width calculation) */
-  dayWidth?: number
 }
 
 /**
@@ -55,10 +54,9 @@ export function DayColumn({
   style,
   isLastVisible,
   viewMode = "compact",
-  dayWidth = 0,
 }: DayColumnProps) {
   if (viewMode === "schedule") {
-    return <ScheduleDayContent entries={entries} dayWidth={dayWidth} dateKey={dateKey} />
+    return <ScheduleDayContent entries={entries} dateKey={dateKey} />
   }
 
   // Compact mode: sort and render as list
@@ -97,8 +95,6 @@ export function EntryTiles({ entries }: EntryTilesProps) {
 interface ScheduleDayContentProps {
   /** Entries for this day */
   entries: ServerEntry[]
-  /** Width of day column */
-  dayWidth: number
   /** Date key for data attribute */
   dateKey: string
 }
@@ -109,7 +105,9 @@ interface ScheduleDayContentProps {
  * All-day, multi-day, and tasks are rendered in the AllDaySection component.
  * Uses percentage-based positioning for CSS-first layout.
  */
-export function ScheduleDayContent({ entries, dayWidth, dateKey }: ScheduleDayContentProps) {
+export function ScheduleDayContent({ entries, dateKey }: ScheduleDayContentProps) {
+  const { dayWidth } = useCalendarContext()
+
   // Separate timed entries from all-day/multi-day/tasks
   const { timed } = useMemo(() => separateEntriesByType(entries), [entries])
 
@@ -117,11 +115,7 @@ export function ScheduleDayContent({ entries, dayWidth, dateKey }: ScheduleDayCo
   const overlapColumns = useMemo(() => detectOverlappingEntries(timed), [timed])
 
   return (
-    <div
-      className="schedule-day-content"
-      data-date={dateKey}
-      style={{ width: dayWidth, minWidth: dayWidth }}
-    >
+    <div className="schedule-day-content" data-date={dateKey}>
       {/* Hour grid lines - positioned with percentages */}
       {Array.from({ length: HOURS_IN_DAY }, (_, hour) => (
         <div

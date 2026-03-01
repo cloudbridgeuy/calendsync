@@ -47,6 +47,8 @@ export interface CalendarContextValue {
   renderedDates: Date[]
   /** Width of each day column in pixels */
   dayWidth: number
+  /** Whether scroll content is CSS pre-positioned (true during SSR, false after init) */
+  scrollPrePositioned: boolean
 
   // Navigation actions
   /** Scroll to a specific date */

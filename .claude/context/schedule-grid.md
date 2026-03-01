@@ -24,10 +24,14 @@ The component uses a 2-column, 3-row grid structure:
 ```css
 .schedule-grid {
   display: grid;
-  grid-template-columns: 60px 1fr;
+  grid-template-columns: var(--schedule-hour-column-width) 1fr;
   grid-template-rows: auto auto 1fr;
 }
 ```
+
+Column widths use CSS custom properties defined per breakpoint:
+- `--schedule-hour-column-width: 60px` — hour column width
+- `--schedule-day-width` — day column width (`(100vw - hour column) / visibleDays`)
 
 ### Sticky Behavior
 

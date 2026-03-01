@@ -163,6 +163,7 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
     visibleDays: virtualVisibleDays,
     scrollToDate,
     scrollToToday,
+    scrollPrePositioned,
   } = useVirtualScroll({
     initialCenterDate: centerDate,
     containerWidth,
@@ -329,6 +330,7 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
       highlightedDate,
       renderedDates,
       dayWidth,
+      scrollPrePositioned,
       // Navigation actions
       scrollToDate,
       navigateDays,
@@ -381,6 +383,7 @@ function CalendarRoot({ initialData, children }: CalendarProps) {
       highlightedDate,
       renderedDates,
       dayWidth,
+      scrollPrePositioned,
       scrollToDate,
       navigateDays,
       scrollToToday,
@@ -455,7 +458,7 @@ function NotificationCenterWrapper() {
  * Uses native browser scroll for navigation.
  */
 function VirtualDaysContent() {
-  const { renderedDates, dayWidth, getEntriesForDate, highlightedDate, scrollToDate, settings } =
+  const { renderedDates, getEntriesForDate, highlightedDate, scrollToDate, settings } =
     useCalendarContext()
 
   return (
@@ -474,12 +477,7 @@ function VirtualDaysContent() {
           >
             <DayContainer.Header />
             <DayContainer.Content>
-              <DayColumn
-                dateKey={dateKey}
-                entries={entries}
-                viewMode={settings.viewMode}
-                dayWidth={dayWidth}
-              />
+              <DayColumn dateKey={dateKey} entries={entries} viewMode={settings.viewMode} />
             </DayContainer.Content>
           </DayContainer>
         )
@@ -493,7 +491,8 @@ function VirtualDaysContent() {
  * Uses native browser scroll with hidden scrollbar.
  */
 function Days() {
-  const { sseConnectionState, error, refresh, scrollContainerRef, settings } = useCalendarContext()
+  const { sseConnectionState, error, refresh, scrollContainerRef, settings, scrollPrePositioned } =
+    useCalendarContext()
   const prevViewModeRef = useRef(settings.viewMode)
   const isScheduleMode = settings.viewMode === "schedule"
 
@@ -545,7 +544,7 @@ function Days() {
       {/* Scroll container for virtual scrolling */}
       <main ref={scrollContainerRef} className="entry-container scroll-container">
         {isScheduleMode ? (
-          <ScheduleGrid>
+          <ScheduleGrid className={scrollPrePositioned ? "scroll-pre-position" : undefined}>
             <ScheduleGrid.Corner />
             <ScheduleGrid.DayHeaders />
             <ScheduleGrid.AllDayLabel />
@@ -554,7 +553,7 @@ function Days() {
             <ScheduleGrid.TimedGrid />
           </ScheduleGrid>
         ) : (
-          <div className="days-scroll">
+          <div className={`days-scroll${scrollPrePositioned ? " scroll-pre-position" : ""}`}>
             <VirtualDaysContent />
           </div>
         )}

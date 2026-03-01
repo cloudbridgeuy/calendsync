@@ -648,6 +648,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | Dev Annotations      | `.claude/context/dev-annotations.md`     |
 | Now Indicator        | `.claude/context/now-indicator.md`       |
 | Settings Persistence | `.claude/context/calendar-settings-persistence.md` |
+| Scroll Pre-Position  | `.claude/context/scroll-pre-position.md`            |
 
 ### Local Working Directories (gitignored)
 

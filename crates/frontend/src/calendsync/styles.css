@@ -12,38 +12,64 @@
   --border: #e5e5e5;
   --tile-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   --now-indicator: #ef4444;
+  --schedule-hour-column-width: 60px;
   --day-width: calc(100vw / 7);
+  --schedule-day-width: calc((100vw - var(--schedule-hour-column-width)) / 7);
+  --scroll-offset-days: 7;
 }
 
 /* Responsive day width breakpoints */
 @media (max-width: 499px) {
   :root {
     --day-width: 100vw;
+    --schedule-day-width: calc(100vw - var(--schedule-hour-column-width));
+    --scroll-offset-days: 10;
   }
 }
 
 @media (min-width: 500px) and (max-width: 749px) {
   :root {
     --day-width: 75vw;
+    --schedule-day-width: calc(100vw - var(--schedule-hour-column-width));
+    --scroll-offset-days: 10;
   }
 }
 
 @media (min-width: 750px) and (max-width: 1249px) {
   :root {
     --day-width: calc(100vw / 3);
+    --schedule-day-width: calc((100vw - var(--schedule-hour-column-width)) / 3);
+    --scroll-offset-days: 9;
   }
 }
 
 @media (min-width: 1250px) and (max-width: 1749px) {
   :root {
     --day-width: calc(100vw / 5);
+    --schedule-day-width: calc((100vw - var(--schedule-hour-column-width)) / 5);
+    --scroll-offset-days: 8;
   }
 }
 
 @media (min-width: 1750px) {
   :root {
     --day-width: calc(100vw / 7);
+    --schedule-day-width: calc((100vw - var(--schedule-hour-column-width)) / 7);
+    --scroll-offset-days: 7;
   }
+}
+
+/* Pre-position scroll content during SSR to prevent flash of wrong days.
+   Browser resolves calc() before first paint. React removes this class
+   in useLayoutEffect and sets scrollLeft to the equivalent position. */
+.days-scroll.scroll-pre-position {
+  transform: translateX(calc(-1 * var(--scroll-offset-days) * var(--day-width)));
+}
+
+.schedule-grid.scroll-pre-position .schedule-day-headers,
+.schedule-grid.scroll-pre-position .schedule-all-day-events,
+.schedule-grid.scroll-pre-position .schedule-timed-grid {
+  transform: translateX(calc(-1 * var(--scroll-offset-days) * var(--day-width)));
 }
 
 @media (prefers-color-scheme: dark) {
@@ -2178,8 +2204,8 @@ body {
 .schedule-hour-column {
   position: sticky;
   left: 0;
-  width: 60px;
-  min-width: 60px;
+  width: var(--schedule-hour-column-width);
+  min-width: var(--schedule-hour-column-width);
   flex-shrink: 0;
   background-color: var(--bg-secondary);
   border-right: 1px solid var(--border);
@@ -2475,8 +2501,8 @@ body {
 .hour-column-fixed {
   position: sticky;
   left: 0;
-  width: 60px;
-  min-width: 60px;
+  width: var(--schedule-hour-column-width);
+  min-width: var(--schedule-hour-column-width);
   flex-shrink: 0;
   background-color: var(--bg-secondary);
   border-right: 1px solid var(--border);
@@ -2660,6 +2686,8 @@ body {
 /* Schedule Day Content (inside DayColumn) */
 .schedule-day-content {
   position: relative;
+  width: var(--schedule-day-width);
+  min-width: var(--schedule-day-width);
   height: 100%; /* Fill parent height, which has min-height: 1440px */
 }
 
@@ -2728,7 +2756,7 @@ body {
 
 .schedule-grid {
   display: grid;
-  grid-template-columns: 60px 1fr;
+  grid-template-columns: var(--schedule-hour-column-width) 1fr;
   grid-template-rows: auto auto 1fr;
   min-height: 100%;
   width: max-content;
@@ -2773,6 +2801,8 @@ body {
 
 .schedule-day-header {
   flex-shrink: 0;
+  width: var(--schedule-day-width);
+  min-width: var(--schedule-day-width);
   padding: 0.75rem;
   text-align: center;
   border-right: 1px solid var(--border);
@@ -2862,6 +2892,8 @@ body {
 
 .schedule-all-day-column {
   flex-shrink: 0;
+  width: var(--schedule-day-width);
+  min-width: var(--schedule-day-width);
   padding: 0.25rem;
   border-right: 1px solid var(--border);
   display: flex;
