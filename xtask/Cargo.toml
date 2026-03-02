@@ -21,6 +21,7 @@ serde_json = { workspace = true }
 toml_edit = { workspace = true }
 semver = { workspace = true }
 dialoguer = { workspace = true }
+duct = { workspace = true }
 aws-config = { workspace = true }
 aws-sdk-dynamodb = { workspace = true }
 calendsync_core = { workspace = true }
