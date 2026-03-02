@@ -5,6 +5,7 @@
 
 import {
   calculateHourLinePositionPercent,
+  clickYToTimeSlot,
   detectOverlappingEntries,
   HOURS_IN_DAY,
   separateEntriesByType,
@@ -12,7 +13,7 @@ import {
 } from "@core/calendar"
 import type { ViewMode } from "@core/calendar/settings"
 import type { ServerEntry } from "@core/calendar/types"
-import { useMemo } from "react"
+import { useCallback, useMemo } from "react"
 import { useCalendarContext } from "../contexts"
 
 import { EntryTile } from "./EntryTile"
@@ -55,6 +56,17 @@ export function DayColumn({
   isLastVisible,
   viewMode = "compact",
 }: DayColumnProps) {
+  const { openCreateModal } = useCalendarContext()
+
+  const handleClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const target = e.target as HTMLElement
+      if (target.closest(".entry-tile")) return
+      openCreateModal(dateKey)
+    },
+    [dateKey, openCreateModal],
+  )
+
   if (viewMode === "schedule") {
     return <ScheduleDayContent entries={entries} dateKey={dateKey} />
   }
@@ -64,7 +76,9 @@ export function DayColumn({
   const classes = ["day-column", isLastVisible ? "last-visible" : ""].filter(Boolean).join(" ")
 
   return (
-    <div className={classes} data-date={dateKey} style={style}>
+    // biome-ignore lint/a11y/useKeyWithClickEvents: keyboard users use FAB button
+    // biome-ignore lint/a11y/noStaticElementInteractions: tap-to-create on empty space
+    <div className={classes} data-date={dateKey} style={style} onClick={handleClick}>
       <EntryTiles entries={sortedEntries} />
     </div>
   )
@@ -106,7 +120,7 @@ interface ScheduleDayContentProps {
  * Uses percentage-based positioning for CSS-first layout.
  */
 export function ScheduleDayContent({ entries, dateKey }: ScheduleDayContentProps) {
-  const { dayWidth } = useCalendarContext()
+  const { dayWidth, openCreateModal } = useCalendarContext()
 
   // Separate timed entries from all-day/multi-day/tasks
   const { timed } = useMemo(() => separateEntriesByType(entries), [entries])
@@ -114,8 +128,23 @@ export function ScheduleDayContent({ entries, dateKey }: ScheduleDayContentProps
   // Calculate overlap columns for timed entries
   const overlapColumns = useMemo(() => detectOverlappingEntries(timed), [timed])
 
+  const handleClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const target = e.target as HTMLElement
+      if (target.closest(".entry-tile, .schedule-timed-entry, .all-day-entry-tile")) return
+
+      const container = e.currentTarget
+      const relativeY = e.clientY - container.getBoundingClientRect().top
+      const { startTime, endTime } = clickYToTimeSlot(relativeY, container.clientHeight)
+      openCreateModal(dateKey, { startTime, endTime, entryType: "timed" })
+    },
+    [dateKey, openCreateModal],
+  )
+
   return (
-    <div className="schedule-day-content" data-date={dateKey}>
+    // biome-ignore lint/a11y/useKeyWithClickEvents: keyboard users use FAB button
+    // biome-ignore lint/a11y/noStaticElementInteractions: tap-to-create on empty space
+    <div className="schedule-day-content" data-date={dateKey} onClick={handleClick}>
       {/* Hour grid lines - positioned with percentages */}
       {Array.from({ length: HOURS_IN_DAY }, (_, hour) => (
         <div

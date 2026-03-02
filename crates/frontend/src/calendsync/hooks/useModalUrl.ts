@@ -3,6 +3,7 @@
  * Imperative Shell: Handles browser history API interactions.
  */
 
+import type { CreateFormOptions } from "@core/calendar"
 import { buildCalendarUrl, buildModalUrl, parseModalUrl } from "@core/calendar"
 import { useCallback, useEffect, useState } from "react"
 
@@ -24,8 +25,8 @@ export interface UseModalUrlConfig {
 export interface UseModalUrlResult {
   /** Current modal state (null if modal is closed) */
   modalState: ModalState | null
-  /** Open the modal in create mode */
-  openCreateModal: (defaultDate?: string) => void
+  /** Open the modal in create mode, optionally with pre-filled time/type */
+  openCreateModal: (defaultDate?: string, opts?: CreateFormOptions) => void
   /** Open the modal in edit mode for a specific entry */
   openEditModal: (entryId: string) => void
   /** Close the modal via history.back() */
@@ -87,15 +88,16 @@ export function useModalUrl(config: UseModalUrlConfig): UseModalUrlResult {
   }, [])
 
   /**
-   * Open the modal in create mode.
+   * Open the modal in create mode, optionally with pre-filled time/type.
    */
   const openCreateModal = useCallback(
-    (defaultDate?: string) => {
+    (defaultDate?: string, opts?: CreateFormOptions) => {
       const url = buildModalUrl(calendarId, "create")
       history.pushState({ modal: "create" }, "", url)
       setModalState({
         mode: "create",
         defaultDate,
+        createFormOptions: opts,
       })
     },
     [calendarId],

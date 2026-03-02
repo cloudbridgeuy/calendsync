@@ -2,6 +2,7 @@
  * Entry modal component for creating and editing calendar entries.
  */
 
+import type { CreateFormOptions } from "@core/calendar/modal"
 import type { ServerEntry } from "@core/calendar/types"
 import { useCallback, useState } from "react"
 import { useEntryApi, useEntryForm, useFocusTrap } from "../hooks"
@@ -16,6 +17,8 @@ export interface EntryModalProps {
   entry?: ServerEntry
   /** Default date for create mode (pre-fill the date field) */
   defaultDate?: string
+  /** Pre-fill options for create mode (from tap-to-create) */
+  createFormOptions?: CreateFormOptions
   /** Calendar ID for API calls */
   calendarId: string
   /** Callback when the modal is closed (cancel or save) */
@@ -30,13 +33,15 @@ export interface EntryModalProps {
  * Modal component for creating/editing calendar entries.
  */
 export function EntryModal(props: EntryModalProps) {
-  const { mode, entry, defaultDate, calendarId, onClose, onSave, onDelete } = props
+  const { mode, entry, defaultDate, createFormOptions, calendarId, onClose, onSave, onDelete } =
+    props
 
   // Form state from extracted hook
   const { formData, validationErrors, handleChange, validate } = useEntryForm({
     mode,
     entry,
     defaultDate,
+    createFormOptions,
   })
 
   // Submission state

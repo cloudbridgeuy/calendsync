@@ -79,7 +79,7 @@ export {
   shouldNavigateFromSwipe,
   snapToNearestDay,
 } from "./layout"
-export type { EntryFormData, ParsedModalUrl, ValidationResult } from "./modal"
+export type { CreateFormOptions, EntryFormData, ParsedModalUrl, ValidationResult } from "./modal"
 // Re-export modal functions
 export {
   buildCalendarUrl,
@@ -129,6 +129,7 @@ export type {
   SeparatedEntries,
   TimePosition,
   TimePositionPercent,
+  TimeSlot,
 } from "./scheduleLayout"
 export {
   calculateDuration,
@@ -138,6 +139,7 @@ export {
   calculateScrollToHour,
   calculateTimePosition,
   calculateTimePositionPercent,
+  clickYToTimeSlot,
   DEFAULT_SCROLL_HOUR,
   detectOverlappingEntries,
   formatHourLabel,

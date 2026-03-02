@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type { EntryFormData } from "../modal"
+import type { CreateFormOptions, EntryFormData } from "../modal"
 import {
   buildCalendarUrl,
   buildModalUrl,
@@ -236,6 +236,61 @@ describe("createDefaultFormData", () => {
 
     expect(result.startDate).toBe("2024-01-15")
     expect(result.isAllDay).toBe(true)
+  })
+
+  test("with empty opts returns existing behavior", () => {
+    const result = createDefaultFormData("2024-01-15", {})
+
+    expect(result.isAllDay).toBe(true)
+    expect(result.entryType).toBe("all_day")
+  })
+
+  test("with timed entryType and startTime returns timed entry", () => {
+    const opts: CreateFormOptions = {
+      startTime: "09:00",
+      endTime: "10:00",
+      entryType: "timed",
+    }
+    const result = createDefaultFormData("2024-01-15", opts)
+
+    expect(result.isAllDay).toBe(false)
+    expect(result.entryType).toBe("timed")
+    expect(result.startTime).toBe("09:00")
+    expect(result.endTime).toBe("10:00")
+    expect(result.startDate).toBe("2024-01-15")
+  })
+
+  test("with timed entryType and only startTime works", () => {
+    const opts: CreateFormOptions = {
+      startTime: "14:00",
+      entryType: "timed",
+    }
+    const result = createDefaultFormData("2024-01-15", opts)
+
+    expect(result.isAllDay).toBe(false)
+    expect(result.entryType).toBe("timed")
+    expect(result.startTime).toBe("14:00")
+    expect(result.endTime).toBeUndefined()
+  })
+
+  test("with timed entryType but no startTime falls back to all-day", () => {
+    const opts: CreateFormOptions = {
+      entryType: "timed",
+    }
+    const result = createDefaultFormData("2024-01-15", opts)
+
+    expect(result.isAllDay).toBe(true)
+    expect(result.entryType).toBe("timed")
+  })
+
+  test("with task entryType respects it", () => {
+    const opts: CreateFormOptions = {
+      entryType: "task",
+    }
+    const result = createDefaultFormData("2024-01-15", opts)
+
+    expect(result.isAllDay).toBe(true)
+    expect(result.entryType).toBe("task")
   })
 })
 

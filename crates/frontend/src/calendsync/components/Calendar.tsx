@@ -634,6 +634,7 @@ function Modal() {
           ? modalState.defaultDate || formatDateKey(highlightedDate)
           : undefined
       }
+      createFormOptions={modalState.mode === "create" ? modalState.createFormOptions : undefined}
       calendarId={calendarId}
       onClose={closeModal}
       onSave={handleModalSave}

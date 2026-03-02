@@ -3,6 +3,7 @@
  * Extracts form logic from EntryModal for separation of concerns.
  */
 
+import type { CreateFormOptions } from "@core/calendar"
 import { createDefaultFormData, entryToFormData, validateFormData } from "@core/calendar"
 import type { ServerEntry } from "@core/calendar/types"
 import { useCallback, useEffect, useState } from "react"
@@ -16,6 +17,8 @@ export interface UseEntryFormOptions {
   entry?: ServerEntry
   /** Default date for create mode */
   defaultDate?: string
+  /** Pre-fill options for create mode (from tap-to-create) */
+  createFormOptions?: CreateFormOptions
 }
 
 /** Return type for useEntryForm hook */
@@ -36,14 +39,14 @@ export interface UseEntryFormReturn {
  * Hook to manage entry form state and validation.
  */
 export function useEntryForm(options: UseEntryFormOptions): UseEntryFormReturn {
-  const { mode, entry, defaultDate } = options
+  const { mode, entry, defaultDate, createFormOptions } = options
 
   // Initialize form data based on mode
   const [formData, setFormData] = useState<EntryFormData>(() => {
     if (mode === "edit" && entry) {
       return entryToFormData(entry)
     }
-    return createDefaultFormData(defaultDate)
+    return createDefaultFormData(defaultDate, createFormOptions)
   })
 
   const [validationErrors, setValidationErrors] = useState<string[]>([])

@@ -126,14 +126,40 @@ export function entryToFormData(entry: ServerEntry): EntryFormData {
 }
 
 /**
- * Create default form data for a new entry.
+ * Options for pre-filling the create entry form.
+ * Used by tap-to-create to pass time/type information.
  */
-export function createDefaultFormData(defaultDate?: string): EntryFormData {
+export interface CreateFormOptions {
+  startTime?: string
+  endTime?: string
+  entryType?: EntryFormData["entryType"]
+}
+
+/**
+ * Create default form data for a new entry.
+ * When opts is provided with a timed entryType and startTime,
+ * the form defaults to a timed entry instead of all-day.
+ */
+export function createDefaultFormData(
+  defaultDate?: string,
+  opts?: CreateFormOptions,
+): EntryFormData {
+  if (opts?.entryType === "timed" && opts.startTime) {
+    return {
+      title: "",
+      startDate: defaultDate ?? "",
+      isAllDay: false,
+      entryType: "timed",
+      startTime: opts.startTime,
+      endTime: opts.endTime,
+    }
+  }
+
   return {
     title: "",
     startDate: defaultDate ?? "",
     isAllDay: true,
-    entryType: "all_day",
+    entryType: opts?.entryType ?? "all_day",
   }
 }
 

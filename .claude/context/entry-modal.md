@@ -129,6 +129,20 @@ interface EntryFormData {
 }
 ```
 
+## Creation Triggers
+
+The entry creation modal can be opened from multiple UI surfaces:
+
+| Trigger | View | Pre-filled Fields | Notes |
+|---------|------|-------------------|-------|
+| FAB ("New") button | Any | Date (highlighted day) | Always available |
+| Tap empty space in Schedule view | Schedule | Date + start/end time + entryType "timed" | `clickYToTimeSlot()` converts Y position to snapped 30-min time slots |
+| Tap empty space in Compact view | Compact | Date only | Opens as all-day by default |
+
+The time pre-fill uses `CreateFormOptions` passed through `openCreateModal(dateKey, opts)` → `ModalState` → `EntryModal` props → `useEntryForm` → `createDefaultFormData(date, opts)`.
+
+Click handlers bail out when the click target is an entry tile (checked via `e.target.closest('.entry-tile, .schedule-timed-entry, .all-day-entry-tile')`), so existing entry click behavior is preserved without `stopPropagation()`.
+
 ## Accessibility
 
 - Modal has `role="dialog"` and `aria-modal="true"`

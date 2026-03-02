@@ -21,6 +21,15 @@ export const MINUTES_IN_DAY = 1440
 /** Default hour to scroll to on load (8 AM) */
 export const DEFAULT_SCROLL_HOUR = 8
 
+/** Default snap interval for click-to-create (30 minutes) */
+const DEFAULT_SNAP_MINUTES = 30
+
+/** Default duration for click-to-create entries (60 minutes) */
+const DEFAULT_DURATION_MINUTES = 60
+
+/** Maximum start time in minutes (23:00) */
+const MAX_START_MINUTES = 1380
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -47,6 +56,12 @@ export interface OverlapColumn {
   columnIndex: number
   /** Total number of columns in this overlap group */
   totalColumns: number
+}
+
+/** A time slot derived from a click position, with formatted HH:MM strings */
+export interface TimeSlot {
+  startTime: string
+  endTime: string
 }
 
 /** Entries separated by type for schedule view */
@@ -321,4 +336,42 @@ export function formatHourLabel(hour: number): string {
  */
 export function generateHourLabels(): string[] {
   return Array.from({ length: HOURS_IN_DAY }, (_, i) => formatHourLabel(i))
+}
+
+// ============================================================================
+// Click-to-Create Functions
+// ============================================================================
+
+/**
+ * Convert a click Y position within a schedule container to a snapped TimeSlot.
+ *
+ * Parses raw pixel coordinates into a structured TimeSlot:
+ * - Maps Y position proportionally to time of day (0 = midnight, containerHeight = midnight)
+ * - Snaps start time to the nearest interval below (e.g., 30-minute blocks)
+ * - Clamps start to 0–23:00 and end to 24:00
+ */
+export function clickYToTimeSlot(
+  clickY: number,
+  containerHeight: number,
+  snapMinutes: number = DEFAULT_SNAP_MINUTES,
+  durationMinutes: number = DEFAULT_DURATION_MINUTES,
+): TimeSlot {
+  const clampedY = Math.max(0, Math.min(clickY, containerHeight))
+  const rawMinutes = (clampedY / containerHeight) * MINUTES_IN_DAY
+
+  const snappedStart = Math.floor(rawMinutes / snapMinutes) * snapMinutes
+  const clampedStart = Math.min(snappedStart, MAX_START_MINUTES)
+  const clampedEnd = Math.min(clampedStart + durationMinutes, MINUTES_IN_DAY)
+
+  return {
+    startTime: formatMinutesAsTime(clampedStart),
+    endTime: formatMinutesAsTime(clampedEnd),
+  }
+}
+
+/** Format total minutes as "HH:MM" string. */
+function formatMinutesAsTime(totalMinutes: number): string {
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`
 }

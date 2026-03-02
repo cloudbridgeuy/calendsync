@@ -7,6 +7,7 @@ import {
   calculateScrollToHour,
   calculateTimePosition,
   calculateTimePositionPercent,
+  clickYToTimeSlot,
   detectOverlappingEntries,
   formatHourLabel,
   generateHourLabels,
@@ -340,5 +341,60 @@ describe("generateHourLabels", () => {
     expect(labels[0]).toBe("12 AM")
     expect(labels[12]).toBe("12 PM")
     expect(labels[23]).toBe("11 PM")
+  })
+})
+
+describe("clickYToTimeSlot", () => {
+  const containerHeight = 1440 // 1px per minute for easy reasoning
+
+  test("midnight click (y=0)", () => {
+    const result = clickYToTimeSlot(0, containerHeight)
+    expect(result.startTime).toBe("00:00")
+    expect(result.endTime).toBe("01:00")
+  })
+
+  test("noon click (y=containerHeight/2)", () => {
+    const result = clickYToTimeSlot(containerHeight / 2, containerHeight)
+    expect(result.startTime).toBe("12:00")
+    expect(result.endTime).toBe("13:00")
+  })
+
+  test("snaps down to 30-minute intervals", () => {
+    // y at 14:20 equivalent = 860px in 1440px container
+    const result = clickYToTimeSlot(860, containerHeight)
+    expect(result.startTime).toBe("14:00")
+    expect(result.endTime).toBe("15:00")
+  })
+
+  test("end of day clamps to 24:00", () => {
+    // y at 23:30 equivalent = 1410px
+    const result = clickYToTimeSlot(1410, containerHeight)
+    expect(result.startTime).toBe("23:00")
+    expect(result.endTime).toBe("24:00")
+  })
+
+  test("custom snap (15 min)", () => {
+    // y at 9:20 equivalent = 560px → snaps to 9:15
+    const result = clickYToTimeSlot(560, containerHeight, 15)
+    expect(result.startTime).toBe("09:15")
+    expect(result.endTime).toBe("10:15")
+  })
+
+  test("custom duration (30 min)", () => {
+    const result = clickYToTimeSlot(containerHeight / 2, containerHeight, 30, 30)
+    expect(result.startTime).toBe("12:00")
+    expect(result.endTime).toBe("12:30")
+  })
+
+  test("negative y clamps to 00:00", () => {
+    const result = clickYToTimeSlot(-50, containerHeight)
+    expect(result.startTime).toBe("00:00")
+    expect(result.endTime).toBe("01:00")
+  })
+
+  test("y > containerHeight clamps to 23:00", () => {
+    const result = clickYToTimeSlot(containerHeight + 100, containerHeight)
+    expect(result.startTime).toBe("23:00")
+    expect(result.endTime).toBe("24:00")
   })
 })

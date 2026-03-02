@@ -3,6 +3,7 @@
  * This eliminates props drilling through DayColumn to EntryTile.
  */
 
+import type { CreateFormOptions } from "@core/calendar"
 import type { EntryStyle, ViewMode } from "@core/calendar/settings"
 import type { ServerEntry } from "@core/calendar/types"
 import type { SseConnectionState } from "@core/sse/types"
@@ -63,8 +64,8 @@ export interface CalendarContextValue {
   refresh: () => void
 
   // New - modal state
-  /** Open create modal for a specific date */
-  openCreateModal: (date: string) => void
+  /** Open create modal for a specific date, optionally with pre-filled time/type */
+  openCreateModal: (date: string, opts?: CreateFormOptions) => void
   /** Open edit modal for a specific entry */
   openEditModal: (entryId: string) => void
   /** Close the modal */

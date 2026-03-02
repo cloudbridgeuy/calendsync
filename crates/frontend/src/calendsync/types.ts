@@ -43,6 +43,8 @@ export interface ModalState {
   entry?: import("@core/calendar/types").ServerEntry
   /** Default date for create mode (pre-fill the date field) */
   defaultDate?: string
+  /** Pre-fill options for create mode (from tap-to-create) */
+  createFormOptions?: import("@core/calendar/modal").CreateFormOptions
 }
 
 // Re-export EntryFormData from core modal utilities
