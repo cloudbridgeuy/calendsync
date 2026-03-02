@@ -18,7 +18,7 @@ cargo build --release
 # Run the server (default port 3000)
 cargo xtask dev server
 
-# Run code quality checks (fmt, check, clippy, test, cargo-rail)
+# Run code quality checks (quiet — only errors print, full output in target/xtask-lint.log)
 cargo xtask lint
 
 # Auto-fix formatting issues
@@ -235,7 +235,23 @@ The TypeScript build is triggered by Cargo:
 
 ## Lint Checks
 
-The `cargo xtask lint` command runs these checks in order:
+**Always use `cargo xtask lint` for code quality checks.** Do not run `cargo fmt`, `cargo clippy`, `cargo test`, `bunx biome`, `bun run typecheck`, or `bun test` directly — they flood context with noise. `cargo xtask lint` runs all of these quietly and only surfaces errors. Full output is saved to `target/xtask-lint.log`.
+
+**For agents (Claude):** Never use `--verbose` — it exists for human terminal use. If you need more context about a specific check's output (e.g., to understand a passing check's warnings), read the log file directly:
+
+- `Read target/xtask-lint.log` — full output of all checks, sectioned by `--- check-name [STATUS] ---` headers
+- `Grep "--- cargo clippy" target/xtask-lint.log` — jump to a specific check's output
+- `Grep "\\[FAIL\\]" target/xtask-lint.log` — find all failures
+
+```bash
+cargo xtask lint              # Run all checks (quiet — only errors print)
+cargo xtask lint --fix        # Auto-fix formatting and clippy issues
+cargo xtask lint --no-biome   # Skip biome checks
+cargo xtask lint --no-typecheck  # Skip TypeScript type checking
+cargo xtask lint --no-bun-test   # Skip bun test checks
+```
+
+The command runs these checks in order:
 
 **Rust checks:**
 
@@ -245,11 +261,24 @@ The `cargo xtask lint` command runs these checks in order:
 4. `cargo test --all-targets` - Tests
 5. `cargo rail unify --check` - Dependency unification, unused deps, dead features
 
-**TypeScript checks (crates/frontend):** 6. `biome check --write --unsafe` - Format and lint with auto-fix 7. `bun run typecheck` - TypeScript type checking 8. `bun test` - Run TypeScript tests
+**TypeScript checks (crates/frontend):**
 
-**TypeScript checks (examples/hello-world):** 9. `biome check --write --unsafe` - Format and lint example TypeScript 10. `bun run typecheck` - Example TypeScript type checking
+6. `biome check --write --unsafe` - Format and lint with auto-fix
+7. `bun run typecheck` - TypeScript type checking
+8. `bun test` - Run TypeScript tests
+
+**TypeScript checks (examples/react-ssr):**
+
+9. `biome check --write --unsafe` - Format and lint example TypeScript
+10. `bun run typecheck` - Example TypeScript type checking
 
 Pre-commit hooks can be installed with `cargo xtask lint --install-hooks`.
+
+### Human Terminal Options
+
+```bash
+cargo xtask lint --verbose    # Show all output including passes (human use only)
+```
 
 ### calendsync_core Crate Requirements
 
