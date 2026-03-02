@@ -1,20 +1,10 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Project Overview
 
 calendsync is a Rust web application for creating calendars to sync with friends. It uses axum as the web framework with React SSR for the frontend.
 
 This is a technical exploration of the **"Rust full-stack" pattern**: server-side rendering React with `deno_core`, real-time updates via SSE, and a pure Rust backend - demonstrating that modern web apps can be built entirely in Rust without Node.js.
-
-**Current State**: Working web application with:
-
-- REST API for calendar entries
-- React SSR calendar with real-time SSE updates
-- Storage backends: in-memory (default), SQLite, or DynamoDB with memory or Redis caching
-- Repository pattern with cached decorators for cache-aside + event publishing
-- Graceful shutdown support
 
 ## Build Commands
 
@@ -26,10 +16,7 @@ cargo build
 cargo build --release
 
 # Run the server (default port 3000)
-cargo run -p calendsync
-
-# Run with auto-reload (requires systemfd and cargo-watch)
-systemfd --no-pid -s http::3000 -- cargo watch -x 'run -p calendsync'
+cargo xtask dev server
 
 # Run code quality checks (fmt, check, clippy, test, cargo-rail)
 cargo xtask lint
@@ -45,9 +32,6 @@ cargo test <test_name>
 
 # Run tests for a specific package
 cargo test -p calendsync_core
-
-# Run the React SSR example
-cargo run --example react-ssr -p calendsync
 
 # Build with default features (inmemory storage + memory cache)
 cargo build -p calendsync
@@ -354,64 +338,6 @@ pub async fn fetch_and_filter_metrics(
 }
 ```
 
-**Module Organization:**
-
-```
-crates/core/src/
-├── lib.rs           # Public API exports
-├── serde.rs         # Pure serde helpers (deserialize_optional_string, etc.)
-└── calendar/
-    ├── mod.rs       # Module exports and re-exports
-    ├── types.rs     # Domain types (Calendar, CalendarEntry, CalendarEvent, User, etc.)
-    ├── requests.rs  # API request types (CreateCalendarRequest, CreateEntryRequest, etc.)
-    ├── mock_data.rs # Pure mock data generation (generate_seed_entries)
-    ├── sorting.rs   # Pure sorting functions
-    ├── operations.rs # Pure calendar operations
-    └── error.rs     # CalendarError enum
-```
-
-## CI/CD
-
-GitHub Actions workflows in `.github/workflows/`:
-
-- **ci.yml** - Runs on push/PR to main/develop:
-
-  - Tests with `cargo test`
-  - Clippy with `-D warnings`
-  - Format check with `cargo fmt`
-  - Dependency hygiene with `cargo-rail` (unification, unused deps, dead features)
-  - Typo check with `typos`
-  - Build check on Ubuntu and macOS
-
-- **release.yml** - Triggered on version tags:
-
-  - Multi-platform builds (Linux x86_64, macOS x86_64, macOS ARM64)
-  - Creates GitHub release with binaries
-
-- **dependabot.yml** - Automated dependency updates
-
-## Web Application Patterns
-
-When working with this codebase:
-
-1. **Adding New Handlers**:
-
-   - Add handler functions in `handlers/` module
-   - Register routes in `app.rs` using axum's routing macros
-   - Use `State<AppState>` extractor for shared state access
-   - Return appropriate response types (`Json`, `Html`, `StatusCode`)
-
-2. **Error Handling**:
-
-   - Return `Result<T, AppError>` from handlers
-   - Use `?` operator for propagation
-   - Errors are converted to appropriate HTTP responses
-
-3. **Adding New Models**:
-   - Define model structs in `models/` module
-   - Derive `Serialize`, `Deserialize`, `Clone` as needed
-   - Add corresponding storage in `AppState`
-
 ## Testing Strategy
 
 ### Cache Tests
@@ -465,6 +391,7 @@ This follows the Functional Core - Imperative Shell pattern: pure functions are 
 - Prefer descriptive variable names
 - Add rustdoc comments for public APIs
 - Use `#[allow(clippy::large_enum_variant)]` sparingly and with justification
+- Never use `#[allow(dead_code_]`
 
 ## Unnegotiables
 
@@ -661,11 +588,6 @@ The `.local/` directory contains working files that are not committed to git:
 
 These directories are for temporary working artifacts. Move finalized documentation to `docs/` or `.claude/context/` when ready to commit.
 
-### Examples
-
-- **React SSR Example**: Minimal SSR with `deno_core`. Run: `cargo run --example react-ssr -p calendsync`
-- **React Calendar**: Full SSR calendar with SSE. Run: `cargo run -p calendsync` then visit `/calendar/{calendar_id}`
-
 ## Glossary
 
 | Term                    | Definition                                                                         |
@@ -689,62 +611,3 @@ These directories are for temporary working artifacts. Move finalized documentat
 | **CalendarMembership**  | Entity linking users to calendars with roles (owner/writer/reader)                 |
 | **CalendarSettings**    | Per-user, per-calendar display settings (viewMode, showTasks, entryStyle)           |
 | **SettingsRepository**  | Repository trait for persisting CalendarSettings server-side                        |
-
-## Pommel - Semantic Code Search
-
-This project uses Pommel (v0.5.0) for semantic code search. Pommel indexes your codebase into semantic chunks and enables natural language search with hybrid vector + keyword matching.
-
-**Supported platforms:** macOS, Linux, Windows
-**Supported languages:** C#, Dart, Elixir, Go, Java, JavaScript, Kotlin, PHP, Python, Rust, Solidity, Swift, TypeScript
-
-### Code Search Priority
-
-**IMPORTANT: Use `pm search` BEFORE using Grep/Glob for code exploration.**
-
-Pommel saves ~95% of tokens compared to traditional file exploration. When looking for:
-- How something is implemented → `pm search "authentication flow"`
-- Where a pattern is used → `pm search "error handling"`
-- Related code/concepts → `pm search "database connection"`
-- Code that does X → `pm search "validate user input"`
-
-Only fall back to Grep/Glob when:
-- Searching for an exact string literal (e.g., a specific error message)
-- Looking for a specific identifier name you already know
-- Pommel daemon is not running
-
-### Quick Search Examples
-```bash
-# Find code by semantic meaning (not just keywords)
-pm search "authentication logic"
-pm search "error handling patterns"
-pm search "database connection setup"
-
-# Search with JSON output for programmatic use
-pm search "user validation" --json
-
-# Limit results
-pm search "API endpoints" --limit 5
-
-# Search specific chunk levels
-pm search "class definitions" --level class
-pm search "function implementations" --level method
-
-# Show detailed match reasons and score breakdown
-pm search "rate limiting" --verbose
-
-# Show context savings metrics
-pm search "database queries" --metrics
-```
-
-### Available Commands
-- `pm search <query>` - Hybrid semantic + keyword search across the codebase
-- `pm status` - Check daemon status and index statistics
-- `pm reindex` - Force a full reindex of the codebase
-- `pm start` / `pm stop` - Control the background daemon
-
-### Tips
-- Use natural language queries - Pommel understands semantic meaning
-- Keep the daemon running (`pm start`) for always-current search results
-- Use `--json` flag when you need structured output for processing
-- Use `--verbose` to see why results matched (helpful for tuning queries)
-- Chunk levels: file (entire files), class (structs/interfaces/classes), method (functions/methods)
