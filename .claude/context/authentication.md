@@ -26,8 +26,9 @@ calendsync_auth
 │   ├── apple.rs       # AppleProvider (OIDC client)
 │   └── mock.rs        # MockProvider (for testing)
 ├── sessions/
-│   ├── sqlite.rs      # SQLite session storage
-│   └── redis_impl.rs  # Redis session storage
+│   ├── sqlite.rs      # SQLite session storage (priority 1)
+│   ├── redis_impl.rs  # Redis session storage (priority 2)
+│   └── inmemory.rs    # In-memory session storage (priority 3)
 └── mock_idp/
     ├── server.rs      # Mock IdP HTTP server
     └── templates.rs   # Login page HTML templates
@@ -166,6 +167,9 @@ if !membership.role.can_write() {
 | `redis` | Redis session storage (production) |
 | `mock` | Mock IdP server (development/testing only) |
 
+When multiple session storage features are enabled, re-export priority is: **sqlite > redis > mock**.
+All modules compile independently, but only one `SessionStore` type is re-exported from `sessions::`.
+
 Example builds:
 ```bash
 # Development with SQLite sessions
@@ -174,9 +178,15 @@ cargo build -p calendsync_auth --features sqlite
 # Production with Redis sessions
 cargo build -p calendsync_auth --features redis
 
-# Testing with mock provider
+# Dev mode (mock IdP + persistent SQLite sessions)
 cargo build -p calendsync_auth --features sqlite,mock
 ```
+
+### Dev Mode Session Persistence
+
+The dev server (`cargo xtask dev server`) enables both `auth-mock` and `auth-sqlite`. The cfg priority
+ensures SQLite handles sessions (persistent across restarts) while Mock IdP provides fake OIDC login.
+Session database is stored at `.local/data/auth.db`.
 
 ## Configuration
 

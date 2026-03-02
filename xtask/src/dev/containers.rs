@@ -174,8 +174,9 @@ pub fn required_containers(storage: Storage, cache: Cache) -> Vec<&'static Conta
 
 /// Returns the cargo feature string for the given storage and cache configuration.
 ///
-/// Format: `"{storage},{cache},auth-mock"` where storage is "inmemory", "sqlite", or "dynamodb"
-/// and cache is "memory" or "redis". Always includes `auth-mock` for development.
+/// Format: `"{storage},{cache},auth-mock,auth-sqlite"` where storage is "inmemory", "sqlite",
+/// or "dynamodb" and cache is "memory" or "redis". Always includes `auth-mock` (Mock IdP) and
+/// `auth-sqlite` (persistent session storage) for development.
 pub fn cargo_features(storage: Storage, cache: Cache) -> String {
     let storage_str = match storage {
         Storage::Inmemory => "inmemory",
@@ -188,7 +189,7 @@ pub fn cargo_features(storage: Storage, cache: Cache) -> String {
         Cache::Redis => "redis",
     };
 
-    format!("{},{},auth-mock", storage_str, cache_str)
+    format!("{},{},auth-mock,auth-sqlite", storage_str, cache_str)
 }
 
 /// Discovered container ports after startup.
@@ -208,6 +209,7 @@ pub struct ContainerPorts {
 /// - `PORT` - server port
 /// - `DEV_MODE` - set to "1"
 /// - Mock auth credentials for Google and Apple (enables both providers in dev)
+/// - `AUTH_SQLITE_PATH` - SQLite path for persistent session storage
 ///
 /// Storage-specific:
 /// - DynamoDB: AWS endpoint and credentials for local development
@@ -239,6 +241,8 @@ pub fn environment_variables(
         ("APPLE_TEAM_ID", "mock-team-id".to_string()),
         ("APPLE_KEY_ID", "mock-key-id".to_string()),
         ("APPLE_PRIVATE_KEY", "mock-private-key".to_string()),
+        // Persistent session storage for dev (survives server restarts)
+        ("AUTH_SQLITE_PATH", ".local/data/auth.db".to_string()),
     ];
 
     match storage {
@@ -639,27 +643,27 @@ mod tests {
     fn test_cargo_features() {
         assert_eq!(
             cargo_features(Storage::Inmemory, Cache::Memory),
-            "inmemory,memory,auth-mock"
+            "inmemory,memory,auth-mock,auth-sqlite"
         );
         assert_eq!(
             cargo_features(Storage::Sqlite, Cache::Memory),
-            "sqlite,memory,auth-mock"
+            "sqlite,memory,auth-mock,auth-sqlite"
         );
         assert_eq!(
             cargo_features(Storage::Dynamodb, Cache::Memory),
-            "dynamodb,memory,auth-mock"
+            "dynamodb,memory,auth-mock,auth-sqlite"
         );
         assert_eq!(
             cargo_features(Storage::Inmemory, Cache::Redis),
-            "inmemory,redis,auth-mock"
+            "inmemory,redis,auth-mock,auth-sqlite"
         );
         assert_eq!(
             cargo_features(Storage::Sqlite, Cache::Redis),
-            "sqlite,redis,auth-mock"
+            "sqlite,redis,auth-mock,auth-sqlite"
         );
         assert_eq!(
             cargo_features(Storage::Dynamodb, Cache::Redis),
-            "dynamodb,redis,auth-mock"
+            "dynamodb,redis,auth-mock,auth-sqlite"
         );
     }
 
@@ -675,8 +679,10 @@ mod tests {
         assert!(vars.contains(&("COOKIE_SECURE", "false".to_string())));
         assert!(vars.contains(&("GOOGLE_CLIENT_ID", "mock-google-client-id".to_string())));
         assert!(vars.contains(&("APPLE_CLIENT_ID", "mock-apple-client-id".to_string())));
-        // 10 base vars (PORT, DEV_MODE, AUTH_BASE_URL, COOKIE_SECURE, 6 auth vars)
-        assert_eq!(vars.len(), 10);
+        // Session storage path
+        assert!(vars.contains(&("AUTH_SQLITE_PATH", ".local/data/auth.db".to_string())));
+        // 11 base vars (PORT, DEV_MODE, AUTH_BASE_URL, COOKIE_SECURE, 6 auth vars, AUTH_SQLITE_PATH)
+        assert_eq!(vars.len(), 11);
     }
 
     #[test]
