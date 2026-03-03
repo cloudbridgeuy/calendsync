@@ -158,8 +158,13 @@ function AllDayLabel() {
  */
 function AllDayEvents() {
   const { renderedDates, getEntriesForDate } = useScheduleGridContext()
-  const { showAllDayOverflow, setShowAllDayOverflow, showAllDayTasks, setShowAllDayTasks } =
-    useCalendarContext()
+  const {
+    openCreateModal,
+    showAllDayOverflow,
+    setShowAllDayOverflow,
+    showAllDayTasks,
+    setShowAllDayTasks,
+  } = useCalendarContext()
 
   // Compute all-day summaries for each date
   const summariesByDate = useMemo(() => {
@@ -193,7 +198,17 @@ function AllDayEvents() {
         const columnTasksText = formatTasksToggle(summary.tasks.length, showAllDayTasks)
 
         return (
-          <div key={dateKey} className="schedule-all-day-column">
+          // biome-ignore lint/a11y/useKeyWithClickEvents: keyboard users use FAB button
+          // biome-ignore lint/a11y/noStaticElementInteractions: tap-to-create on empty space
+          <div
+            key={dateKey}
+            className="schedule-all-day-column"
+            onClick={(e) => {
+              const target = e.target as HTMLElement
+              if (target.closest(".all-day-entry-tile, .all-day-toggle")) return
+              openCreateModal(dateKey)
+            }}
+          >
             {/* Visible events */}
             {summary.visibleEvents.map((entry) => (
               <AllDayEntryTile key={entry.id} entry={entry} />
