@@ -133,7 +133,6 @@ export type {
 } from "./scheduleLayout"
 export {
   calculateDuration,
-  calculateEntryWidth,
   calculateGridHeight,
   calculateHourLinePositionPercent,
   calculateScrollToHour,

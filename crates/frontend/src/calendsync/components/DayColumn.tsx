@@ -120,7 +120,7 @@ interface ScheduleDayContentProps {
  * Uses percentage-based positioning for CSS-first layout.
  */
 export function ScheduleDayContent({ entries, dateKey }: ScheduleDayContentProps) {
-  const { dayWidth, openCreateModal } = useCalendarContext()
+  const { openCreateModal } = useCalendarContext()
 
   // Separate timed entries from all-day/multi-day/tasks
   const { timed } = useMemo(() => separateEntriesByType(entries), [entries])
@@ -159,14 +159,7 @@ export function ScheduleDayContent({ entries, dateKey }: ScheduleDayContentProps
         const overlapColumn = overlapColumns.get(entry.id)
         if (!overlapColumn) return null
 
-        return (
-          <ScheduleTimedEntry
-            key={entry.id}
-            entry={entry}
-            overlapColumn={overlapColumn}
-            containerWidth={dayWidth}
-          />
-        )
+        return <ScheduleTimedEntry key={entry.id} entry={entry} overlapColumn={overlapColumn} />
       })}
     </div>
   )

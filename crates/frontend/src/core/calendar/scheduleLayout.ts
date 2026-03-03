@@ -308,20 +308,6 @@ export function calculateGridHeight(hourHeight: number = HOUR_HEIGHT_PX): number
 }
 
 /**
- * Calculate width and left offset for an entry based on overlap columns.
- */
-export function calculateEntryWidth(
-  overlapColumn: OverlapColumn,
-  containerWidth: number,
-): { width: number; left: number } {
-  const { columnIndex, totalColumns } = overlapColumn
-  const width = containerWidth / totalColumns
-  const left = columnIndex * width
-
-  return { width, left }
-}
-
-/**
  * Format hour for display (e.g., "9 AM", "12 PM", "6 PM").
  */
 export function formatHourLabel(hour: number): string {

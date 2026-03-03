@@ -2280,6 +2280,8 @@ body {
   z-index: 2;
   box-sizing: border-box;
   margin: 0 2px;
+  width: calc(100% / var(--col-total, 1));
+  left: calc(var(--col-index, 0) * (100% / var(--col-total, 1)));
 }
 
 .schedule-timed-entry:hover {

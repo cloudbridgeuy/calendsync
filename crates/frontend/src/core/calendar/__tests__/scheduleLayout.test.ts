@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import {
   calculateDuration,
-  calculateEntryWidth,
   calculateGridHeight,
   calculateHourLinePositionPercent,
   calculateScrollToHour,
@@ -275,30 +274,6 @@ describe("detectOverlappingEntries", () => {
   test("handles empty array", () => {
     const result = detectOverlappingEntries([])
     expect(result.size).toBe(0)
-  })
-})
-
-describe("calculateEntryWidth", () => {
-  test("calculates full width for single column", () => {
-    const result = calculateEntryWidth({ columnIndex: 0, totalColumns: 1 }, 300)
-    expect(result.width).toBe(300)
-    expect(result.left).toBe(0)
-  })
-
-  test("calculates half width for two columns", () => {
-    const result1 = calculateEntryWidth({ columnIndex: 0, totalColumns: 2 }, 300)
-    expect(result1.width).toBe(150)
-    expect(result1.left).toBe(0)
-
-    const result2 = calculateEntryWidth({ columnIndex: 1, totalColumns: 2 }, 300)
-    expect(result2.width).toBe(150)
-    expect(result2.left).toBe(150)
-  })
-
-  test("calculates third width for three columns", () => {
-    const result = calculateEntryWidth({ columnIndex: 1, totalColumns: 3 }, 300)
-    expect(result.width).toBe(100)
-    expect(result.left).toBe(100)
   })
 })
 

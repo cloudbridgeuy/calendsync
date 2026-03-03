@@ -4,11 +4,7 @@
  * Supports sync status indicators for offline-first operations.
  */
 
-import {
-  calculateEntryWidth,
-  calculateTimePositionPercent,
-  type OverlapColumn,
-} from "@core/calendar"
+import { calculateTimePositionPercent, type OverlapColumn } from "@core/calendar"
 import type { ServerEntry } from "@core/calendar/types"
 import { useCalendarContext } from "../contexts"
 import { useEntrySyncStatus } from "../hooks/useEntrySyncStatus"
@@ -19,25 +15,18 @@ interface ScheduleTimedEntryProps {
   entry: ServerEntry
   /** Overlap column assignment */
   overlapColumn: OverlapColumn
-  /** Width of the day column container */
-  containerWidth: number
 }
 
 /**
  * Renders a timed entry tile in the schedule view.
  * Uses percentage-based absolute positioning for CSS-first layout.
  */
-export function ScheduleTimedEntry({
-  entry,
-  overlapColumn,
-  containerWidth,
-}: ScheduleTimedEntryProps) {
+export function ScheduleTimedEntry({ entry, overlapColumn }: ScheduleTimedEntryProps) {
   const { onEntryClick, flashStates, settings } = useCalendarContext()
   const syncStatus = useEntrySyncStatus(entry.id)
   const { entryStyle } = settings
 
   const { topPercent, heightPercent } = calculateTimePositionPercent(entry.startTime, entry.endTime)
-  const { width, left } = calculateEntryWidth(overlapColumn, containerWidth)
 
   const flashState = flashStates.get(entry.id)
   const flashClass = flashState ? `flash-${flashState}` : ""
@@ -66,17 +55,19 @@ export function ScheduleTimedEntry({
     .filter(Boolean)
     .join(" ")
 
+  const style: React.CSSProperties & Record<`--${string}`, string> = {
+    top: `${topPercent}%`,
+    height: `${heightPercent}%`,
+    "--col-index": `${overlapColumn.columnIndex}`,
+    "--col-total": `${overlapColumn.totalColumns}`,
+    ...colorStyle,
+  }
+
   return (
     // biome-ignore lint/a11y/useSemanticElements: Using div with role="button" for complex layout positioning
     <div
       className={classes}
-      style={{
-        top: `${topPercent}%`,
-        height: `${heightPercent}%`,
-        left,
-        width,
-        ...colorStyle,
-      }}
+      style={style}
       onClick={() => onEntryClick(entry)}
       role="button"
       tabIndex={0}

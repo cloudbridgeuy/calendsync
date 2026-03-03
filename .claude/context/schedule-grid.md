@@ -132,6 +132,22 @@ formatOverflowToggle(hiddenCount: number, isExpanded: boolean): string | null
 formatTasksToggle(taskCount: number, isExpanded: boolean): string | null
 ```
 
+## Timed Entry Positioning
+
+Timed entries use **CSS-first layout** — all positioning is percentage-based so entries render correctly during SSR without waiting for JS hydration:
+
+- **Vertical**: `top` and `height` as percentages of the 24-hour grid (via `calculateTimePositionPercent`)
+- **Horizontal**: `width` and `left` driven by CSS custom properties set as inline styles:
+
+```css
+.schedule-timed-entry {
+  width: calc(100% / var(--col-total, 1));
+  left: calc(var(--col-index, 0) * (100% / var(--col-total, 1)));
+}
+```
+
+The component sets `--col-index` and `--col-total` from the overlap detection algorithm (`detectOverlappingEntries`). Values must be passed as **strings** in React inline styles to prevent React from appending `px`.
+
 ## Files
 
 | File | Purpose |
