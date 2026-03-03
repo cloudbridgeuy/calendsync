@@ -18,7 +18,6 @@ import {
   computeAllDaySummary,
   filterAllDayEntries,
   filterTimedEntries,
-  findTodayColumnIndex,
   formatDateKey,
   formatHourLabel,
   formatNowLabel,
@@ -44,7 +43,6 @@ import { ScheduleDayContent } from "./DayColumn"
 interface ScheduleGridContextValue {
   renderedDates: Date[]
   getEntriesForDate: (date: Date) => ServerEntry[]
-  dayWidth: number
   highlightedDate: Date
   scrollToDate: (date: Date) => void
   now: Date
@@ -70,20 +68,18 @@ interface ScheduleGridRootProps {
 }
 
 function ScheduleGridRoot({ children, className }: ScheduleGridRootProps) {
-  const { renderedDates, getEntriesForDate, dayWidth, highlightedDate, scrollToDate } =
-    useCalendarContext()
+  const { renderedDates, getEntriesForDate, highlightedDate, scrollToDate } = useCalendarContext()
   const now = useCurrentTime(30_000)
 
   const contextValue = useMemo<ScheduleGridContextValue>(
     () => ({
       renderedDates,
       getEntriesForDate,
-      dayWidth,
       highlightedDate,
       scrollToDate,
       now,
     }),
-    [renderedDates, getEntriesForDate, dayWidth, highlightedDate, scrollToDate, now],
+    [renderedDates, getEntriesForDate, highlightedDate, scrollToDate, now],
   )
 
   return (
@@ -259,9 +255,8 @@ function HourColumn() {
  * Timed grid - main content area with timed entries.
  */
 function TimedGrid() {
-  const { renderedDates, getEntriesForDate, dayWidth, now } = useScheduleGridContext()
+  const { renderedDates, getEntriesForDate, now } = useScheduleGridContext()
   const percent = calculateNowPositionPercent(now.getHours(), now.getMinutes())
-  const todayIdx = findTodayColumnIndex(renderedDates, now)
 
   return (
     <div className="schedule-timed-grid">
@@ -272,12 +267,6 @@ function TimedGrid() {
         return <ScheduleDayContent key={dateKey} entries={entries} dateKey={dateKey} />
       })}
       <div className="now-indicator-line" style={{ top: `${percent}%` }} />
-      {todayIdx !== null && (
-        <div
-          className="now-indicator-dot"
-          style={{ top: `${percent}%`, left: todayIdx * dayWidth }}
-        />
-      )}
     </div>
   )
 }

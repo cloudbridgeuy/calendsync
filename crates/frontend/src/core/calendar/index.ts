@@ -120,7 +120,6 @@ export {
 export {
   calculateNowPositionPercent,
   calculateScrollToCurrentTime,
-  findTodayColumnIndex,
   formatNowLabel,
 } from "./nowIndicator"
 // Re-export schedule layout functions

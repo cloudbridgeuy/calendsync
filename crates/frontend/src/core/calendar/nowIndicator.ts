@@ -3,7 +3,6 @@
  * Calculates position, formatting, and scroll offset for the current time line.
  */
 
-import { isSameDay } from "./dates"
 import { MINUTES_IN_DAY } from "./scheduleLayout"
 
 /**
@@ -11,15 +10,6 @@ import { MINUTES_IN_DAY } from "./scheduleLayout"
  */
 export function calculateNowPositionPercent(hours: number, minutes: number): number {
   return ((hours * 60 + minutes) / MINUTES_IN_DAY) * 100
-}
-
-/**
- * Find the index of today's column in the rendered dates array.
- * Returns null if today is not among the rendered dates.
- */
-export function findTodayColumnIndex(renderedDates: Date[], today: Date): number | null {
-  const idx = renderedDates.findIndex((d) => isSameDay(d, today))
-  return idx === -1 ? null : idx
 }
 
 /**

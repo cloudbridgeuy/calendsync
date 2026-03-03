@@ -2977,17 +2977,6 @@ body {
   pointer-events: none;
 }
 
-.now-indicator-dot {
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background-color: var(--now-indicator);
-  z-index: 3;
-  pointer-events: none;
-  transform: translate(-50%, -50%);
-}
-
 .now-time-label {
   position: absolute;
   right: 0.25rem;

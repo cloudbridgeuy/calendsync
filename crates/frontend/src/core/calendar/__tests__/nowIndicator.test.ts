@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test"
 import {
   calculateNowPositionPercent,
   calculateScrollToCurrentTime,
-  findTodayColumnIndex,
   formatNowLabel,
 } from "../nowIndicator"
 
@@ -26,29 +25,6 @@ describe("calculateNowPositionPercent", () => {
 
   test("23:59 is near 100%", () => {
     expect(calculateNowPositionPercent(23, 59)).toBeCloseTo(99.9306, 2)
-  })
-})
-
-describe("findTodayColumnIndex", () => {
-  const today = new Date(2024, 5, 15) // June 15, 2024
-
-  test("returns index when today is in rendered dates", () => {
-    const dates = [new Date(2024, 5, 14), new Date(2024, 5, 15), new Date(2024, 5, 16)]
-    expect(findTodayColumnIndex(dates, today)).toBe(1)
-  })
-
-  test("returns null when today is not in rendered dates", () => {
-    const dates = [new Date(2024, 5, 10), new Date(2024, 5, 11)]
-    expect(findTodayColumnIndex(dates, today)).toBeNull()
-  })
-
-  test("returns 0 when today is the first date", () => {
-    const dates = [new Date(2024, 5, 15), new Date(2024, 5, 16)]
-    expect(findTodayColumnIndex(dates, today)).toBe(0)
-  })
-
-  test("handles empty array", () => {
-    expect(findTodayColumnIndex([], today)).toBeNull()
   })
 })
 
