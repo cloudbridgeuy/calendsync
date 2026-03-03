@@ -122,6 +122,10 @@ All tools accept optional `url` param (default: `CALENDSYNC_DEV_URL` env or `htt
 6. After fixing: `ui_annotations_resolve <id> "description of fix"`
 7. Annotations persist across server restarts in SQLite
 
+## For Claude
+
+Always use the MCP tools (`ui_annotations_list`, `ui_annotations_get`, `ui_annotations_resolve`, `ui_annotations_clear`) to query and manage annotations. Never query the SQLite database (`data/dev-annotations.db`) directly. The dev server must be running with `cargo xtask dev server --annotations`.
+
 ## Testing
 
 ```bash

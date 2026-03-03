@@ -48,5 +48,6 @@ crates/src-tauri/gen/schemas/
 !.claude/context/*.md
 !.claude/designs/*.md
 !.claude/plans/*.md
+data/
 .pommel/
 crates/frontend/target/
