@@ -14,6 +14,7 @@ pub enum CheckId {
     Fmt,
     Check,
     Clippy,
+    ClippyAuth,
     Test,
     Rail,
     BiomeFrontend,
@@ -73,6 +74,24 @@ const CHECKS: &[Check] = &[
         name: "cargo clippy ... -D warnings",
         program: "cargo",
         default_args: &["clippy", "--all-targets", "--", "-D", "warnings"],
+        optional: false,
+        cwd: None,
+    },
+    Check {
+        id: CheckId::ClippyAuth,
+        name: "cargo clippy (auth) ... -D warnings",
+        program: "cargo",
+        default_args: &[
+            "clippy",
+            "-p",
+            "calendsync",
+            "--no-default-features",
+            "--features",
+            "inmemory,memory,auth-mock,auth-sqlite",
+            "--",
+            "-D",
+            "warnings",
+        ],
         optional: false,
         cwd: None,
     },
@@ -157,7 +176,7 @@ fn fix_args<'a>(id: CheckId, default_args: &'a [&'a str], fix_mode: bool) -> Vec
             .copied()
             .filter(|a| *a != "--check")
             .collect(),
-        CheckId::Clippy => {
+        CheckId::Clippy | CheckId::ClippyAuth => {
             let mut args = Vec::new();
             for &arg in default_args {
                 if arg == "--" {
@@ -266,17 +285,18 @@ Rust checks:
  1. cargo fmt - Code formatting (auto-fix with --fix)
  2. cargo check - Compilation check
  3. cargo clippy - Linting with all warnings treated as errors
- 4. cargo test - Run all tests including doctests
- 5. cargo rail unify --check - Dependency unification, unused deps, dead features
+ 4. cargo clippy (auth) - Linting auth feature combinations
+ 5. cargo test - Run all tests including doctests
+ 6. cargo rail unify --check - Dependency unification, unused deps, dead features
 
 TypeScript checks (crates/frontend):
- 6. biome check --write --unsafe - Format and lint with auto-fix
- 7. bun run typecheck - TypeScript type checking
- 8. bun test - Run TypeScript tests
+ 7. biome check --write --unsafe - Format and lint with auto-fix
+ 8. bun run typecheck - TypeScript type checking
+ 9. bun test - Run TypeScript tests
 
 TypeScript checks (examples/hello-world):
- 9. biome check --write --unsafe - Format and lint example TypeScript
-10. bun run typecheck - Example TypeScript type checking
+10. biome check --write --unsafe - Format and lint example TypeScript
+11. bun run typecheck - Example TypeScript type checking
 
 When used with --install-hooks, this command also manages git pre-commit hooks that
 run these same checks automatically before each commit.
@@ -650,6 +670,38 @@ mod tests {
     }
 
     #[test]
+    fn fix_args_clippy_auth_inserts_fix_before_separator() {
+        let defaults = &[
+            "clippy",
+            "-p",
+            "calendsync",
+            "--no-default-features",
+            "--features",
+            "inmemory,memory,auth-mock,auth-sqlite",
+            "--",
+            "-D",
+            "warnings",
+        ];
+        let result = fix_args(CheckId::ClippyAuth, defaults, true);
+        assert_eq!(
+            result,
+            vec![
+                "clippy",
+                "-p",
+                "calendsync",
+                "--no-default-features",
+                "--features",
+                "inmemory,memory,auth-mock,auth-sqlite",
+                "--fix",
+                "--allow-dirty",
+                "--",
+                "-D",
+                "warnings",
+            ]
+        );
+    }
+
+    #[test]
     fn fix_args_other_check_unchanged() {
         let defaults = &["test", "--all-targets"];
         assert_eq!(fix_args(CheckId::Test, defaults, true), defaults.to_vec());
@@ -772,8 +824,8 @@ mod tests {
     // -- CHECKS const ---
 
     #[test]
-    fn checks_has_ten_entries() {
-        assert_eq!(CHECKS.len(), 10);
+    fn checks_has_eleven_entries() {
+        assert_eq!(CHECKS.len(), 11);
     }
 
     #[test]
@@ -785,6 +837,7 @@ mod tests {
                 CheckId::Fmt,
                 CheckId::Check,
                 CheckId::Clippy,
+                CheckId::ClippyAuth,
                 CheckId::Test,
                 CheckId::Rail,
                 CheckId::BiomeFrontend,
@@ -829,6 +882,7 @@ mod tests {
             CheckId::Fmt,
             CheckId::Check,
             CheckId::Clippy,
+            CheckId::ClippyAuth,
             CheckId::Test,
             CheckId::Rail,
         ];

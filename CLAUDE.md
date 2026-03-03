@@ -258,19 +258,20 @@ The command runs these checks in order:
 1. `cargo fmt --check` - Code formatting
 2. `cargo check --all-targets` - Compilation
 3. `cargo clippy --all-targets -- -D warnings` - Linting (warnings are errors)
-4. `cargo test --all-targets` - Tests
-5. `cargo rail unify --check` - Dependency unification, unused deps, dead features
+4. `cargo clippy -p calendsync --features auth-mock,auth-sqlite -- -D warnings` - Linting auth feature combinations
+5. `cargo test --all-targets` - Tests
+6. `cargo rail unify --check` - Dependency unification, unused deps, dead features
 
 **TypeScript checks (crates/frontend):**
 
-6. `biome check --write --unsafe` - Format and lint with auto-fix
-7. `bun run typecheck` - TypeScript type checking
-8. `bun test` - Run TypeScript tests
+7. `biome check --write --unsafe` - Format and lint with auto-fix
+8. `bun run typecheck` - TypeScript type checking
+9. `bun test` - Run TypeScript tests
 
 **TypeScript checks (examples/react-ssr):**
 
-9. `biome check --write --unsafe` - Format and lint example TypeScript
-10. `bun run typecheck` - Example TypeScript type checking
+10. `biome check --write --unsafe` - Format and lint example TypeScript
+11. `bun run typecheck` - Example TypeScript type checking
 
 Pre-commit hooks can be installed with `cargo xtask lint --install-hooks`.
 
@@ -433,6 +434,8 @@ These principles are non-negotiable when working on this codebase:
 3. **Progressive Disclosure**: Keep documentation layered. High-level overview in CLAUDE.md, detailed docs in `.claude/context/` files. Don't duplicate information.
 
 4. **Follow Existing Patterns**: When implementing features, use patterns already established in the codebase. Don't invent new approaches when existing ones work. Consistency trumps novelty.
+
+5. **Annotations via MCP Tools**: Query and manage dev annotations through the MCP tools (`ui_annotations_list`, etc.), never by querying the SQLite database directly. See [`.claude/context/dev-annotations.md`](.claude/context/dev-annotations.md).
 
 ## Functional Core - Imperative Shell
 
