@@ -608,6 +608,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | Now Indicator        | `.claude/context/now-indicator.md`       |
 | Settings Persistence | `.claude/context/calendar-settings-persistence.md` |
 | Scroll Pre-Position  | `.claude/context/scroll-pre-position.md`            |
+| Typography           | `.claude/context/typography.md`                     |
 
 ### Local Working Directories (gitignored)
 
