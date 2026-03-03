@@ -6,11 +6,11 @@
 //! - In-memory (with `mock` feature)
 //!
 //! When multiple features are enabled, priority is: sqlite > redis > mock.
-//! All modules compile independently, but only one `SessionStore` is re-exported.
+//! Only the highest-priority module compiles and its `SessionStore` is re-exported.
 
-#[cfg(feature = "mock")]
+#[cfg(all(feature = "mock", not(feature = "sqlite"), not(feature = "redis")))]
 mod inmemory;
-#[cfg(feature = "redis")]
+#[cfg(all(feature = "redis", not(feature = "sqlite")))]
 mod redis_impl;
 #[cfg(feature = "sqlite")]
 mod sqlite;
