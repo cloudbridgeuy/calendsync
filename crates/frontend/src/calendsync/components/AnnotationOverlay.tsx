@@ -12,6 +12,7 @@ import {
   buildCreateAnnotationBody,
   extractComputedStyles,
   generateSelector,
+  isVisibleAnnotation,
 } from "../../core/calendar/annotations"
 import { AnnotationDetailPopup } from "./AnnotationDetailPopup"
 import { AnnotationMarker } from "./AnnotationMarker"
@@ -80,6 +81,7 @@ export function AnnotationOverlay({
   onDismiss,
   onReply,
 }: AnnotationOverlayProps) {
+  const visibleAnnotations = annotations.filter(isVisibleAnnotation)
   const [hoveredRect, setHoveredRect] = useState<DOMRect | null>(null)
   const [hoveredInfo, setHoveredInfo] = useState<string>("")
   const [notePopup, setNotePopup] = useState<{
@@ -240,7 +242,7 @@ export function AnnotationOverlay({
       )}
 
       {/* Markers on annotated elements */}
-      {annotations.map((annotation, i) => (
+      {visibleAnnotations.map((annotation, i) => (
         <AnnotationMarker
           key={annotation.id}
           annotation={annotation}

@@ -285,3 +285,12 @@ export function buildCreateAnnotationBody(
     full_path: options?.fullPath ?? null,
   }
 }
+
+/**
+ * Whether an annotation should be visible on the overlay.
+ * Only pending annotations are shown — acknowledged, resolved,
+ * and dismissed annotations disappear from the UI.
+ */
+export function isVisibleAnnotation(annotation: Annotation): boolean {
+  return annotation.status === "pending"
+}

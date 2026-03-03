@@ -8,6 +8,7 @@ import {
   generateSelector,
   groupByStatus,
   intentIcon,
+  isVisibleAnnotation,
   severityLabel,
   statusColor,
   truncateTextContent,
@@ -309,5 +310,23 @@ describe("buildCreateAnnotationBody", () => {
     expect(body.intent).toBe("question")
     expect(body.severity).toBe("blocking")
     expect(body.css_classes).toEqual(["btn", "primary"])
+  })
+})
+
+describe("isVisibleAnnotation", () => {
+  test("pending annotation is visible", () => {
+    expect(isVisibleAnnotation(makeAnnotation({ status: "pending" }))).toBe(true)
+  })
+
+  test("acknowledged annotation is not visible", () => {
+    expect(isVisibleAnnotation(makeAnnotation({ status: "acknowledged" }))).toBe(false)
+  })
+
+  test("resolved annotation is not visible", () => {
+    expect(isVisibleAnnotation(makeAnnotation({ status: "resolved" }))).toBe(false)
+  })
+
+  test("dismissed annotation is not visible", () => {
+    expect(isVisibleAnnotation(makeAnnotation({ status: "dismissed" }))).toBe(false)
   })
 })

@@ -4,8 +4,12 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import type { Annotation, AnnotationsListResponse } from "../../core/calendar/annotations"
-import { formatAnnotationsMarkdown } from "../../core/calendar/annotations"
+import {
+  type Annotation,
+  type AnnotationsListResponse,
+  formatAnnotationsMarkdown,
+  isVisibleAnnotation,
+} from "../../core/calendar/annotations"
 
 const API_BASE = "/_dev/annotations"
 const SSE_URL = "/_dev/annotations/events"
@@ -40,7 +44,10 @@ export function useAnnotations() {
       eventSource.addEventListener("annotation.updated", (event: MessageEvent<string>) => {
         const annotation: Annotation = JSON.parse(event.data)
         setAnnotations((prev) => prev.map((a) => (a.id === annotation.id ? annotation : a)))
-        setSelectedAnnotation((prev) => (prev?.id === annotation.id ? annotation : prev))
+        setSelectedAnnotation((prev) => {
+          if (prev?.id !== annotation.id) return prev
+          return isVisibleAnnotation(annotation) ? annotation : null
+        })
       })
 
       eventSource.addEventListener("annotation.deleted", (event: MessageEvent<string>) => {
