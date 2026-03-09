@@ -21,7 +21,7 @@ export function createNotification(
   date: string,
 ): Notification {
   return {
-    id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+    id: `notif-${type}-${entryId}`,
     type,
     entryId,
     entryTitle,
@@ -40,6 +40,7 @@ export function addNotification(
   notification: Notification,
   maxCount: number = MAX_NOTIFICATIONS,
 ): Notification[] {
+  if (notifications.some((n) => n.id === notification.id)) return notifications
   return [notification, ...notifications].slice(0, maxCount)
 }
 
