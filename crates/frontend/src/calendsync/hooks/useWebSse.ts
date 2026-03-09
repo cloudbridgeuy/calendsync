@@ -127,12 +127,8 @@ export function useWebSse(config: UseWebSseConfig): UseWebSseResult {
   // Use a ref for the current lastEventId to avoid reconnection loop
   const lastEventIdRef = useRef<string | null>(null)
 
-  // Update ref when syncState changes, but only if we're not currently connecting
-  useEffect(() => {
-    if (syncState?.lastEventId && connectionState !== "connecting") {
-      lastEventIdRef.current = syncState.lastEventId
-    }
-  }, [syncState?.lastEventId, connectionState])
+  // syncState is undefined while Dexie query is loading, null/object when resolved
+  const syncStateResolved = syncState !== undefined
 
   /**
    * Save the last event ID to sync state.
@@ -308,16 +304,23 @@ export function useWebSse(config: UseWebSseConfig): UseWebSseResult {
     connect()
   }, [connect, disconnect])
 
-  // Connect on mount and disconnect on unmount
+  // Update lastEventIdRef when syncState changes (ref-only, no reconnection)
   useEffect(() => {
-    if (enabled) {
+    if (syncStateResolved) {
+      lastEventIdRef.current = syncState?.lastEventId ?? null
+    }
+  }, [syncStateResolved, syncState?.lastEventId])
+
+  // Connect once Dexie has resolved sync_state, disconnect on unmount
+  useEffect(() => {
+    if (enabled && syncStateResolved) {
       connect()
     }
 
     return () => {
       disconnect()
     }
-  }, [enabled, connect, disconnect])
+  }, [enabled, syncStateResolved, connect, disconnect])
 
   return {
     connectionState,
