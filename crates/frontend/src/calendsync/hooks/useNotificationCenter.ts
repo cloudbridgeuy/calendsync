@@ -14,7 +14,7 @@ import {
   removeNotification as removePure,
   serializeNotifications,
 } from "@core/calendar/notifications"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { ChangeType, Notification } from "../types"
 
 /** Configuration for useNotificationCenter hook */
@@ -69,6 +69,7 @@ export function useNotificationCenter(
   const { calendarId } = config
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [isOpen, setIsOpen] = useState(false)
+  const hasMountedRef = useRef(false)
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -77,16 +78,15 @@ export function useNotificationCenter(
     const stored = localStorage.getItem(storageKey)
     const parsed = parseNotificationsJson(stored)
     setNotifications(parsed)
+    hasMountedRef.current = true
   }, [calendarId])
 
-  // Persist to localStorage on change
+  // Persist to localStorage on change (skip until initial load completes)
   useEffect(() => {
     if (typeof window === "undefined") return
-    // Skip if notifications are empty on initial render
-    // (we only want to save after user interaction or new notifications)
+    if (!hasMountedRef.current) return
     const storageKey = getStorageKey(calendarId)
-    const serialized = serializeNotifications(notifications)
-    localStorage.setItem(storageKey, serialized)
+    localStorage.setItem(storageKey, serializeNotifications(notifications))
   }, [calendarId, notifications])
 
   const unreadCount = useMemo(() => countUnread(notifications), [notifications])
