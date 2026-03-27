@@ -27,7 +27,7 @@ jobs:
 
       - name: Detect affected crates
         id: changes
-        uses: loadingalias/cargo-rail-action@v1
+        uses: loadingalias/cargo-rail-action@v2
 
   test:
     name: Test Suite
