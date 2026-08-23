@@ -71,15 +71,11 @@ pub fn validate_entry(entry: &CalendarEntry) -> Result<(), EntryError> {
 
     // Validate date/time ranges for specific entry kinds
     match &entry.kind {
-        EntryKind::MultiDay => {
-            if entry.end_date < entry.start_date {
-                return Err(EntryError::InvalidDateRange);
-            }
+        EntryKind::MultiDay if entry.end_date < entry.start_date => {
+            return Err(EntryError::InvalidDateRange);
         }
-        EntryKind::Timed { start, end } => {
-            if end <= start {
-                return Err(EntryError::InvalidTimeRange);
-            }
+        EntryKind::Timed { start, end } if end <= start => {
+            return Err(EntryError::InvalidTimeRange);
         }
         _ => {}
     }
@@ -216,6 +212,14 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_entry_title_too_long() {
+        let cal_id = test_calendar_id();
+        let date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
+        let entry = CalendarEntry::all_day(cal_id, "a".repeat(201), date);
+        assert_eq!(validate_entry(&entry), Err(EntryError::TitleTooLong));
+    }
+
+    #[test]
     fn test_validate_entry_invalid_date_range() {
         let cal_id = test_calendar_id();
         let start = NaiveDate::from_ymd_opt(2024, 1, 20).unwrap();
@@ -225,12 +229,31 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_entry_multi_day_equal_dates_is_valid() {
+        // Boundary: end_date == start_date is a valid single-day span, not an error.
+        let cal_id = test_calendar_id();
+        let date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
+        let entry = CalendarEntry::multi_day(cal_id, "Same day", date, date);
+        assert!(validate_entry(&entry).is_ok());
+    }
+
+    #[test]
     fn test_validate_entry_invalid_time_range() {
         let cal_id = test_calendar_id();
         let date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
         let start = NaiveTime::from_hms_opt(14, 0, 0).unwrap();
         let end = NaiveTime::from_hms_opt(10, 0, 0).unwrap(); // Before start!
         let entry = CalendarEntry::timed(cal_id, "Invalid", date, start, end);
+        assert_eq!(validate_entry(&entry), Err(EntryError::InvalidTimeRange));
+    }
+
+    #[test]
+    fn test_validate_entry_timed_equal_times_is_invalid() {
+        // Boundary: end == start has zero duration, so it is rejected.
+        let cal_id = test_calendar_id();
+        let date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
+        let time = NaiveTime::from_hms_opt(10, 0, 0).unwrap();
+        let entry = CalendarEntry::timed(cal_id, "Zero duration", date, time, time);
         assert_eq!(validate_entry(&entry), Err(EntryError::InvalidTimeRange));
     }
 
