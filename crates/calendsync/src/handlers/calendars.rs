@@ -69,10 +69,7 @@ async fn list_my_calendars_impl(
     state: &AppState,
     user_id: Uuid,
 ) -> Result<Json<Vec<CalendarWithRole>>, (StatusCode, String)> {
-    let auth = state
-        .auth
-        .as_ref()
-        .expect("Auth state required when auth feature enabled");
+    let auth = &state.auth;
     let calendars = auth
         .memberships
         .get_calendars_for_user(user_id)
@@ -130,10 +127,7 @@ pub async fn create_calendar(
         })?;
 
     // Create owner membership for the creating user
-    let auth = state
-        .auth
-        .as_ref()
-        .expect("Auth state required when auth feature enabled");
+    let auth = &state.auth;
     let membership = CalendarMembership::owner(calendar.id, user.id);
     auth.memberships
         .create_membership(&membership)
@@ -194,7 +188,7 @@ pub async fn get_calendar(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, Response> {
-    let auth = state.auth.as_ref().expect("Auth state required");
+    let auth = &state.auth;
     require_read_access(auth, id, user.id)
         .await
         .map_err(IntoResponse::into_response)?;
@@ -249,7 +243,7 @@ pub async fn update_calendar(
     Path(id): Path<Uuid>,
     form_result: Result<Form<UpdateCalendar>, FormRejection>,
 ) -> Result<impl IntoResponse, Response> {
-    let auth = state.auth.as_ref().expect("Auth state required");
+    let auth = &state.auth;
     require_write_access(auth, id, user.id)
         .await
         .map_err(IntoResponse::into_response)?;
@@ -330,7 +324,7 @@ pub async fn delete_calendar(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, Response> {
-    let auth = state.auth.as_ref().expect("Auth state required");
+    let auth = &state.auth;
     require_admin_access(auth, id, user.id)
         .await
         .map_err(IntoResponse::into_response)?;

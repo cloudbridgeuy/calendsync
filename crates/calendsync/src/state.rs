@@ -77,6 +77,20 @@ pub struct StoredEvent {
     pub event: CalendarEvent,
 }
 
+/// Repository trait objects for a configured storage/cache backend.
+///
+/// Groups the objects that a backend factory produces, so that wiring a new
+/// backend combination only requires implementing one constructor rather than
+/// threading six positional arguments through `AppState::build`.
+pub struct Repositories {
+    pub entry: Arc<dyn EntryRepository>,
+    pub calendar: Arc<dyn CalendarRepository>,
+    pub user: Arc<dyn UserRepository>,
+    pub membership: Arc<dyn MembershipRepository>,
+    pub settings: Arc<dyn SettingsRepository>,
+    pub cache_pubsub: Arc<dyn CachePubSub>,
+}
+
 /// Shared application state.
 ///
 /// This is cloned for each request handler and contains shared resources
@@ -137,21 +151,31 @@ pub struct AppState {
     #[cfg(feature = "dev-annotations")]
     pub dev_annotation_tx: broadcast::Sender<DevAnnotationEvent>,
 
-    /// Authentication state (optional, enabled via auth-* features).
+    /// Authentication state (present whenever an auth-* feature is enabled).
     #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
-    pub auth: Option<AuthState>,
+    pub auth: AuthState,
 }
 
 impl AppState {
-    /// Creates a new AppState with the given repositories and configuration.
-    fn build(
-        entry_repo: Arc<dyn EntryRepository>,
-        calendar_repo: Arc<dyn CalendarRepository>,
-        user_repo: Arc<dyn UserRepository>,
-        membership_repo: Arc<dyn MembershipRepository>,
-        settings_repo: Arc<dyn SettingsRepository>,
-        cache_pubsub: Arc<dyn CachePubSub>,
+    /// Creates a new AppState by wiring up repositories for the configured backend.
+    ///
+    /// Not available when an auth feature is enabled: those builds must construct
+    /// an `AuthState` first (auth setup needs the repositories) and pass it to
+    /// [`AppState::build`], so that a misconfigured auth setup fails before an
+    /// `AppState` can exist at all.
+    #[cfg(not(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock")))]
+    pub async fn new(config: &Config) -> Result<Self, anyhow::Error> {
+        let repositories = Repositories::new(config).await?;
+        Ok(Self::build(repositories, config))
+    }
+
+    /// Assembles an AppState from already-constructed repositories and, when an
+    /// auth feature is enabled, an already-constructed `AuthState`.
+    pub(crate) fn build(
+        repositories: Repositories,
         config: &Config,
+        #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+        auth: AuthState,
     ) -> Self {
         let (shutdown_tx, _) = broadcast::channel(1);
         let (dev_reload_tx, _) = broadcast::channel(1);
@@ -161,12 +185,12 @@ impl AppState {
         let (dev_annotation_tx, _) = broadcast::channel(64);
 
         Self {
-            entry_repo,
-            calendar_repo,
-            user_repo,
-            membership_repo,
-            settings_repo,
-            cache_pubsub,
+            entry_repo: repositories.entry,
+            calendar_repo: repositories.calendar,
+            user_repo: repositories.user,
+            membership_repo: repositories.membership,
+            settings_repo: repositories.settings,
+            cache_pubsub: repositories.cache_pubsub,
             event_counter: Arc::new(AtomicU64::new(1)),
             event_history: Arc::new(RwLock::new(VecDeque::new())),
             event_history_max_size: config.event_history_max_size,
@@ -181,7 +205,7 @@ impl AppState {
             #[cfg(feature = "dev-annotations")]
             dev_annotation_tx,
             #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
-            auth: None,
+            auth,
         }
     }
     /// Set the SSR pool asynchronously (for background initialization).
@@ -192,19 +216,6 @@ impl AppState {
         let mut guard = self.ssr_pool.write().await;
         *guard = Some(Arc::new(pool));
         tracing::info!("SSR pool set");
-    }
-
-    /// Set the auth state.
-    ///
-    /// This is called during initialization before any handlers run.
-    ///
-    /// Note: This method is prepared for future integration when the storage layer
-    /// exposes the required repositories for auth initialization.
-    #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
-    #[allow(dead_code)]
-    pub fn with_auth(mut self, auth: AuthState) -> Self {
-        self.auth = Some(auth);
-        self
     }
 
     /// Get the SSR pool for rendering.
@@ -410,9 +421,7 @@ impl AppState {
 #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
 impl AsRef<AuthState> for AppState {
     fn as_ref(&self) -> &AuthState {
-        self.auth
-            .as_ref()
-            .expect("Auth state must be set before using auth routes")
+        &self.auth
     }
 }
 
@@ -427,8 +436,8 @@ mod sqlite_memory {
     use crate::storage::cached::{CachedCalendarRepository, CachedEntryRepository};
     use crate::storage::SqliteRepository;
 
-    impl AppState {
-        /// Creates AppState with SQLite storage and in-memory cache.
+    impl Repositories {
+        /// Creates repositories with SQLite storage and in-memory cache.
         pub async fn new(config: &Config) -> Result<Self, anyhow::Error> {
             let sqlite_repo = Arc::new(SqliteRepository::new(&config.sqlite_path).await?);
             let memory_cache = Arc::new(MemoryCache::new(config.cache_max_entries));
@@ -447,15 +456,14 @@ mod sqlite_memory {
                 config.cache_ttl(),
             ));
 
-            Ok(Self::build(
-                cached_entry_repo,
-                cached_calendar_repo,
-                sqlite_repo.clone(),
-                sqlite_repo.clone(),
-                sqlite_repo,
-                memory_pubsub,
-                config,
-            ))
+            Ok(Self {
+                entry: cached_entry_repo,
+                calendar: cached_calendar_repo,
+                user: sqlite_repo.clone(),
+                membership: sqlite_repo.clone(),
+                settings: sqlite_repo,
+                cache_pubsub: memory_pubsub,
+            })
         }
     }
 }
@@ -467,8 +475,8 @@ mod sqlite_redis {
     use crate::storage::cached::{CachedCalendarRepository, CachedEntryRepository};
     use crate::storage::SqliteRepository;
 
-    impl AppState {
-        /// Creates AppState with SQLite storage and Redis cache.
+    impl Repositories {
+        /// Creates repositories with SQLite storage and Redis cache.
         pub async fn new(config: &Config) -> Result<Self, anyhow::Error> {
             let sqlite_repo = Arc::new(SqliteRepository::new(&config.sqlite_path).await?);
             let redis_cache = Arc::new(RedisCache::new(&config.redis_url).await?);
@@ -487,15 +495,14 @@ mod sqlite_redis {
                 config.cache_ttl(),
             ));
 
-            Ok(Self::build(
-                cached_entry_repo,
-                cached_calendar_repo,
-                sqlite_repo.clone(),
-                sqlite_repo.clone(),
-                sqlite_repo,
-                redis_pubsub,
-                config,
-            ))
+            Ok(Self {
+                entry: cached_entry_repo,
+                calendar: cached_calendar_repo,
+                user: sqlite_repo.clone(),
+                membership: sqlite_repo.clone(),
+                settings: sqlite_repo,
+                cache_pubsub: redis_pubsub,
+            })
         }
     }
 }
@@ -507,8 +514,8 @@ mod inmemory_memory {
     use crate::storage::cached::{CachedCalendarRepository, CachedEntryRepository};
     use crate::storage::InMemoryRepository;
 
-    impl AppState {
-        /// Creates AppState with in-memory storage and cache.
+    impl Repositories {
+        /// Creates repositories with in-memory storage and cache.
         /// Useful for testing without any external dependencies.
         pub async fn new(config: &Config) -> Result<Self, anyhow::Error> {
             let inmemory_repo = Arc::new(InMemoryRepository::new());
@@ -528,15 +535,14 @@ mod inmemory_memory {
                 config.cache_ttl(),
             ));
 
-            Ok(Self::build(
-                cached_entry_repo,
-                cached_calendar_repo,
-                inmemory_repo.clone(),
-                inmemory_repo.clone(),
-                inmemory_repo,
-                memory_pubsub,
-                config,
-            ))
+            Ok(Self {
+                entry: cached_entry_repo,
+                calendar: cached_calendar_repo,
+                user: inmemory_repo.clone(),
+                membership: inmemory_repo.clone(),
+                settings: inmemory_repo,
+                cache_pubsub: memory_pubsub,
+            })
         }
     }
 }
@@ -548,8 +554,8 @@ mod dynamodb_memory {
     use crate::storage::cached::{CachedCalendarRepository, CachedEntryRepository};
     use crate::storage::DynamoDbRepository;
 
-    impl AppState {
-        /// Creates AppState with DynamoDB storage and in-memory cache.
+    impl Repositories {
+        /// Creates repositories with DynamoDB storage and in-memory cache.
         pub async fn new(config: &Config) -> Result<Self, anyhow::Error> {
             let aws_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
             let dynamodb_client = aws_sdk_dynamodb::Client::new(&aws_config);
@@ -574,15 +580,14 @@ mod dynamodb_memory {
                 config.cache_ttl(),
             ));
 
-            Ok(Self::build(
-                cached_entry_repo,
-                cached_calendar_repo,
-                dynamodb_repo.clone(),
-                dynamodb_repo.clone(),
-                dynamodb_repo,
-                memory_pubsub,
-                config,
-            ))
+            Ok(Self {
+                entry: cached_entry_repo,
+                calendar: cached_calendar_repo,
+                user: dynamodb_repo.clone(),
+                membership: dynamodb_repo.clone(),
+                settings: dynamodb_repo,
+                cache_pubsub: memory_pubsub,
+            })
         }
     }
 }
@@ -594,8 +599,8 @@ mod dynamodb_redis {
     use crate::storage::cached::{CachedCalendarRepository, CachedEntryRepository};
     use crate::storage::DynamoDbRepository;
 
-    impl AppState {
-        /// Creates AppState with DynamoDB storage and Redis cache.
+    impl Repositories {
+        /// Creates repositories with DynamoDB storage and Redis cache.
         pub async fn new(config: &Config) -> Result<Self, anyhow::Error> {
             let aws_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
             let dynamodb_client = aws_sdk_dynamodb::Client::new(&aws_config);
@@ -620,15 +625,14 @@ mod dynamodb_redis {
                 config.cache_ttl(),
             ));
 
-            Ok(Self::build(
-                cached_entry_repo,
-                cached_calendar_repo,
-                dynamodb_repo.clone(),
-                dynamodb_repo.clone(),
-                dynamodb_repo,
-                redis_pubsub,
-                config,
-            ))
+            Ok(Self {
+                entry: cached_entry_repo,
+                calendar: cached_calendar_repo,
+                user: dynamodb_repo.clone(),
+                membership: dynamodb_repo.clone(),
+                settings: dynamodb_repo,
+                cache_pubsub: redis_pubsub,
+            })
         }
     }
 }
@@ -654,6 +658,11 @@ mod test_support {
         CalendarRepository, DateRange, EntryRepository, MembershipRepository, Result,
         SettingsRepository, UserRepository,
     };
+
+    #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+    use calendsync_auth::AuthConfig;
+    #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+    use calendsync_core::auth::{AuthFlowState, Session, SessionId, SessionRepository};
 
     /// Minimal in-memory repository for tests.
     /// This is a simplified version that only implements the traits needed for testing.
@@ -854,6 +863,78 @@ mod test_support {
         }
     }
 
+    /// Minimal in-memory `SessionRepository` for tests.
+    ///
+    /// Building a valid `AuthState` fixture (see `AuthState::no_providers`) needs a
+    /// session repository. The one shipped in `calendsync_auth::sessions` picks
+    /// SQLite over the in-memory backend when both the `sqlite` and `mock` features
+    /// are enabled (as they are together under the auth clippy check), which would
+    /// require a real database connection just to build a test fixture. This type
+    /// sidesteps that by always being in-memory, regardless of which auth features
+    /// are enabled.
+    #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+    #[derive(Debug, Default)]
+    struct TestSessionRepository {
+        sessions: RwLock<HashMap<String, Session>>,
+        auth_flows: RwLock<HashMap<String, AuthFlowState>>,
+    }
+
+    #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+    #[async_trait]
+    impl SessionRepository for TestSessionRepository {
+        async fn create_session(&self, session: &Session) -> calendsync_core::auth::Result<()> {
+            let mut sessions = self.sessions.write().await;
+            sessions.insert(session.id.as_str().to_string(), session.clone());
+            Ok(())
+        }
+
+        async fn get_session(
+            &self,
+            id: &SessionId,
+        ) -> calendsync_core::auth::Result<Option<Session>> {
+            let sessions = self.sessions.read().await;
+            Ok(sessions.get(id.as_str()).cloned())
+        }
+
+        async fn delete_session(&self, id: &SessionId) -> calendsync_core::auth::Result<()> {
+            let mut sessions = self.sessions.write().await;
+            sessions.remove(id.as_str());
+            Ok(())
+        }
+
+        async fn delete_user_sessions(&self, user_id: &str) -> calendsync_core::auth::Result<()> {
+            let mut sessions = self.sessions.write().await;
+            sessions.retain(|_, s| s.user_id != user_id);
+            Ok(())
+        }
+
+        async fn store_auth_flow(
+            &self,
+            state: &str,
+            flow: &AuthFlowState,
+        ) -> calendsync_core::auth::Result<()> {
+            let mut flows = self.auth_flows.write().await;
+            flows.insert(state.to_string(), flow.clone());
+            Ok(())
+        }
+
+        async fn peek_auth_flow(
+            &self,
+            state: &str,
+        ) -> calendsync_core::auth::Result<Option<AuthFlowState>> {
+            let flows = self.auth_flows.read().await;
+            Ok(flows.get(state).cloned())
+        }
+
+        async fn take_auth_flow(
+            &self,
+            state: &str,
+        ) -> calendsync_core::auth::Result<Option<AuthFlowState>> {
+            let mut flows = self.auth_flows.write().await;
+            Ok(flows.remove(state))
+        }
+    }
+
     impl Default for AppState {
         /// Creates an AppState with in-memory storage for testing.
         ///
@@ -865,14 +946,40 @@ mod test_support {
             let memory_pubsub = Arc::new(MemoryPubSub::new());
 
             // For tests, we use the test repository without caching
-            Self::build(
-                test_repo.clone(),
-                test_repo.clone(),
+            let repositories = Repositories {
+                entry: test_repo.clone(),
+                calendar: test_repo.clone(),
+                user: test_repo.clone(),
+                membership: test_repo.clone(),
+                settings: test_repo.clone(),
+                cache_pubsub: memory_pubsub,
+            };
+
+            #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+            let auth = AuthState::no_providers(
+                Arc::new(TestSessionRepository::default()),
                 test_repo.clone(),
                 test_repo.clone(),
                 test_repo,
-                memory_pubsub,
+                AuthConfig {
+                    google: None,
+                    apple: None,
+                    session_ttl: std::time::Duration::from_secs(7 * 24 * 60 * 60),
+                    base_url: "http://localhost:3000".parse().unwrap(),
+                    cookie_name: "session".to_string(),
+                    cookie_secure: false,
+                },
+            );
+
+            Self::build(
+                repositories,
                 &config,
+                #[cfg(any(
+                    feature = "auth-sqlite",
+                    feature = "auth-redis",
+                    feature = "auth-mock"
+                ))]
+                auth,
             )
         }
     }

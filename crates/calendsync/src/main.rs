@@ -29,6 +29,9 @@ use calendsync_core::auth::SessionRepository;
 
 use crate::{app::create_app, config::Config, state::AppState};
 
+#[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+use crate::state::Repositories;
+
 /// CalendSync - Create calendars to sync with your friends
 #[derive(Parser, Debug)]
 #[command(name = "calendsync")]
@@ -59,8 +62,36 @@ async fn main() -> Result<()> {
     // Load configuration from environment
     let config = Config::from_env();
 
-    // Create application state WITHOUT SSR pool (starts as None, initialized in background)
+    // Spawn Mock IdP server when auth-mock feature is enabled
+    #[cfg(feature = "auth-mock")]
+    {
+        use calendsync_auth::mock_idp::MockIdpServer;
+
+        let mock_server = MockIdpServer::new(3001);
+        tokio::spawn(async move {
+            if let Err(e) = mock_server.run().await {
+                tracing::error!(error = %e, "Mock IdP server failed");
+            }
+        });
+        tracing::info!("Mock IdP server started on port 3001");
+    }
+
+    // Create application state WITHOUT SSR pool (starts as None, initialized in background).
+    //
+    // When an auth feature is enabled, repositories are built first and auth is set
+    // up before an AppState is assembled, so a misconfigured auth setup fails the
+    // process at startup (via `?`) instead of producing a server that silently runs
+    // without auth and panics on every request that needs it.
+    #[cfg(not(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock")))]
     let state = AppState::new(&config).await?;
+
+    #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+    let state = {
+        let repositories = Repositories::new(&config).await?;
+        let session_store = create_session_store(&config).await?;
+        let auth = setup_auth(&repositories, session_store).await?;
+        AppState::build(repositories, &config, auth)
+    };
 
     // Initialize dev annotation store when in dev mode
     #[cfg(feature = "dev-annotations")]
@@ -79,38 +110,6 @@ async fn main() -> Result<()> {
             );
         }
         state
-    };
-
-    // Spawn Mock IdP server when auth-mock feature is enabled
-    #[cfg(feature = "auth-mock")]
-    {
-        use calendsync_auth::mock_idp::MockIdpServer;
-
-        let mock_server = MockIdpServer::new(3001);
-        tokio::spawn(async move {
-            if let Err(e) = mock_server.run().await {
-                tracing::error!(error = %e, "Mock IdP server failed");
-            }
-        });
-        tracing::info!("Mock IdP server started on port 3001");
-    }
-
-    // Initialize auth if configured
-    #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
-    let state = {
-        match create_session_store(&config).await {
-            Ok(session_store) => {
-                if let Some(auth_state) = setup_auth(&state, session_store).await {
-                    state.with_auth(auth_state)
-                } else {
-                    state
-                }
-            }
-            Err(e) => {
-                tracing::error!(error = %e, "Failed to create session store, running without auth");
-                state
-            }
-        }
     };
 
     // Build the application router
@@ -291,40 +290,31 @@ async fn create_session_store(_config: &Config) -> anyhow::Result<Arc<dyn Sessio
     Ok(Arc::new(SessionStore::new()))
 }
 
-/// Sets up authentication if configured via environment variables.
+/// Sets up authentication from environment variables.
 ///
-/// Returns `None` if auth environment variables are not set (running without auth).
+/// An auth feature being enabled at compile time means auth is required at
+/// runtime: this returns an error (rather than degrading to a server that runs
+/// without auth) if no provider is configured, a provider is partially
+/// configured, or provider initialization otherwise fails. The caller is
+/// expected to propagate the error and abort startup.
 #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
 async fn setup_auth(
-    state: &AppState,
+    repositories: &Repositories,
     session_store: Arc<dyn SessionRepository>,
-) -> Option<AuthState> {
-    let config = match AuthConfig::from_env() {
-        Ok(c) => c,
-        Err(e) => {
-            tracing::info!(error = %e, "Auth not configured, skipping");
-            return None;
-        }
-    };
+) -> anyhow::Result<AuthState> {
+    let config = AuthConfig::from_env()?;
 
-    match AuthState::new(
+    let auth_state = AuthState::new(
         session_store,
-        state.user_repo.clone(),
-        state.calendar_repo.clone(),
-        state.membership_repo.clone(),
+        repositories.user.clone(),
+        repositories.calendar.clone(),
+        repositories.membership.clone(),
         config,
     )
-    .await
-    {
-        Ok(auth_state) => {
-            tracing::info!("Auth initialized successfully");
-            Some(auth_state)
-        }
-        Err(e) => {
-            tracing::error!(error = %e, "Failed to initialize auth");
-            None
-        }
-    }
+    .await?;
+
+    tracing::info!("Auth initialized successfully");
+    Ok(auth_state)
 }
 
 /// Wait for shutdown signals (Ctrl+C or SIGTERM) and notify SSE handlers.

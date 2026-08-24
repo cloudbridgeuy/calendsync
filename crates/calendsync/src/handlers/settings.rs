@@ -42,7 +42,7 @@ pub async fn update_settings(
     Path(calendar_id): Path<Uuid>,
     Json(settings): Json<CalendarSettings>,
 ) -> Result<StatusCode, Response> {
-    let auth = state.auth.as_ref().expect("Auth state required");
+    let auth = &state.auth;
     require_read_access(auth, calendar_id, user.id)
         .await
         .map_err(IntoResponse::into_response)?;

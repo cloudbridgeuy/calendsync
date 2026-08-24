@@ -473,26 +473,29 @@ pub async fn calendar_react_ssr(
     };
 
     // Membership check: verify user has access to this calendar
-    if let Some(auth) = &state.auth {
-        match auth.memberships.get_membership(calendar_id, user.id).await {
-            Ok(Some(_membership)) => {
-                // User has access, continue to render
-            }
-            Ok(None) => {
-                // No membership - redirect to user's first calendar with flash message
-                tracing::warn!(
-                    user_id = %user.id,
-                    calendar_id = %calendar_id,
-                    request_id = %ctx.request_id,
-                    "User attempted to access calendar without membership"
-                );
-                return redirect_to_first_calendar_with_flash(&state, user.id).await;
-            }
-            Err(e) => {
-                tracing::error!(error = %e, request_id = %ctx.request_id, "Failed to check calendar membership");
-                // On error, still try to redirect to user's calendar
-                return redirect_to_first_calendar_with_flash(&state, user.id).await;
-            }
+    match state
+        .auth
+        .memberships
+        .get_membership(calendar_id, user.id)
+        .await
+    {
+        Ok(Some(_membership)) => {
+            // User has access, continue to render
+        }
+        Ok(None) => {
+            // No membership - redirect to user's first calendar with flash message
+            tracing::warn!(
+                user_id = %user.id,
+                calendar_id = %calendar_id,
+                request_id = %ctx.request_id,
+                "User attempted to access calendar without membership"
+            );
+            return redirect_to_first_calendar_with_flash(&state, user.id).await;
+        }
+        Err(e) => {
+            tracing::error!(error = %e, request_id = %ctx.request_id, "Failed to check calendar membership");
+            // On error, still try to redirect to user's calendar
+            return redirect_to_first_calendar_with_flash(&state, user.id).await;
         }
     }
 
@@ -521,15 +524,7 @@ pub async fn calendar_react_ssr(
 async fn redirect_to_first_calendar_with_flash(state: &AppState, user_id: Uuid) -> Response {
     let flash = FlashMessage::error("You don't have access to the requested calendar");
 
-    let auth = match &state.auth {
-        Some(auth) => auth,
-        None => {
-            tracing::error!("Auth state not initialized");
-            return redirect_with_flash("/login", flash);
-        }
-    };
-
-    match auth.memberships.get_calendars_for_user(user_id).await {
+    match state.auth.memberships.get_calendars_for_user(user_id).await {
         Ok(calendars) if !calendars.is_empty() => {
             let first_calendar_id = calendars[0].0.id;
             redirect_with_flash(&format!("/calendar/{}", first_calendar_id), flash)
@@ -677,25 +672,28 @@ pub async fn calendar_react_ssr_entry(
     };
 
     // Membership check: verify user has access to this calendar
-    if let Some(auth) = &state.auth {
-        match auth.memberships.get_membership(calendar_id, user.id).await {
-            Ok(Some(_membership)) => {
-                // User has access, continue to render
-            }
-            Ok(None) => {
-                // No membership - redirect to user's first calendar with flash message
-                tracing::warn!(
-                    user_id = %user.id,
-                    calendar_id = %calendar_id,
-                    request_id = %ctx.request_id,
-                    "User attempted to access calendar entry without membership"
-                );
-                return redirect_to_first_calendar_with_flash(&state, user.id).await;
-            }
-            Err(e) => {
-                tracing::error!(error = %e, request_id = %ctx.request_id, "Failed to check calendar membership");
-                return redirect_to_first_calendar_with_flash(&state, user.id).await;
-            }
+    match state
+        .auth
+        .memberships
+        .get_membership(calendar_id, user.id)
+        .await
+    {
+        Ok(Some(_membership)) => {
+            // User has access, continue to render
+        }
+        Ok(None) => {
+            // No membership - redirect to user's first calendar with flash message
+            tracing::warn!(
+                user_id = %user.id,
+                calendar_id = %calendar_id,
+                request_id = %ctx.request_id,
+                "User attempted to access calendar entry without membership"
+            );
+            return redirect_to_first_calendar_with_flash(&state, user.id).await;
+        }
+        Err(e) => {
+            tracing::error!(error = %e, request_id = %ctx.request_id, "Failed to check calendar membership");
+            return redirect_to_first_calendar_with_flash(&state, user.id).await;
         }
     }
 
