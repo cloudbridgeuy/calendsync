@@ -17,6 +17,7 @@ pub enum CheckId {
     ClippyAuth,
     Test,
     Rail,
+    Typos,
     BiomeFrontend,
     TypecheckFrontend,
     TestFrontend,
@@ -53,7 +54,7 @@ pub struct CheckResult {
 
 /// All lint checks, executed in order: Rust checks first, then TypeScript checks.
 const CHECKS: &[Check] = &[
-    // Rust checks (1–5)
+    // Rust checks (1–7)
     Check {
         id: CheckId::Fmt,
         name: "cargo fmt --check",
@@ -113,7 +114,15 @@ const CHECKS: &[Check] = &[
         optional: true,
         cwd: None,
     },
-    // TypeScript checks (6–10)
+    Check {
+        id: CheckId::Typos,
+        name: "typos",
+        program: "typos",
+        default_args: &[],
+        optional: true,
+        cwd: None,
+    },
+    // TypeScript checks (8–13)
     Check {
         id: CheckId::BiomeFrontend,
         name: "biome check (frontend)",
@@ -303,16 +312,17 @@ Rust checks:
  4. cargo clippy (auth) - Linting auth feature combinations
  5. cargo test - Run all tests including doctests
  6. cargo rail unify --check - Dependency unification, unused deps, dead features
+ 7. typos - Spell-check the repository (optional; skipped if not installed)
 
 TypeScript checks (crates/frontend):
- 7. biome check - Format and lint (reports only; auto-fix with --fix)
- 8. bun run typecheck - TypeScript type checking
- 9. bun test - Run TypeScript tests
+ 8. biome check - Format and lint (reports only; auto-fix with --fix)
+ 9. bun run typecheck - TypeScript type checking
+10. bun test - Run TypeScript tests
 
 TypeScript checks (examples/hello-world):
-10. bun install --frozen-lockfile - Install example dependencies from the committed lockfile
-11. biome check - Format and lint example TypeScript (reports only; auto-fix with --fix)
-12. bun run typecheck - Example TypeScript type checking
+11. bun install --frozen-lockfile - Install example dependencies from the committed lockfile
+12. biome check - Format and lint example TypeScript (reports only; auto-fix with --fix)
+13. bun run typecheck - Example TypeScript type checking
 
 When used with --install-hooks, this command also manages git pre-commit hooks that
 run these same checks automatically before each commit.
@@ -443,6 +453,17 @@ fn is_cargo_rail_installed() -> bool {
         .unwrap_or(false)
 }
 
+/// Check whether `typos` is installed.
+fn is_typos_installed() -> bool {
+    std::process::Command::new("typos")
+        .arg("--version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
 /// Resolve the project root from `CARGO_MANIFEST_DIR`.
 fn project_root() -> &'static std::path::Path {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
@@ -513,6 +534,7 @@ fn run_pipeline(command: &LintCommand, global: &crate::Global) -> Result<()> {
     };
 
     let rail_installed = is_cargo_rail_installed();
+    let typos_installed = is_typos_installed();
     let mut failed = false;
 
     for check in CHECKS {
@@ -520,6 +542,7 @@ fn run_pipeline(command: &LintCommand, global: &crate::Global) -> Result<()> {
         // detects "not found" in output) provide defense-in-depth for optional checks.
         let tool_installed = match check.id {
             CheckId::Rail => rail_installed,
+            CheckId::Typos => typos_installed,
             _ => true,
         };
 
@@ -840,8 +863,8 @@ mod tests {
     // -- CHECKS const ---
 
     #[test]
-    fn checks_has_twelve_entries() {
-        assert_eq!(CHECKS.len(), 12);
+    fn checks_has_thirteen_entries() {
+        assert_eq!(CHECKS.len(), 13);
     }
 
     #[test]
@@ -856,6 +879,7 @@ mod tests {
                 CheckId::ClippyAuth,
                 CheckId::Test,
                 CheckId::Rail,
+                CheckId::Typos,
                 CheckId::BiomeFrontend,
                 CheckId::TypecheckFrontend,
                 CheckId::TestFrontend,
@@ -867,10 +891,10 @@ mod tests {
     }
 
     #[test]
-    fn only_rail_is_optional() {
+    fn only_rail_and_typos_are_optional() {
         for check in CHECKS {
-            if check.id == CheckId::Rail {
-                assert!(check.optional, "Rail should be optional");
+            if check.id == CheckId::Rail || check.id == CheckId::Typos {
+                assert!(check.optional, "{} should be optional", check.name);
             } else {
                 assert!(!check.optional, "{} should not be optional", check.name);
             }
@@ -903,6 +927,7 @@ mod tests {
             CheckId::ClippyAuth,
             CheckId::Test,
             CheckId::Rail,
+            CheckId::Typos,
         ];
         for check in CHECKS {
             if rust_ids.contains(&check.id) {
