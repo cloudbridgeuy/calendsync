@@ -20,6 +20,7 @@ pub enum CheckId {
     BiomeFrontend,
     TypecheckFrontend,
     TestFrontend,
+    InstallExample,
     BiomeExample,
     TypecheckExample,
 }
@@ -88,6 +89,7 @@ const CHECKS: &[Check] = &[
             "--no-default-features",
             "--features",
             "inmemory,memory,auth-mock,auth-sqlite",
+            "--all-targets",
             "--",
             "-D",
             "warnings",
@@ -116,7 +118,7 @@ const CHECKS: &[Check] = &[
         id: CheckId::BiomeFrontend,
         name: "biome check (frontend)",
         program: "bunx",
-        default_args: &["biome", "check", "--write", "--unsafe"],
+        default_args: &["biome", "check"],
         optional: false,
         cwd: Some("crates/frontend"),
     },
@@ -137,10 +139,18 @@ const CHECKS: &[Check] = &[
         cwd: Some("crates/frontend"),
     },
     Check {
+        id: CheckId::InstallExample,
+        name: "bun install (example)",
+        program: "bun",
+        default_args: &["install", "--frozen-lockfile"],
+        optional: false,
+        cwd: Some("crates/calendsync/examples/react-ssr"),
+    },
+    Check {
         id: CheckId::BiomeExample,
         name: "biome check (example)",
         program: "bunx",
-        default_args: &["biome", "check", "--write", "--unsafe"],
+        default_args: &["biome", "check"],
         optional: false,
         cwd: Some("crates/calendsync/examples/react-ssr"),
     },
@@ -185,6 +195,11 @@ fn fix_args<'a>(id: CheckId, default_args: &'a [&'a str], fix_mode: bool) -> Vec
                     args.push(arg);
                 }
             }
+            args
+        }
+        CheckId::BiomeFrontend | CheckId::BiomeExample => {
+            let mut args = default_args.to_vec();
+            args.extend_from_slice(&["--write", "--unsafe"]);
             args
         }
         _ => default_args.to_vec(),
@@ -290,13 +305,14 @@ Rust checks:
  6. cargo rail unify --check - Dependency unification, unused deps, dead features
 
 TypeScript checks (crates/frontend):
- 7. biome check --write --unsafe - Format and lint with auto-fix
+ 7. biome check - Format and lint (reports only; auto-fix with --fix)
  8. bun run typecheck - TypeScript type checking
  9. bun test - Run TypeScript tests
 
 TypeScript checks (examples/hello-world):
-10. biome check --write --unsafe - Format and lint example TypeScript
-11. bun run typecheck - Example TypeScript type checking
+10. bun install --frozen-lockfile - Install example dependencies from the committed lockfile
+11. biome check - Format and lint example TypeScript (reports only; auto-fix with --fix)
+12. bun run typecheck - Example TypeScript type checking
 
 When used with --install-hooks, this command also manages git pre-commit hooks that
 run these same checks automatically before each commit.
@@ -824,8 +840,8 @@ mod tests {
     // -- CHECKS const ---
 
     #[test]
-    fn checks_has_eleven_entries() {
-        assert_eq!(CHECKS.len(), 11);
+    fn checks_has_twelve_entries() {
+        assert_eq!(CHECKS.len(), 12);
     }
 
     #[test]
@@ -843,6 +859,7 @@ mod tests {
                 CheckId::BiomeFrontend,
                 CheckId::TypecheckFrontend,
                 CheckId::TestFrontend,
+                CheckId::InstallExample,
                 CheckId::BiomeExample,
                 CheckId::TypecheckExample,
             ]
@@ -866,6 +883,7 @@ mod tests {
             CheckId::BiomeFrontend,
             CheckId::TypecheckFrontend,
             CheckId::TestFrontend,
+            CheckId::InstallExample,
             CheckId::BiomeExample,
             CheckId::TypecheckExample,
         ];
@@ -932,10 +950,46 @@ mod tests {
     // -- fix_args for TypeScript checks ---
 
     #[test]
-    fn fix_args_typescript_check_unchanged() {
-        let defaults = &["biome", "check", "--write", "--unsafe"];
+    fn fix_args_biome_frontend_no_fix_is_check_only() {
+        let defaults = &["biome", "check"];
+        assert_eq!(
+            fix_args(CheckId::BiomeFrontend, defaults, false),
+            defaults.to_vec()
+        );
+    }
+
+    #[test]
+    fn fix_args_biome_frontend_fix_adds_write_unsafe() {
+        let defaults = &["biome", "check"];
         assert_eq!(
             fix_args(CheckId::BiomeFrontend, defaults, true),
+            vec!["biome", "check", "--write", "--unsafe"]
+        );
+    }
+
+    #[test]
+    fn fix_args_biome_example_no_fix_is_check_only() {
+        let defaults = &["biome", "check"];
+        assert_eq!(
+            fix_args(CheckId::BiomeExample, defaults, false),
+            defaults.to_vec()
+        );
+    }
+
+    #[test]
+    fn fix_args_biome_example_fix_adds_write_unsafe() {
+        let defaults = &["biome", "check"];
+        assert_eq!(
+            fix_args(CheckId::BiomeExample, defaults, true),
+            vec!["biome", "check", "--write", "--unsafe"]
+        );
+    }
+
+    #[test]
+    fn fix_args_typecheck_unaffected_by_fix_mode() {
+        let defaults = &["run", "typecheck"];
+        assert_eq!(
+            fix_args(CheckId::TypecheckFrontend, defaults, true),
             defaults.to_vec()
         );
     }
