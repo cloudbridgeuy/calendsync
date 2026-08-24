@@ -1,4 +1,7 @@
-targets = ["x86_64-apple-darwin", "aarch64-apple-darwin"]
+# No explicit target list: rail analyzes the host target. Naming the two macOS
+# targets made this check unrunnable anywhere else, because collecting compiler
+# evidence for a target the host cannot build fails, and rail then reports
+# unification edits that a macOS run never sees.
 
 [unify]
 detect_unused = true

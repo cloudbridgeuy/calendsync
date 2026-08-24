@@ -43,7 +43,12 @@ jobs:
         uses: cargo-bins/cargo-binstall@main
 
       - name: Install cargo-rail and typos-cli
-        run: cargo binstall cargo-rail typos-cli --no-confirm
+        # Pinned deliberately. An unpinned `binstall` let CI take cargo-rail
+        # 0.22.1 while local runs used an older build, so the same command
+        # disagreed with itself across machines. 0.22.1 also declares an MSRV
+        # above the toolchain this repo pins, so it cannot be built from source
+        # here; 0.21.0 is the newest version that can.
+        run: cargo binstall cargo-rail@0.21.0 typos-cli@1.49.0 --no-confirm
 
       - name: Run the gate
         run: cargo xtask lint
