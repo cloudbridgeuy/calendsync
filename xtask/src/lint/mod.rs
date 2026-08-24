@@ -20,6 +20,7 @@ pub enum CheckId {
     BiomeFrontend,
     TypecheckFrontend,
     TestFrontend,
+    InstallExample,
     BiomeExample,
     TypecheckExample,
 }
@@ -136,6 +137,14 @@ const CHECKS: &[Check] = &[
         default_args: &["test"],
         optional: false,
         cwd: Some("crates/frontend"),
+    },
+    Check {
+        id: CheckId::InstallExample,
+        name: "bun install (example)",
+        program: "bun",
+        default_args: &["install", "--frozen-lockfile"],
+        optional: false,
+        cwd: Some("crates/calendsync/examples/react-ssr"),
     },
     Check {
         id: CheckId::BiomeExample,
@@ -301,8 +310,9 @@ TypeScript checks (crates/frontend):
  9. bun test - Run TypeScript tests
 
 TypeScript checks (examples/hello-world):
-10. biome check - Format and lint example TypeScript (reports only; auto-fix with --fix)
-11. bun run typecheck - Example TypeScript type checking
+10. bun install --frozen-lockfile - Install example dependencies from the committed lockfile
+11. biome check - Format and lint example TypeScript (reports only; auto-fix with --fix)
+12. bun run typecheck - Example TypeScript type checking
 
 When used with --install-hooks, this command also manages git pre-commit hooks that
 run these same checks automatically before each commit.
@@ -830,8 +840,8 @@ mod tests {
     // -- CHECKS const ---
 
     #[test]
-    fn checks_has_eleven_entries() {
-        assert_eq!(CHECKS.len(), 11);
+    fn checks_has_twelve_entries() {
+        assert_eq!(CHECKS.len(), 12);
     }
 
     #[test]
@@ -849,6 +859,7 @@ mod tests {
                 CheckId::BiomeFrontend,
                 CheckId::TypecheckFrontend,
                 CheckId::TestFrontend,
+                CheckId::InstallExample,
                 CheckId::BiomeExample,
                 CheckId::TypecheckExample,
             ]
@@ -872,6 +883,7 @@ mod tests {
             CheckId::BiomeFrontend,
             CheckId::TypecheckFrontend,
             CheckId::TestFrontend,
+            CheckId::InstallExample,
             CheckId::BiomeExample,
             CheckId::TypecheckExample,
         ];
