@@ -77,6 +77,20 @@ pub struct StoredEvent {
     pub event: CalendarEvent,
 }
 
+/// Repository trait objects for a configured storage/cache backend.
+///
+/// Groups the objects that a backend factory produces, so that wiring a new
+/// backend combination only requires implementing one constructor rather than
+/// threading six positional arguments through `AppState::build`.
+pub struct Repositories {
+    pub entry: Arc<dyn EntryRepository>,
+    pub calendar: Arc<dyn CalendarRepository>,
+    pub user: Arc<dyn UserRepository>,
+    pub membership: Arc<dyn MembershipRepository>,
+    pub settings: Arc<dyn SettingsRepository>,
+    pub cache_pubsub: Arc<dyn CachePubSub>,
+}
+
 /// Shared application state.
 ///
 /// This is cloned for each request handler and contains shared resources
@@ -143,16 +157,14 @@ pub struct AppState {
 }
 
 impl AppState {
+    /// Creates a new AppState by wiring up repositories for the configured backend.
+    pub async fn new(config: &Config) -> Result<Self, anyhow::Error> {
+        let repositories = Repositories::new(config).await?;
+        Ok(Self::build(repositories, config))
+    }
+
     /// Creates a new AppState with the given repositories and configuration.
-    fn build(
-        entry_repo: Arc<dyn EntryRepository>,
-        calendar_repo: Arc<dyn CalendarRepository>,
-        user_repo: Arc<dyn UserRepository>,
-        membership_repo: Arc<dyn MembershipRepository>,
-        settings_repo: Arc<dyn SettingsRepository>,
-        cache_pubsub: Arc<dyn CachePubSub>,
-        config: &Config,
-    ) -> Self {
+    fn build(repositories: Repositories, config: &Config) -> Self {
         let (shutdown_tx, _) = broadcast::channel(1);
         let (dev_reload_tx, _) = broadcast::channel(1);
         let (dev_error_tx, _) = broadcast::channel(1);
@@ -161,12 +173,12 @@ impl AppState {
         let (dev_annotation_tx, _) = broadcast::channel(64);
 
         Self {
-            entry_repo,
-            calendar_repo,
-            user_repo,
-            membership_repo,
-            settings_repo,
-            cache_pubsub,
+            entry_repo: repositories.entry,
+            calendar_repo: repositories.calendar,
+            user_repo: repositories.user,
+            membership_repo: repositories.membership,
+            settings_repo: repositories.settings,
+            cache_pubsub: repositories.cache_pubsub,
             event_counter: Arc::new(AtomicU64::new(1)),
             event_history: Arc::new(RwLock::new(VecDeque::new())),
             event_history_max_size: config.event_history_max_size,
@@ -427,8 +439,8 @@ mod sqlite_memory {
     use crate::storage::cached::{CachedCalendarRepository, CachedEntryRepository};
     use crate::storage::SqliteRepository;
 
-    impl AppState {
-        /// Creates AppState with SQLite storage and in-memory cache.
+    impl Repositories {
+        /// Creates repositories with SQLite storage and in-memory cache.
         pub async fn new(config: &Config) -> Result<Self, anyhow::Error> {
             let sqlite_repo = Arc::new(SqliteRepository::new(&config.sqlite_path).await?);
             let memory_cache = Arc::new(MemoryCache::new(config.cache_max_entries));
@@ -447,15 +459,14 @@ mod sqlite_memory {
                 config.cache_ttl(),
             ));
 
-            Ok(Self::build(
-                cached_entry_repo,
-                cached_calendar_repo,
-                sqlite_repo.clone(),
-                sqlite_repo.clone(),
-                sqlite_repo,
-                memory_pubsub,
-                config,
-            ))
+            Ok(Self {
+                entry: cached_entry_repo,
+                calendar: cached_calendar_repo,
+                user: sqlite_repo.clone(),
+                membership: sqlite_repo.clone(),
+                settings: sqlite_repo,
+                cache_pubsub: memory_pubsub,
+            })
         }
     }
 }
@@ -467,8 +478,8 @@ mod sqlite_redis {
     use crate::storage::cached::{CachedCalendarRepository, CachedEntryRepository};
     use crate::storage::SqliteRepository;
 
-    impl AppState {
-        /// Creates AppState with SQLite storage and Redis cache.
+    impl Repositories {
+        /// Creates repositories with SQLite storage and Redis cache.
         pub async fn new(config: &Config) -> Result<Self, anyhow::Error> {
             let sqlite_repo = Arc::new(SqliteRepository::new(&config.sqlite_path).await?);
             let redis_cache = Arc::new(RedisCache::new(&config.redis_url).await?);
@@ -487,15 +498,14 @@ mod sqlite_redis {
                 config.cache_ttl(),
             ));
 
-            Ok(Self::build(
-                cached_entry_repo,
-                cached_calendar_repo,
-                sqlite_repo.clone(),
-                sqlite_repo.clone(),
-                sqlite_repo,
-                redis_pubsub,
-                config,
-            ))
+            Ok(Self {
+                entry: cached_entry_repo,
+                calendar: cached_calendar_repo,
+                user: sqlite_repo.clone(),
+                membership: sqlite_repo.clone(),
+                settings: sqlite_repo,
+                cache_pubsub: redis_pubsub,
+            })
         }
     }
 }
@@ -507,8 +517,8 @@ mod inmemory_memory {
     use crate::storage::cached::{CachedCalendarRepository, CachedEntryRepository};
     use crate::storage::InMemoryRepository;
 
-    impl AppState {
-        /// Creates AppState with in-memory storage and cache.
+    impl Repositories {
+        /// Creates repositories with in-memory storage and cache.
         /// Useful for testing without any external dependencies.
         pub async fn new(config: &Config) -> Result<Self, anyhow::Error> {
             let inmemory_repo = Arc::new(InMemoryRepository::new());
@@ -528,15 +538,14 @@ mod inmemory_memory {
                 config.cache_ttl(),
             ));
 
-            Ok(Self::build(
-                cached_entry_repo,
-                cached_calendar_repo,
-                inmemory_repo.clone(),
-                inmemory_repo.clone(),
-                inmemory_repo,
-                memory_pubsub,
-                config,
-            ))
+            Ok(Self {
+                entry: cached_entry_repo,
+                calendar: cached_calendar_repo,
+                user: inmemory_repo.clone(),
+                membership: inmemory_repo.clone(),
+                settings: inmemory_repo,
+                cache_pubsub: memory_pubsub,
+            })
         }
     }
 }
@@ -548,8 +557,8 @@ mod dynamodb_memory {
     use crate::storage::cached::{CachedCalendarRepository, CachedEntryRepository};
     use crate::storage::DynamoDbRepository;
 
-    impl AppState {
-        /// Creates AppState with DynamoDB storage and in-memory cache.
+    impl Repositories {
+        /// Creates repositories with DynamoDB storage and in-memory cache.
         pub async fn new(config: &Config) -> Result<Self, anyhow::Error> {
             let aws_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
             let dynamodb_client = aws_sdk_dynamodb::Client::new(&aws_config);
@@ -574,15 +583,14 @@ mod dynamodb_memory {
                 config.cache_ttl(),
             ));
 
-            Ok(Self::build(
-                cached_entry_repo,
-                cached_calendar_repo,
-                dynamodb_repo.clone(),
-                dynamodb_repo.clone(),
-                dynamodb_repo,
-                memory_pubsub,
-                config,
-            ))
+            Ok(Self {
+                entry: cached_entry_repo,
+                calendar: cached_calendar_repo,
+                user: dynamodb_repo.clone(),
+                membership: dynamodb_repo.clone(),
+                settings: dynamodb_repo,
+                cache_pubsub: memory_pubsub,
+            })
         }
     }
 }
@@ -594,8 +602,8 @@ mod dynamodb_redis {
     use crate::storage::cached::{CachedCalendarRepository, CachedEntryRepository};
     use crate::storage::DynamoDbRepository;
 
-    impl AppState {
-        /// Creates AppState with DynamoDB storage and Redis cache.
+    impl Repositories {
+        /// Creates repositories with DynamoDB storage and Redis cache.
         pub async fn new(config: &Config) -> Result<Self, anyhow::Error> {
             let aws_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
             let dynamodb_client = aws_sdk_dynamodb::Client::new(&aws_config);
@@ -620,15 +628,14 @@ mod dynamodb_redis {
                 config.cache_ttl(),
             ));
 
-            Ok(Self::build(
-                cached_entry_repo,
-                cached_calendar_repo,
-                dynamodb_repo.clone(),
-                dynamodb_repo.clone(),
-                dynamodb_repo,
-                redis_pubsub,
-                config,
-            ))
+            Ok(Self {
+                entry: cached_entry_repo,
+                calendar: cached_calendar_repo,
+                user: dynamodb_repo.clone(),
+                membership: dynamodb_repo.clone(),
+                settings: dynamodb_repo,
+                cache_pubsub: redis_pubsub,
+            })
         }
     }
 }
@@ -865,15 +872,16 @@ mod test_support {
             let memory_pubsub = Arc::new(MemoryPubSub::new());
 
             // For tests, we use the test repository without caching
-            Self::build(
-                test_repo.clone(),
-                test_repo.clone(),
-                test_repo.clone(),
-                test_repo.clone(),
-                test_repo,
-                memory_pubsub,
-                &config,
-            )
+            let repositories = Repositories {
+                entry: test_repo.clone(),
+                calendar: test_repo.clone(),
+                user: test_repo.clone(),
+                membership: test_repo.clone(),
+                settings: test_repo,
+                cache_pubsub: memory_pubsub,
+            };
+
+            Self::build(repositories, &config)
         }
     }
 }
