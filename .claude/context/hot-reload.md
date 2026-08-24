@@ -37,7 +37,7 @@ pub ssr_pool: Arc<TokioRwLock<Option<Arc<SsrPool>>>>
 pub dev_reload_tx: broadcast::Sender<()>  // For browser auto-refresh
 ```
 
-**`handlers/dev.rs`**: Dev-only endpoints (debug builds only)
+**`handlers/dev/`**: Dev-only endpoints (debug builds only)
 - `POST /_dev/reload`: Detects change type (none/css_only/client_only/full), conditionally swaps SSR pool
 - `POST /_dev/error`: Receives build errors from xtask, broadcasts to browsers
 - `GET /_dev/events`: SSE endpoint with events: `reload`, `css-reload`, `build-error`
@@ -62,7 +62,7 @@ pub dev_reload_tx: broadcast::Sender<()>  // For browser auto-refresh
 - Handles `css-reload` event: hot-swaps stylesheet without reload
 - Handles `build-error` event: displays error overlay with dismiss button
 
-### xtask (`xtask/src/dev/web.rs`)
+### xtask (`xtask/src/dev/server.rs`)
 
 - Spawns server with `DEV_MODE=1`
 - File watcher using `notify-debouncer-mini`
@@ -137,7 +137,7 @@ cargo xtask dev server --release
 | File | Purpose |
 |------|---------|
 | `crates/calendsync/src/state.rs` | Swappable SSR pool + reload broadcast |
-| `crates/calendsync/src/handlers/dev.rs` | Reload endpoint + SSE events endpoint |
+| `crates/calendsync/src/handlers/dev/hot_reload.rs` | Reload endpoint + SSE events endpoint |
 | `crates/calendsync/src/handlers/calendar_react.rs` | Runtime bundle URLs (JS + CSS) + devMode |
 | `crates/frontend/scripts/build-css.ts` | CSS content hashing during build |
 | `crates/frontend/scripts/update-manifest.ts` | Updates manifest.json with latest asset filenames |
@@ -146,7 +146,7 @@ cargo xtask dev server --release
 | `crates/calendsync/src/main.rs` | Runtime manifest |
 | `crates/frontend/src/calendsync/App.tsx` | Auto-refresh script injection |
 | `crates/frontend/src/calendsync/types.ts` | devMode in InitialData |
-| `xtask/src/dev/web.rs` | File watcher, reload orchestration |
+| `xtask/src/dev/server.rs` | File watcher, reload orchestration |
 
 ## Tauri (Desktop/iOS) - Not Affected
 
