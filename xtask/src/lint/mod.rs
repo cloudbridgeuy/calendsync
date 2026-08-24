@@ -88,6 +88,7 @@ const CHECKS: &[Check] = &[
             "--no-default-features",
             "--features",
             "inmemory,memory,auth-mock,auth-sqlite",
+            "--all-targets",
             "--",
             "-D",
             "warnings",
