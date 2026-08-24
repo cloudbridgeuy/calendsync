@@ -114,6 +114,28 @@ impl AuthState {
         })
     }
 
+    /// Creates an `AuthState` with no OIDC providers configured.
+    ///
+    /// Skips provider discovery entirely, so unlike `new`, this is synchronous and
+    /// performs no I/O. Intended for building a valid `AuthState` fixture in tests.
+    pub fn no_providers(
+        sessions: Arc<dyn SessionRepository>,
+        users: Arc<dyn UserRepository>,
+        calendars: Arc<dyn CalendarRepository>,
+        memberships: Arc<dyn MembershipRepository>,
+        config: AuthConfig,
+    ) -> Self {
+        Self {
+            sessions,
+            users,
+            calendars,
+            memberships,
+            config,
+            google: None,
+            apple: None,
+        }
+    }
+
     /// Gets the provider client for the given OIDC provider.
     ///
     /// # Errors

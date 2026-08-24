@@ -76,15 +76,7 @@ pub async fn login_page(
 /// If the user has no calendars, redirects back to /login (shouldn't happen but handle gracefully).
 #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
 async fn redirect_to_first_calendar(state: &AppState, user_id: uuid::Uuid) -> Response {
-    let auth = match &state.auth {
-        Some(auth) => auth,
-        None => {
-            tracing::error!("Auth state not initialized");
-            return Redirect::to("/login").into_response();
-        }
-    };
-
-    match auth.memberships.get_calendars_for_user(user_id).await {
+    match state.auth.memberships.get_calendars_for_user(user_id).await {
         Ok(calendars) if !calendars.is_empty() => {
             let first_calendar_id = calendars[0].0.id;
             Redirect::to(&format!("/calendar/{first_calendar_id}")).into_response()
@@ -106,13 +98,7 @@ async fn redirect_to_first_calendar(state: &AppState, user_id: uuid::Uuid) -> Re
 /// Builds a simple HTML page with login buttons for each enabled provider.
 #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
 fn render_login_html(state: &AppState, return_to: Option<String>) -> Response {
-    let auth = match &state.auth {
-        Some(auth) => auth,
-        None => {
-            tracing::error!("Auth state not initialized");
-            return Html("<h1>Authentication not configured</h1>").into_response();
-        }
-    };
+    let auth = &state.auth;
 
     // Get CSS URL from manifest
     let css_url = get_css_url();

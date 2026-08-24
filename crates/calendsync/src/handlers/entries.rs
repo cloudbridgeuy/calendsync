@@ -74,7 +74,7 @@ pub async fn list_entries(
     State(state): State<AppState>,
     Query(query): Query<ListEntriesQuery>,
 ) -> Result<Json<Vec<serde_json::Value>>, Response> {
-    let auth = state.auth.as_ref().expect("Auth state required");
+    let auth = &state.auth;
     require_read_access(auth, query.calendar_id, user.id)
         .await
         .map_err(IntoResponse::into_response)?;
@@ -137,7 +137,7 @@ pub async fn create_entry(
     })?;
 
     // Check write access on the calendar BEFORE creating entry
-    let auth = state.auth.as_ref().expect("Auth state required");
+    let auth = &state.auth;
     require_write_access(auth, payload.calendar_id, user.id)
         .await
         .map_err(IntoResponse::into_response)?;
@@ -228,7 +228,7 @@ pub async fn get_entry(
         })?;
 
     // Check read access on the entry's calendar
-    let auth = state.auth.as_ref().expect("Auth state required");
+    let auth = &state.auth;
     require_read_access(auth, entry.calendar_id, user.id)
         .await
         .map_err(IntoResponse::into_response)?;
@@ -287,7 +287,7 @@ pub async fn update_entry(
         })?;
 
     // Check write access on the entry's calendar
-    let auth = state.auth.as_ref().expect("Auth state required");
+    let auth = &state.auth;
     require_write_access(auth, server_entry.calendar_id, user.id)
         .await
         .map_err(IntoResponse::into_response)?;
@@ -413,7 +413,7 @@ pub async fn delete_entry(
         })?;
 
     // Check write access on the entry's calendar
-    let auth = state.auth.as_ref().expect("Auth state required");
+    let auth = &state.auth;
     require_write_access(auth, entry.calendar_id, user.id)
         .await
         .map_err(IntoResponse::into_response)?;
@@ -472,7 +472,7 @@ pub async fn toggle_entry(
         })?;
 
     // Check write access on the entry's calendar
-    let auth = state.auth.as_ref().expect("Auth state required");
+    let auth = &state.auth;
     require_write_access(auth, existing.calendar_id, user.id)
         .await
         .map_err(IntoResponse::into_response)?;

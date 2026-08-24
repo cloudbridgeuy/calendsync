@@ -151,20 +151,32 @@ pub struct AppState {
     #[cfg(feature = "dev-annotations")]
     pub dev_annotation_tx: broadcast::Sender<DevAnnotationEvent>,
 
-    /// Authentication state (optional, enabled via auth-* features).
+    /// Authentication state (present whenever an auth-* feature is enabled).
     #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
-    pub auth: Option<AuthState>,
+    pub auth: AuthState,
 }
 
 impl AppState {
     /// Creates a new AppState by wiring up repositories for the configured backend.
+    ///
+    /// Not available when an auth feature is enabled: those builds must construct
+    /// an `AuthState` first (auth setup needs the repositories) and pass it to
+    /// [`AppState::build`], so that a misconfigured auth setup fails before an
+    /// `AppState` can exist at all.
+    #[cfg(not(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock")))]
     pub async fn new(config: &Config) -> Result<Self, anyhow::Error> {
         let repositories = Repositories::new(config).await?;
         Ok(Self::build(repositories, config))
     }
 
-    /// Creates a new AppState with the given repositories and configuration.
-    fn build(repositories: Repositories, config: &Config) -> Self {
+    /// Assembles an AppState from already-constructed repositories and, when an
+    /// auth feature is enabled, an already-constructed `AuthState`.
+    pub(crate) fn build(
+        repositories: Repositories,
+        config: &Config,
+        #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+        auth: AuthState,
+    ) -> Self {
         let (shutdown_tx, _) = broadcast::channel(1);
         let (dev_reload_tx, _) = broadcast::channel(1);
         let (dev_error_tx, _) = broadcast::channel(1);
@@ -193,7 +205,7 @@ impl AppState {
             #[cfg(feature = "dev-annotations")]
             dev_annotation_tx,
             #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
-            auth: None,
+            auth,
         }
     }
     /// Set the SSR pool asynchronously (for background initialization).
@@ -204,19 +216,6 @@ impl AppState {
         let mut guard = self.ssr_pool.write().await;
         *guard = Some(Arc::new(pool));
         tracing::info!("SSR pool set");
-    }
-
-    /// Set the auth state.
-    ///
-    /// This is called during initialization before any handlers run.
-    ///
-    /// Note: This method is prepared for future integration when the storage layer
-    /// exposes the required repositories for auth initialization.
-    #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
-    #[allow(dead_code)]
-    pub fn with_auth(mut self, auth: AuthState) -> Self {
-        self.auth = Some(auth);
-        self
     }
 
     /// Get the SSR pool for rendering.
@@ -422,9 +421,7 @@ impl AppState {
 #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
 impl AsRef<AuthState> for AppState {
     fn as_ref(&self) -> &AuthState {
-        self.auth
-            .as_ref()
-            .expect("Auth state must be set before using auth routes")
+        &self.auth
     }
 }
 
@@ -662,6 +659,11 @@ mod test_support {
         SettingsRepository, UserRepository,
     };
 
+    #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+    use calendsync_auth::AuthConfig;
+    #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+    use calendsync_core::auth::{AuthFlowState, Session, SessionId, SessionRepository};
+
     /// Minimal in-memory repository for tests.
     /// This is a simplified version that only implements the traits needed for testing.
     #[derive(Debug, Default)]
@@ -861,6 +863,78 @@ mod test_support {
         }
     }
 
+    /// Minimal in-memory `SessionRepository` for tests.
+    ///
+    /// Building a valid `AuthState` fixture (see `AuthState::no_providers`) needs a
+    /// session repository. The one shipped in `calendsync_auth::sessions` picks
+    /// SQLite over the in-memory backend when both the `sqlite` and `mock` features
+    /// are enabled (as they are together under the auth clippy check), which would
+    /// require a real database connection just to build a test fixture. This type
+    /// sidesteps that by always being in-memory, regardless of which auth features
+    /// are enabled.
+    #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+    #[derive(Debug, Default)]
+    struct TestSessionRepository {
+        sessions: RwLock<HashMap<String, Session>>,
+        auth_flows: RwLock<HashMap<String, AuthFlowState>>,
+    }
+
+    #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+    #[async_trait]
+    impl SessionRepository for TestSessionRepository {
+        async fn create_session(&self, session: &Session) -> calendsync_core::auth::Result<()> {
+            let mut sessions = self.sessions.write().await;
+            sessions.insert(session.id.as_str().to_string(), session.clone());
+            Ok(())
+        }
+
+        async fn get_session(
+            &self,
+            id: &SessionId,
+        ) -> calendsync_core::auth::Result<Option<Session>> {
+            let sessions = self.sessions.read().await;
+            Ok(sessions.get(id.as_str()).cloned())
+        }
+
+        async fn delete_session(&self, id: &SessionId) -> calendsync_core::auth::Result<()> {
+            let mut sessions = self.sessions.write().await;
+            sessions.remove(id.as_str());
+            Ok(())
+        }
+
+        async fn delete_user_sessions(&self, user_id: &str) -> calendsync_core::auth::Result<()> {
+            let mut sessions = self.sessions.write().await;
+            sessions.retain(|_, s| s.user_id != user_id);
+            Ok(())
+        }
+
+        async fn store_auth_flow(
+            &self,
+            state: &str,
+            flow: &AuthFlowState,
+        ) -> calendsync_core::auth::Result<()> {
+            let mut flows = self.auth_flows.write().await;
+            flows.insert(state.to_string(), flow.clone());
+            Ok(())
+        }
+
+        async fn peek_auth_flow(
+            &self,
+            state: &str,
+        ) -> calendsync_core::auth::Result<Option<AuthFlowState>> {
+            let flows = self.auth_flows.read().await;
+            Ok(flows.get(state).cloned())
+        }
+
+        async fn take_auth_flow(
+            &self,
+            state: &str,
+        ) -> calendsync_core::auth::Result<Option<AuthFlowState>> {
+            let mut flows = self.auth_flows.write().await;
+            Ok(flows.remove(state))
+        }
+    }
+
     impl Default for AppState {
         /// Creates an AppState with in-memory storage for testing.
         ///
@@ -877,11 +951,36 @@ mod test_support {
                 calendar: test_repo.clone(),
                 user: test_repo.clone(),
                 membership: test_repo.clone(),
-                settings: test_repo,
+                settings: test_repo.clone(),
                 cache_pubsub: memory_pubsub,
             };
 
-            Self::build(repositories, &config)
+            #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
+            let auth = AuthState::no_providers(
+                Arc::new(TestSessionRepository::default()),
+                test_repo.clone(),
+                test_repo.clone(),
+                test_repo,
+                AuthConfig {
+                    google: None,
+                    apple: None,
+                    session_ttl: std::time::Duration::from_secs(7 * 24 * 60 * 60),
+                    base_url: "http://localhost:3000".parse().unwrap(),
+                    cookie_name: "session".to_string(),
+                    cookie_secure: false,
+                },
+            );
+
+            Self::build(
+                repositories,
+                &config,
+                #[cfg(any(
+                    feature = "auth-sqlite",
+                    feature = "auth-redis",
+                    feature = "auth-mock"
+                ))]
+                auth,
+            )
         }
     }
 }
