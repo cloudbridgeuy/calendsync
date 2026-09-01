@@ -76,6 +76,7 @@ cargo tauri ios build                     # Build iOS app
 
 - **crates/calendsync** - Main binary application (web server)
 - **crates/core** - Pure business logic library (Functional Core)
+- **crates/auth** - OIDC authentication (Google, Apple), session storage (SQLite or Redis)
 - **crates/client** - CLI client for calendsync API
 - **crates/frontend** - TypeScript build crate (bun bundler)
 - **crates/ssr_core** - Pure SSR functions (config, validation, polyfills)
@@ -237,6 +238,8 @@ The TypeScript build is triggered by Cargo:
 
 **Always use `cargo xtask lint` for code quality checks.** Do not run `cargo fmt`, `cargo clippy`, `cargo test`, `bunx biome`, `bun run typecheck`, or `bun test` directly — they flood context with noise. `cargo xtask lint` runs all of these quietly and only surfaces errors. Full output is saved to `target/xtask-lint.log`.
 
+`cargo xtask lint` is the single source of truth for code quality: the CI `gate` job's "Run the gate" step runs this exact command rather than duplicating the checks. The gate stops at the first failing check, so a red run shows only the first failure.
+
 **For agents (Claude):** Never use `--verbose` — it exists for human terminal use. If you need more context about a specific check's output (e.g., to understand a passing check's warnings), read the log file directly:
 
 - `Read target/xtask-lint.log` — full output of all checks, sectioned by `--- check-name [STATUS] ---` headers
@@ -261,17 +264,19 @@ The command runs these checks in order:
 4. `cargo clippy -p calendsync --features auth-mock,auth-sqlite -- -D warnings` - Linting auth feature combinations
 5. `cargo test --all-targets` - Tests
 6. `cargo rail unify --check` - Dependency unification, unused deps, dead features
+7. `typos` - Spell-checking (optional; skips if the `typos` binary is absent)
 
 **TypeScript checks (crates/frontend):**
 
-7. `biome check --write --unsafe` - Format and lint with auto-fix
-8. `bun run typecheck` - TypeScript type checking
-9. `bun test` - Run TypeScript tests
+8. `biome check` - Format and lint (`--write --unsafe` is added under `--fix`)
+9. `bun run typecheck` - TypeScript type checking
+10. `bun test` - Run TypeScript tests
 
 **TypeScript checks (examples/react-ssr):**
 
-10. `biome check --write --unsafe` - Format and lint example TypeScript
-11. `bun run typecheck` - Example TypeScript type checking
+11. `bun install --frozen-lockfile` - Install example dependencies
+12. `biome check` - Format and lint example TypeScript (`--write --unsafe` is added under `--fix`)
+13. `bun run typecheck` - Example TypeScript type checking
 
 Pre-commit hooks can be installed with `cargo xtask lint --install-hooks`.
 
@@ -287,7 +292,7 @@ The `calendsync_core` crate contains pure business logic following the Functiona
 
 **STRICT RULES:**
 
-1. **No Async Functions**: All functions MUST be synchronous. No `async fn` allowed.
+1. **No Async Function Bodies**: `async fn` bodies are not allowed. Trait method signatures may be `async fn`, since a trait declaration performs no I/O — implementations live in the imperative shell.
 
    - Core logic should not perform I/O operations
    - Use regular functions that can be called from sync or async contexts
@@ -569,7 +574,7 @@ Detailed documentation is kept in dedicated files. Consult these when working on
 | CLI Client           | `crates/client/README.md`              |
 | DynamoDB Schema      | `docs/dynamodb.md`                     |
 | DynamoDB xtask       | `.claude/context/dynamodb.md`          |
-| React SSR Example    | `crates/calendsync/examples/README.md` |
+| React SSR Example    | `crates/calendsync/examples/react-ssr/README.md` |
 | React Calendar       | `.claude/context/react-calendar.md`    |
 | Entry Modal          | `.claude/context/entry-modal.md`       |
 | Wheel Navigation     | `.claude/context/wheel-navigation.md`  |

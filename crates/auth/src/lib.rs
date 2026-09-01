@@ -13,7 +13,7 @@ mod providers;
 mod sessions;
 mod state;
 
-pub use config::{AppleConfig, AuthConfig, ProviderConfig};
+pub use config::{AppleConfig, AuthConfig, AuthConfigError, ProviderConfig};
 pub use error::AuthError;
 pub use extractors::{CurrentUser, OptionalUser};
 pub use handlers::auth_routes;

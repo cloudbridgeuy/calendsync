@@ -17,9 +17,11 @@ pub enum CheckId {
     ClippyAuth,
     Test,
     Rail,
+    Typos,
     BiomeFrontend,
     TypecheckFrontend,
     TestFrontend,
+    InstallExample,
     BiomeExample,
     TypecheckExample,
 }
@@ -52,7 +54,7 @@ pub struct CheckResult {
 
 /// All lint checks, executed in order: Rust checks first, then TypeScript checks.
 const CHECKS: &[Check] = &[
-    // Rust checks (1–5)
+    // Rust checks (1–7)
     Check {
         id: CheckId::Fmt,
         name: "cargo fmt --check",
@@ -88,6 +90,7 @@ const CHECKS: &[Check] = &[
             "--no-default-features",
             "--features",
             "inmemory,memory,auth-mock,auth-sqlite",
+            "--all-targets",
             "--",
             "-D",
             "warnings",
@@ -111,12 +114,20 @@ const CHECKS: &[Check] = &[
         optional: true,
         cwd: None,
     },
-    // TypeScript checks (6–10)
+    Check {
+        id: CheckId::Typos,
+        name: "typos",
+        program: "typos",
+        default_args: &[],
+        optional: true,
+        cwd: None,
+    },
+    // TypeScript checks (8–13)
     Check {
         id: CheckId::BiomeFrontend,
         name: "biome check (frontend)",
         program: "bunx",
-        default_args: &["biome", "check", "--write", "--unsafe"],
+        default_args: &["biome", "check"],
         optional: false,
         cwd: Some("crates/frontend"),
     },
@@ -137,10 +148,18 @@ const CHECKS: &[Check] = &[
         cwd: Some("crates/frontend"),
     },
     Check {
+        id: CheckId::InstallExample,
+        name: "bun install (example)",
+        program: "bun",
+        default_args: &["install", "--frozen-lockfile"],
+        optional: false,
+        cwd: Some("crates/calendsync/examples/react-ssr"),
+    },
+    Check {
         id: CheckId::BiomeExample,
         name: "biome check (example)",
         program: "bunx",
-        default_args: &["biome", "check", "--write", "--unsafe"],
+        default_args: &["biome", "check"],
         optional: false,
         cwd: Some("crates/calendsync/examples/react-ssr"),
     },
@@ -185,6 +204,11 @@ fn fix_args<'a>(id: CheckId, default_args: &'a [&'a str], fix_mode: bool) -> Vec
                     args.push(arg);
                 }
             }
+            args
+        }
+        CheckId::BiomeFrontend | CheckId::BiomeExample => {
+            let mut args = default_args.to_vec();
+            args.extend_from_slice(&["--write", "--unsafe"]);
             args
         }
         _ => default_args.to_vec(),
@@ -288,15 +312,17 @@ Rust checks:
  4. cargo clippy (auth) - Linting auth feature combinations
  5. cargo test - Run all tests including doctests
  6. cargo rail unify --check - Dependency unification, unused deps, dead features
+ 7. typos - Spell-check the repository (optional; skipped if not installed)
 
 TypeScript checks (crates/frontend):
- 7. biome check --write --unsafe - Format and lint with auto-fix
- 8. bun run typecheck - TypeScript type checking
- 9. bun test - Run TypeScript tests
+ 8. biome check - Format and lint (reports only; auto-fix with --fix)
+ 9. bun run typecheck - TypeScript type checking
+10. bun test - Run TypeScript tests
 
 TypeScript checks (examples/hello-world):
-10. biome check --write --unsafe - Format and lint example TypeScript
-11. bun run typecheck - Example TypeScript type checking
+11. bun install --frozen-lockfile - Install example dependencies from the committed lockfile
+12. biome check - Format and lint example TypeScript (reports only; auto-fix with --fix)
+13. bun run typecheck - Example TypeScript type checking
 
 When used with --install-hooks, this command also manages git pre-commit hooks that
 run these same checks automatically before each commit.
@@ -427,6 +453,17 @@ fn is_cargo_rail_installed() -> bool {
         .unwrap_or(false)
 }
 
+/// Check whether `typos` is installed.
+fn is_typos_installed() -> bool {
+    std::process::Command::new("typos")
+        .arg("--version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
 /// Resolve the project root from `CARGO_MANIFEST_DIR`.
 fn project_root() -> &'static std::path::Path {
     let manifest_dir = env!("CARGO_MANIFEST_DIR");
@@ -497,6 +534,7 @@ fn run_pipeline(command: &LintCommand, global: &crate::Global) -> Result<()> {
     };
 
     let rail_installed = is_cargo_rail_installed();
+    let typos_installed = is_typos_installed();
     let mut failed = false;
 
     for check in CHECKS {
@@ -504,6 +542,7 @@ fn run_pipeline(command: &LintCommand, global: &crate::Global) -> Result<()> {
         // detects "not found" in output) provide defense-in-depth for optional checks.
         let tool_installed = match check.id {
             CheckId::Rail => rail_installed,
+            CheckId::Typos => typos_installed,
             _ => true,
         };
 
@@ -824,8 +863,8 @@ mod tests {
     // -- CHECKS const ---
 
     #[test]
-    fn checks_has_eleven_entries() {
-        assert_eq!(CHECKS.len(), 11);
+    fn checks_has_thirteen_entries() {
+        assert_eq!(CHECKS.len(), 13);
     }
 
     #[test]
@@ -840,9 +879,11 @@ mod tests {
                 CheckId::ClippyAuth,
                 CheckId::Test,
                 CheckId::Rail,
+                CheckId::Typos,
                 CheckId::BiomeFrontend,
                 CheckId::TypecheckFrontend,
                 CheckId::TestFrontend,
+                CheckId::InstallExample,
                 CheckId::BiomeExample,
                 CheckId::TypecheckExample,
             ]
@@ -850,10 +891,10 @@ mod tests {
     }
 
     #[test]
-    fn only_rail_is_optional() {
+    fn only_rail_and_typos_are_optional() {
         for check in CHECKS {
-            if check.id == CheckId::Rail {
-                assert!(check.optional, "Rail should be optional");
+            if check.id == CheckId::Rail || check.id == CheckId::Typos {
+                assert!(check.optional, "{} should be optional", check.name);
             } else {
                 assert!(!check.optional, "{} should not be optional", check.name);
             }
@@ -866,6 +907,7 @@ mod tests {
             CheckId::BiomeFrontend,
             CheckId::TypecheckFrontend,
             CheckId::TestFrontend,
+            CheckId::InstallExample,
             CheckId::BiomeExample,
             CheckId::TypecheckExample,
         ];
@@ -885,6 +927,7 @@ mod tests {
             CheckId::ClippyAuth,
             CheckId::Test,
             CheckId::Rail,
+            CheckId::Typos,
         ];
         for check in CHECKS {
             if rust_ids.contains(&check.id) {
@@ -932,10 +975,46 @@ mod tests {
     // -- fix_args for TypeScript checks ---
 
     #[test]
-    fn fix_args_typescript_check_unchanged() {
-        let defaults = &["biome", "check", "--write", "--unsafe"];
+    fn fix_args_biome_frontend_no_fix_is_check_only() {
+        let defaults = &["biome", "check"];
+        assert_eq!(
+            fix_args(CheckId::BiomeFrontend, defaults, false),
+            defaults.to_vec()
+        );
+    }
+
+    #[test]
+    fn fix_args_biome_frontend_fix_adds_write_unsafe() {
+        let defaults = &["biome", "check"];
         assert_eq!(
             fix_args(CheckId::BiomeFrontend, defaults, true),
+            vec!["biome", "check", "--write", "--unsafe"]
+        );
+    }
+
+    #[test]
+    fn fix_args_biome_example_no_fix_is_check_only() {
+        let defaults = &["biome", "check"];
+        assert_eq!(
+            fix_args(CheckId::BiomeExample, defaults, false),
+            defaults.to_vec()
+        );
+    }
+
+    #[test]
+    fn fix_args_biome_example_fix_adds_write_unsafe() {
+        let defaults = &["biome", "check"];
+        assert_eq!(
+            fix_args(CheckId::BiomeExample, defaults, true),
+            vec!["biome", "check", "--write", "--unsafe"]
+        );
+    }
+
+    #[test]
+    fn fix_args_typecheck_unaffected_by_fix_mode() {
+        let defaults = &["run", "typecheck"];
+        assert_eq!(
+            fix_args(CheckId::TypecheckFrontend, defaults, true),
             defaults.to_vec()
         );
     }

@@ -16,6 +16,7 @@ fn main() {
     println!("cargo:rerun-if-changed=src/");
     println!("cargo:rerun-if-changed=package.json");
     println!("cargo:rerun-if-changed=tsconfig.json");
+    println!("cargo:rerun-if-changed=bun.lock");
 
     // Check if source directory exists
     if !src_dir.exists() {
@@ -38,6 +39,20 @@ fn main() {
     } else {
         "build:dev"
     };
+
+    // Install dependencies from the committed lockfile before bundling. The
+    // lockfile is tracked in git, so a fresh clone always has it; the
+    // frozen flag keeps `bun install` from ever rewriting it as a side effect
+    // of a Cargo build.
+    let install_status = Command::new("bun")
+        .args(["install", "--frozen-lockfile"])
+        .current_dir(frontend_dir)
+        .status()
+        .expect("Failed to run bun install. Is bun installed?");
+
+    if !install_status.success() {
+        panic!("bun install failed");
+    }
 
     // Run bun build
     let status = Command::new("bun")

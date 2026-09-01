@@ -103,9 +103,9 @@ data: {"entry_id": "...", "date": "2025-01-01"}
 
 ## Client Implementation
 
-### useSSE Hook
+### useWebSse Hook
 
-Located in `crates/frontend/src/calendar-react/hooks/useSSE.ts`:
+Located in `crates/frontend/src/calendsync/hooks/useWebSse.ts`:
 
 ```typescript
 // Connect to SSE stream
@@ -139,8 +139,8 @@ On disconnect:
 | `crates/calendsync/src/state.rs` | `publish_event()`, `StoredEvent`, event history |
 | `crates/calendsync/src/handlers/events.rs` | SSE stream endpoint with polling |
 | `crates/calendsync/src/handlers/entries.rs` | Entry handlers that publish events |
-| `crates/calendsync_core/src/calendar/types.rs` | `CalendarEvent` enum |
-| `crates/frontend/src/calendar-react/hooks/useSSE.ts` | Client SSE hook |
+| `crates/core/src/calendar/types.rs` | `CalendarEvent` enum |
+| `crates/frontend/src/calendsync/hooks/useWebSse.ts` | Client SSE hook |
 
 ## Configuration
 

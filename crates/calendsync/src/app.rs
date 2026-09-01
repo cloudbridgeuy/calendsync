@@ -157,13 +157,13 @@ pub fn create_app(state: AppState, config: &Config) -> Router {
         );
     }
 
-    // Add auth routes if auth is configured
+    // Add auth routes (auth is always configured when an auth-* feature is enabled)
     // We need to convert auth routes to use AppState by extracting AuthState via AsRef
     #[cfg(any(feature = "auth-sqlite", feature = "auth-redis", feature = "auth-mock"))]
-    if state.auth.is_some() {
+    {
         // auth_routes() returns Router<AuthState>, but our app uses Router<AppState>
         // Since AppState implements AsRef<AuthState>, we can use with_state() to adapt
-        let auth_router = auth_routes().with_state(state.auth.clone().unwrap());
+        let auth_router = auth_routes().with_state(state.auth.clone());
         router = router.merge(auth_router);
 
         // Add login and root redirect routes

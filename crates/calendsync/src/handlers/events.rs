@@ -64,7 +64,7 @@ pub async fn events_sse(
     State(state): State<AppState>,
     Query(query): Query<EventsQuery>,
 ) -> Result<Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>>, Response> {
-    let auth = state.auth.as_ref().expect("Auth state required");
+    let auth = &state.auth;
     require_read_access(auth, query.calendar_id, user.id)
         .await
         .map_err(IntoResponse::into_response)?;

@@ -18,7 +18,7 @@ This prevents accidental diagonal gestures from triggering both scrolling and da
 
 ## Implementation
 
-Located in `crates/frontend/src/calendar-react/components/Calendar.tsx`:
+Located in `crates/frontend/src/calendsync/components/Calendar.tsx`:
 
 ```typescript
 useEffect(() => {
