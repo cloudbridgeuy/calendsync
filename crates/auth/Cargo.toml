@@ -29,12 +29,9 @@ tokio = { workspace = true }
 # Web
 axum = { workspace = true }
 axum-extra = { workspace = true }
-tower = { workspace = true }
-tower-cookies = { workspace = true }
 
 # OIDC
 openidconnect = { workspace = true }
-oauth2 = { workspace = true }
 url = { workspace = true }
 jsonwebtoken = { workspace = true }
 
